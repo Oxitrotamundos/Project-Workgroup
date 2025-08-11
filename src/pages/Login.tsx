@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import type { LoginFormData } from '../types';
 
@@ -12,10 +12,6 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   const { signIn } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  
-  const from = location.state?.from?.pathname || '/dashboard';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -37,7 +33,7 @@ const Login: React.FC = () => {
       setError('');
       setLoading(true);
       await signIn(formData.email, formData.password);
-      navigate(from, { replace: true });
+      // No navegamos manualmente - AuthContext manejará la redirección
     } catch (error: any) {
       console.error('Login error:', error);
       setError('Error al iniciar sesión. Verifica tus credenciales.');
