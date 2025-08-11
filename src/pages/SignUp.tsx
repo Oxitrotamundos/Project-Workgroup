@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import type { SignUpFormData } from '../types';
 
@@ -14,7 +14,6 @@ const SignUp: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   const { signUp } = useAuth();
-  const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -46,7 +45,7 @@ const SignUp: React.FC = () => {
       setError('');
       setLoading(true);
       await signUp(formData.email, formData.password, formData.displayName);
-      navigate('/dashboard');
+      // No navegamos manualmente - AuthContext manejará la redirección
     } catch (error: any) {
       console.error('SignUp error:', error);
       if (error.code === 'auth/email-already-in-use') {
