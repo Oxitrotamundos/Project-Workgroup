@@ -56,12 +56,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         createdAt: new Date()
       };
 
-      await setDoc(userRef, {
+      const userDocData: any = {
         displayName: newUser.displayName,
         role: newUser.role,
-        avatar: newUser.avatar,
         createdAt: newUser.createdAt
-      });
+      };
+
+      // Solo agregar avatar si existe
+      if (newUser.avatar) {
+        userDocData.avatar = newUser.avatar;
+      }
+
+      await setDoc(userRef, userDocData);
 
       return newUser;
     }
