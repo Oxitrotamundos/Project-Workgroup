@@ -39,6 +39,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const userData = userSnap.data();
       return {
         id: firebaseUser.uid,
+        uid: firebaseUser.uid,
         email: firebaseUser.email!,
         displayName: userData.displayName || firebaseUser.displayName || '',
         role: userData.role || 'member',
@@ -49,6 +50,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Crear nuevo documento de usuario
       const newUser: User = {
         id: firebaseUser.uid,
+        uid: firebaseUser.uid,
         email: firebaseUser.email!,
         displayName: firebaseUser.displayName || '',
         role: 'member',
@@ -135,12 +137,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return unsubscribe;
   }, []);
 
+  // Alias para logout
+  const logout = signOut;
+
   const value: AuthContextType = {
     user,
     loading,
     signIn,
     signUp,
     signOut,
+    logout,
     resetPassword
   };
 

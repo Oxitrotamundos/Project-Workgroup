@@ -1,6 +1,7 @@
 // Tipos de datos de usuarios
 export interface User {
   id: string;
+  uid: string; // Firebase UID
   email: string;
   displayName: string;
   role: 'admin' | 'pm' | 'member';
@@ -63,6 +64,7 @@ export interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signOut: () => Promise<void>;
+  logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }
 

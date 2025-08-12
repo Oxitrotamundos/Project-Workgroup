@@ -14,6 +14,14 @@ dist-ssr
 
 # Environment variables
 .env
+.env.local
+.env.production
+.env.development
+
+# Firebase
+config/service-account-key.json
+.firebase/
+.firebaserc
 
 # Editor directories and files
 .vscode/*

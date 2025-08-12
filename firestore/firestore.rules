@@ -1,0 +1,155 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función helper para verificar autenticación
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Función helper para verificar si el usuario es el propietario
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Función helper para verificar si el usuario es admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Función helper para verificar si el usuario es PM o admin
+    function isPMOrAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'pm'];
+    }
+    
+    // Función helper para verificar si el usuario es miembro del proyecto
+    function isProjectMember(projectId) {
+      return isAuthenticated() && 
+             request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.members;
+    }
+    
+    // Función helper para verificar si el usuario es propietario del proyecto
+    function isProjectOwner(projectId) {
+      return isAuthenticated() && 
+             request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId;
+    }
+    
+    // Función helper para verificar si el usuario puede gestionar el proyecto
+    function canManageProject(projectId) {
+      return isAdmin() || isProjectOwner(projectId) || 
+             (isPMOrAdmin() && isProjectMember(projectId));
+    }
+    
+    // Reglas para la colección de usuarios
+    match /users/{userId} {
+      // Lectura: usuarios autenticados pueden leer perfiles de otros usuarios
+      allow read: if isAuthenticated();
+      
+      // Escritura: usuarios pueden actualizar su propio perfil, admins pueden gestionar todos
+      allow write: if isOwner(userId) || isAdmin();
+      
+      // Creación: solo durante el registro (manejado por Cloud Functions)
+      allow create: if isAuthenticated() && isOwner(userId);
+      
+      // Eliminación: solo admins
+      allow delete: if isAdmin();
+    }
+    
+    // Reglas para la colección de proyectos
+    match /projects/{projectId} {
+      // Lectura: miembros del proyecto, propietarios o admins pueden leer
+      allow read: if isProjectMember(projectId) || isProjectOwner(projectId) || isAdmin();
+      
+      // Creación: usuarios autenticados pueden crear proyectos
+      allow create: if isAuthenticated() && 
+                       request.auth.uid == request.resource.data.ownerId;
+      
+      // Actualización: propietarios, PMs del proyecto o admins
+      allow update: if canManageProject(projectId);
+      
+      // Eliminación: solo propietarios o admins
+      allow delete: if isProjectOwner(projectId) || isAdmin();
+    }
+    
+    // Reglas para la colección de tareas
+    match /tasks/{taskId} {
+      // Lectura: miembros del proyecto pueden leer tareas
+      allow read: if isProjectMember(resource.data.projectId) || isAdmin();
+      
+      // Creación: miembros del proyecto pueden crear tareas
+      allow create: if isAuthenticated() && 
+                       isProjectMember(request.resource.data.projectId);
+      
+      // Actualización: miembros del proyecto pueden actualizar tareas
+      // Asignados pueden actualizar progreso y horas actuales
+      allow update: if isProjectMember(resource.data.projectId) || 
+                       isOwner(resource.data.assigneeId) || 
+                       isAdmin();
+      
+      // Eliminación: gestores del proyecto o admins
+      allow delete: if canManageProject(resource.data.projectId) || isAdmin();
+    }
+    
+    // Reglas para la colección de carga de trabajo
+    match /workload/{workloadId} {
+      // Lectura: usuarios pueden ver su propia carga de trabajo, 
+      // gestores del proyecto pueden ver la de todos los miembros
+      allow read: if isOwner(resource.data.userId) || 
+                     isProjectMember(resource.data.projectId) || 
+                     isAdmin();
+      
+      // Creación: sistema automático o gestores del proyecto
+      allow create: if isAuthenticated() && 
+                       (isProjectMember(request.resource.data.projectId) || isAdmin());
+      
+      // Actualización: propietario de la carga de trabajo o gestores del proyecto
+      allow update: if isOwner(resource.data.userId) || 
+                       canManageProject(resource.data.projectId) || 
+                       isAdmin();
+      
+      // Eliminación: gestores del proyecto o admins
+      allow delete: if canManageProject(resource.data.projectId) || isAdmin();
+    }
+    
+    // Reglas para subcollecciones de actividad/logs (si se implementan)
+    match /projects/{projectId}/activity/{activityId} {
+      // Solo lectura para miembros del proyecto
+      allow read: if isProjectMember(projectId) || isAdmin();
+      
+      // Solo creación por el sistema (Cloud Functions)
+      allow create: if false; // Manejado por Cloud Functions
+      
+      // No se permite actualización o eliminación
+      allow update, delete: if false;
+    }
+    
+    // Reglas para comentarios en tareas (si se implementan)
+    match /tasks/{taskId}/comments/{commentId} {
+      // Lectura: miembros del proyecto
+      allow read: if isAuthenticated() && 
+                     isProjectMember(get(/databases/$(database)/documents/tasks/$(taskId)).data.projectId);
+      
+      // Creación: miembros del proyecto
+      allow create: if isAuthenticated() && 
+                       isProjectMember(get(/databases/$(database)/documents/tasks/$(taskId)).data.projectId) &&
+                       request.auth.uid == request.resource.data.authorId;
+      
+      // Actualización: autor del comentario o gestores del proyecto
+      allow update: if isOwner(resource.data.authorId) || 
+                       canManageProject(get(/databases/$(database)/documents/tasks/$(taskId)).data.projectId);
+      
+      // Eliminación: autor del comentario, gestores del proyecto o admins
+      allow delete: if isOwner(resource.data.authorId) || 
+                       canManageProject(get(/databases/$(database)/documents/tasks/$(taskId)).data.projectId) ||
+                       isAdmin();
+    }
+    
+    // Reglas por defecto: denegar todo lo demás
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
