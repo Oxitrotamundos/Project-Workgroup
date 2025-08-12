@@ -10,6 +10,7 @@ import type {
   User
 } from '../types/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserRole } from './useUserRole';
 
 interface UseProjectsState {
   projects: Project[];
@@ -35,6 +36,7 @@ interface UseProjectsReturn extends UseProjectsState, UseProjectsActions { }
  */
 export function useProjects(filters?: ProjectFilters, pageSize: number = 10): UseProjectsReturn {
   const { user } = useAuth();
+  const { userRole } = useUserRole();
   const [state, setState] = useState<UseProjectsState>({
     projects: [],
     loading: true,
@@ -45,44 +47,68 @@ export function useProjects(filters?: ProjectFilters, pageSize: number = 10): Us
 
   // Cargar proyectos
   const loadProjects = useCallback(async (reset: boolean = false) => {
-    if (!user) {
-      setState(prev => ({ ...prev, loading: false, error: 'Usuario no autenticado' }));
+    if (!user || !userRole) {
+      setState(prev => ({ 
+        ...prev, 
+        loading: false, 
+        error: null,
+        projects: [],
+        hasMore: false
+      }));
       return;
     }
 
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
 
-      const response = await ProjectService.getUserProjects(
-        user.uid,
-        filters,
-        pageSize,
-        reset ? undefined : lastDoc
-      );
+      let response;
+      
+      // Los administradores pueden ver todos los proyectos
+      if (userRole === 'admin') {
+        response = await ProjectService.getAllProjects(
+          filters,
+          pageSize,
+          reset ? undefined : lastDoc
+        );
+      } else {
+        // PM y miembros solo ven sus proyectos
+        response = await ProjectService.getUserProjects(
+          user.uid,
+          filters,
+          pageSize
+        );
+      }
 
       setState(prev => ({
         ...prev,
         projects: reset ? response.items : [...prev.projects, ...response.items],
         hasMore: response.hasMore,
-        loading: false
+        loading: false,
+        error: null
       }));
 
       // Actualizar lastDoc para paginación
-      if (response.items.length > 0) {
-        // En una implementación real, necesitaremos  el DocumentSnapshot - Atte. AB
-        // Por ahora, simplificamos
-
-        //TODO: Actualizar lastDoc con el DocumentSnapshot
+      if (response.lastDoc) {
+        setLastDoc(response.lastDoc);
       }
     } catch (error) {
       console.error('Error loading projects:', error);
+      // En caso de error, mostrar lista vacía en lugar de error
       setState(prev => ({
         ...prev,
         loading: false,
-        error: error instanceof Error ? error.message : 'Error al cargar proyectos'
+        error: null,
+        projects: [],
+        hasMore: false
       }));
     }
-  }, [user, filters, pageSize, lastDoc]);
+  }, [user, userRole, filters, pageSize, lastDoc]);
+
+  // Refrescar lista de proyectos
+  const refresh = useCallback(async (): Promise<void> => {
+    setLastDoc(undefined);
+    await loadProjects(true);
+  }, [loadProjects]);
 
   // Crear proyecto
   const createProject = useCallback(async (data: CreateProjectData): Promise<string> => {
@@ -100,7 +126,7 @@ export function useProjects(filters?: ProjectFilters, pageSize: number = 10): Us
 
       const projectId = await ProjectService.createProject(projectData);
 
-      // Recargar la lista de proyectos
+      // Refrescar la lista de proyectos para mostrar el nuevo proyecto
       await refresh();
 
       return projectId;
@@ -108,41 +134,33 @@ export function useProjects(filters?: ProjectFilters, pageSize: number = 10): Us
       console.error('Error creating project:', error);
       throw error;
     }
-  }, [user]);
+  }, [user, refresh]);
 
   // Actualizar proyecto
   const updateProject = useCallback(async (id: string, data: UpdateProjectData): Promise<void> => {
     try {
       await ProjectService.updateProject(id, data);
 
-      // Actualizar el proyecto en el estado local
-      setState(prev => ({
-        ...prev,
-        projects: prev.projects.map(project =>
-          project.id === id ? { ...project, ...data } : project
-        )
-      }));
+      // Refrescar la lista de proyectos para mostrar los cambios actualizados
+      await refresh();
     } catch (error) {
       console.error('Error updating project:', error);
       throw error;
     }
-  }, []);
+  }, [refresh]);
 
   // Eliminar proyecto
   const deleteProject = useCallback(async (id: string): Promise<void> => {
     try {
       await ProjectService.deleteProject(id);
 
-      // Remover el proyecto del estado local
-      setState(prev => ({
-        ...prev,
-        projects: prev.projects.filter(project => project.id !== id)
-      }));
+      // Refrescar la lista de proyectos para reflejar la eliminación
+      await refresh();
     } catch (error) {
       console.error('Error deleting project:', error);
       throw error;
     }
-  }, []);
+  }, [refresh]);
 
   // Cargar más proyectos (paginación)
   const loadMore = useCallback(async (): Promise<void> => {
@@ -152,12 +170,6 @@ export function useProjects(filters?: ProjectFilters, pageSize: number = 10): Us
 
     await loadProjects(false);
   }, [state.loading, state.hasMore, loadProjects]);
-
-  // Refrescar lista de proyectos
-  const refresh = useCallback(async (): Promise<void> => {
-    setLastDoc(undefined);
-    await loadProjects(true);
-  }, [loadProjects]);
 
   // Agregar miembro
   const addMember = useCallback(async (projectId: string, userId: string): Promise<void> => {
@@ -209,8 +221,10 @@ export function useProjects(filters?: ProjectFilters, pageSize: number = 10): Us
 
   // Cargar proyectos al montar el componente o cambiar filtros
   useEffect(() => {
-    loadProjects(true);
-  }, [user, filters]);
+    if (userRole) {
+      loadProjects(true);
+    }
+  }, [user, userRole, filters, loadProjects]);
 
   return {
     // Estado
