@@ -102,6 +102,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDelete, on
                 onClick={() => onView(project.id)}
                 className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
                 title="Ver proyecto"
+                aria-label="Ver proyecto"
               >
                 <Eye className="w-4 h-4" />
               </button>
@@ -112,6 +113,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDelete, on
                 onClick={() => onManageMembers(project)}
                 className="p-2 text-gray-400 hover:text-purple-600 rounded-lg hover:bg-purple-50 transition-colors"
                 title="Gestionar miembros"
+                aria-label="Gestionar miembros"
               >
                 <Users className="w-4 h-4" />
               </button>
@@ -122,6 +124,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDelete, on
                 onClick={() => onEdit(project)}
                 className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
                 title="Editar proyecto"
+                aria-label="Editar proyecto"
               >
                 <Edit3 className="w-4 h-4" />
               </button>
@@ -132,6 +135,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDelete, on
                 onClick={() => onDelete(project.id)}
                 className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
                 title="Eliminar proyecto"
+                aria-label="Eliminar proyecto"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -258,7 +262,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
         {/* Cards skeleton */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
           {[...Array(8)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl shadow-sm p-5 h-64">
+            <div key={i} className="bg-white rounded-xl shadow-sm p-5 h-64" data-testid="project-skeleton">
               <div className="space-y-4 h-full flex flex-col">
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 bg-gray-200 rounded-full animate-pulse"></div>
@@ -347,7 +351,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6" data-testid="projects-grid">
             {projects.map((project) => (
               <div 
                 key={project.id} 
