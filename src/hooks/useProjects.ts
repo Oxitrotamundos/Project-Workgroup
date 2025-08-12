@@ -93,11 +93,11 @@ export function useProjects(filters?: ProjectFilters, pageSize: number = 10): Us
       }
     } catch (error) {
       console.error('Error loading projects:', error);
-      // En caso de error, mostrar lista vacía en lugar de error
+      const errorMessage = error instanceof Error ? error.message : 'Error al cargar proyectos';
       setState(prev => ({
         ...prev,
         loading: false,
-        error: null,
+        error: errorMessage,
         projects: [],
         hasMore: false
       }));
