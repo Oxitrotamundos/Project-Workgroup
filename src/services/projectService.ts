@@ -80,43 +80,35 @@ export class ProjectService {
   static async getUserProjects(
     userId: string,
     filters?: ProjectFilters,
-    pageSize: number = 10,
-    lastDoc?: DocumentSnapshot
+    pageSize: number = 10
   ): Promise<PaginatedResponse<Project>> {
     try {
-      let q = query(
+      // Crear dos consultas: una para proyectos donde es miembro y otra donde es propietario
+      const memberQuery = query(
         collection(db, COLLECTION_NAME),
         where('members', 'array-contains', userId),
         orderBy('updatedAt', 'desc')
       );
 
-      // Aplicar filtros
-      if (filters?.status) {
-        q = query(q, where('status', '==', filters.status));
-      }
+      const ownerQuery = query(
+        collection(db, COLLECTION_NAME),
+        where('ownerId', '==', userId),
+        orderBy('updatedAt', 'desc')
+      );
 
-      if (filters?.ownerId) {
-        q = query(q, where('ownerId', '==', filters.ownerId));
-      }
+      // Ejecutar ambas consultas
+      const [memberSnapshot, ownerSnapshot] = await Promise.all([
+        getDocs(memberQuery),
+        getDocs(ownerQuery)
+      ]);
 
-      // Paginación
-      if (lastDoc) {
-        q = query(q, startAfter(lastDoc));
-      }
+      // Combinar resultados y eliminar duplicados
+      const projectsMap = new Map<string, Project>();
 
-      q = query(q, limit(pageSize + 1)); // +1 para saber si hay más
-
-      const querySnapshot = await getDocs(q);
-      const projects: Project[] = [];
-      const docs = querySnapshot.docs;
-
-      // Procesar documentos
-      const hasMore = docs.length > pageSize;
-      const itemsToProcess = hasMore ? docs.slice(0, pageSize) : docs;
-
-      itemsToProcess.forEach((doc) => {
+      // Procesar proyectos donde es miembro
+      memberSnapshot.docs.forEach((doc) => {
         const data = doc.data();
-        projects.push({
+        projectsMap.set(doc.id, {
           id: doc.id,
           ...data,
           createdAt: data.createdAt?.toDate() || new Date(),
@@ -126,16 +118,53 @@ export class ProjectService {
         } as Project);
       });
 
+      // Procesar proyectos donde es propietario
+      ownerSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        projectsMap.set(doc.id, {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          startDate: data.startDate?.toDate() || new Date(),
+          endDate: data.endDate?.toDate() || new Date()
+        } as Project);
+      });
+
+      // Convertir a array y ordenar por updatedAt
+       let projects = Array.from(projectsMap.values())
+         .sort((a, b) => {
+           const dateA = a.updatedAt instanceof Date ? a.updatedAt : a.updatedAt.toDate();
+           const dateB = b.updatedAt instanceof Date ? b.updatedAt : b.updatedAt.toDate();
+           return dateB.getTime() - dateA.getTime();
+         });
+
+      // Aplicar filtros
+      if (filters?.status) {
+        projects = projects.filter(p => p.status === filters.status);
+      }
+
+      // Aplicar paginación
+      const hasMore = projects.length > pageSize;
+      const paginatedProjects = projects.slice(0, pageSize);
+
       return {
-        items: projects,
-        total: projects.length, // En una implementación real, necesitarías una consulta separada para el total
-        page: 1, // Simplificado para esta implementación
+        items: paginatedProjects,
+        total: projects.length,
+        page: 1,
         pageSize,
         hasMore
       };
     } catch (error) {
       console.error('Error getting user projects:', error);
-      throw new Error('Error al obtener los proyectos del usuario');
+      // En lugar de lanzar error, devolver respuesta vacía
+      return {
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize,
+        hasMore: false
+      };
     }
   }
 
@@ -226,12 +255,61 @@ export class ProjectService {
   }
 
   /**
+   * Obtener todos los proyectos (solo para administradores)
+   */
+  static async getAllProjects(
+    filters?: ProjectFilters,
+    pageSize: number = 10,
+    lastDoc?: DocumentSnapshot
+  ): Promise<PaginatedResponse<Project>> {
+    try {
+      let q = query(
+        collection(db, COLLECTION_NAME),
+        orderBy('createdAt', 'desc')
+      );
+
+      // Aplicar filtros si existen
+      if (filters?.status) {
+        q = query(q, where('status', '==', filters.status));
+      }
+
+      // Aplicar paginación
+      if (pageSize) {
+        q = query(q, limit(pageSize));
+      }
+
+      if (lastDoc) {
+        q = query(q, startAfter(lastDoc));
+      }
+
+      const snapshot = await getDocs(q);
+      const projects = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Project[];
+
+      return {
+        items: projects,
+        total: projects.length, // TODO: Para la implementación final, esto sería el total de documentos
+        page: 1, // Para simplificar, asumimos página 1 - TODO: Para la implementación final, esto debería ser dinámico Atte AB.
+        pageSize,
+        hasMore: snapshot.docs.length === pageSize,
+        lastDoc: snapshot.docs[snapshot.docs.length - 1]
+      };
+    } catch (error) {
+      console.error('Error getting all projects:', error);
+      throw new Error('Error al obtener todos los proyectos');
+    }
+  }
+
+  /**
    * Obtener estadísticas básicas de un proyecto
    */
   static async getProjectStats() {
     try {
       // Esta función se implementará cuando tengamos las tareas
       // Por ahora retorna datos básicos
+      // TODO: Implementar la lógica para obtener estadísticas reales de tareas - Atte. AB
       return {
         totalTasks: 0,
         completedTasks: 0,
