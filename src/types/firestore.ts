@@ -296,6 +296,7 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
   hasMore: boolean;
+  lastDoc?: any; // DocumentSnapshot para paginación
 }
 
 // Tipos para validación
