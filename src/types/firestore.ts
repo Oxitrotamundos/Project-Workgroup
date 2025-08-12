@@ -327,6 +327,50 @@ export interface UserPermissions {
   projects: Record<string, ProjectPermissions>;
 }
 
+// Interfaces para gestión de miembros
+export interface UserSearchResult {
+  id: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  avatar?: string;
+  isAlreadyMember?: boolean;
+}
+
+export interface MemberManagementAction {
+  type: 'add' | 'remove' | 'change_role';
+  userId: string;
+  projectId: string;
+  newRole?: UserRole;
+  performedBy: string;
+  timestamp: Date | Timestamp;
+}
+
+export interface ProjectMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  avatar?: string;
+  joinedAt: Date | Timestamp;
+  addedBy: string;
+}
+
+export interface MemberSearchFilters {
+  query?: string;
+  excludeMembers?: string[];
+  roleFilter?: UserRole[];
+  limit?: number;
+}
+
+export interface MemberManagementPermissions {
+  canAddMembers: boolean;
+  canRemoveMembers: boolean;
+  canChangeRoles: boolean;
+  canRemoveAdmin: boolean;
+  canRemovePM: boolean;
+}
+
 // Constantes útiles
 export const DEFAULT_TASK_COLOR = '#3B82F6';
 export const DEFAULT_PROJECT_COLOR = '#10B981';
