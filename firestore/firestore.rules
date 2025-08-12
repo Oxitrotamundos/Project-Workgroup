@@ -65,7 +65,7 @@ service cloud.firestore {
       
       // Creación: usuarios autenticados pueden crear proyectos
       allow create: if isAuthenticated() && 
-                       request.auth.uid == resource.data.ownerId;
+                       request.auth.uid == request.resource.data.ownerId;
       
       // Actualización: propietarios, PMs del proyecto o admins
       allow update: if canManageProject(projectId);
@@ -81,7 +81,7 @@ service cloud.firestore {
       
       // Creación: miembros del proyecto pueden crear tareas
       allow create: if isAuthenticated() && 
-                       isProjectMember(resource.data.projectId);
+                       isProjectMember(request.resource.data.projectId);
       
       // Actualización: miembros del proyecto pueden actualizar tareas
       // Asignados pueden actualizar progreso y horas actuales
@@ -103,7 +103,7 @@ service cloud.firestore {
       
       // Creación: sistema automático o gestores del proyecto
       allow create: if isAuthenticated() && 
-                       (isProjectMember(resource.data.projectId) || isAdmin());
+                       (isProjectMember(request.resource.data.projectId) || isAdmin());
       
       // Actualización: propietario de la carga de trabajo o gestores del proyecto
       allow update: if isOwner(resource.data.userId) || 
@@ -135,7 +135,7 @@ service cloud.firestore {
       // Creación: miembros del proyecto
       allow create: if isAuthenticated() && 
                        isProjectMember(get(/databases/$(database)/documents/tasks/$(taskId)).data.projectId) &&
-                       request.auth.uid == resource.data.authorId;
+                       request.auth.uid == request.resource.data.authorId;
       
       // Actualización: autor del comentario o gestores del proyecto
       allow update: if isOwner(resource.data.authorId) || 
