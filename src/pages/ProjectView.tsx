@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ProjectService } from '../services/projectService';
 import { useTasks } from '../hooks/usetasks';
 import type { Project, Task } from '../types/firestore';
-import { ArrowLeft, Calendar, Users, Settings, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, Users, Plus } from 'lucide-react';
 
 // Tipos para el componente Gantt
 interface GanttTask {
@@ -360,97 +360,91 @@ const ProjectView: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+      {/* Header minimalista */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+                className="flex items-center text-gray-500 hover:text-gray-700 transition-all duration-200 hover:scale-105"
               >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Volver
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                <span className="text-sm font-medium">Volver</span>
               </button>
-              <div className="h-6 w-px bg-gray-300"></div>
+              <div className="h-4 w-px bg-gray-200"></div>
               <div className="flex items-center space-x-3">
                 <div 
-                  className="w-4 h-4 rounded-full" 
+                  className="w-3 h-3 rounded-full shadow-sm" 
                   style={{ backgroundColor: project.color }}
                 ></div>
-                <h1 className="text-xl font-bold text-gray-900">{project.name}</h1>
+                <h1 className="text-lg font-semibold text-gray-800">{project.name}</h1>
               </div>
             </div>
             
-            <div className="flex items-center space-x-3">
-              <button className="flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                <Calendar className="w-4 h-4 mr-2" />
+            <div className="flex items-center space-x-2">
+              <button className="flex items-center px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-all duration-200">
+                <Calendar className="w-3.5 h-3.5 mr-1.5" />
                 Vista
               </button>
-              <button className="flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                <Users className="w-4 h-4 mr-2" />
-                Miembros
+              <button className="flex items-center px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-all duration-200">
+                <Users className="w-3.5 h-3.5 mr-1.5" />
+                Equipo
               </button>
-              <button className="flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                <Settings className="w-4 h-4 mr-2" />
-                Configuración
-              </button>
-              <button className="flex items-center px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
-                <Plus className="w-4 h-4 mr-2" />
-                Nueva Tarea
+              <button className="flex items-center px-3 py-1.5 bg-blue-500 text-white text-xs rounded-md hover:bg-blue-600 transition-all duration-200 shadow-sm hover:shadow">
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                Tarea
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Project Info */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      {/* Info compacta del proyecto */}
+      <div className="bg-white/60 backdrop-blur-sm border-b border-gray-50">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600">{project.description}</p>
-              <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-                <span>Estado: <span className="font-medium">{project.status}</span></span>
-                <span>•</span>
-                <span>Miembros: <span className="font-medium">{project.members.length}</span></span>
-                <span>•</span>
-                <span>Tareas: <span className="font-medium">{tasks.length}</span></span>
-              </div>
+            <p className="text-sm text-gray-600 truncate max-w-2xl">{project.description}</p>
+            <div className="flex items-center space-x-6 text-xs text-gray-500">
+              <span className="flex items-center">
+                <span className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></span>
+                {project.status}
+              </span>
+              <span>{project.members.length} miembros</span>
+              <span>{tasks.length} tareas</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Gantt Chart */}
-      <div className="flex-1 p-4">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-[calc(100vh-280px)]">
+      {/* Gantt Chart optimizado */}
+      <div className="flex-1 p-6">
+        <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-gray-100 h-[calc(100vh-200px)] overflow-hidden">
           {tasksLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-2 text-gray-600">Cargando tareas...</p>
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent mx-auto"></div>
+                <p className="mt-3 text-sm text-gray-500">Cargando...</p>
               </div>
             </div>
           ) : tasksError ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <p className="text-red-600 mb-2">Error al cargar tareas</p>
-                <p className="text-gray-600 text-sm">{tasksError}</p>
+              <div className="text-center max-w-md">
+                <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <span className="text-red-500 text-xl">⚠</span>
+                </div>
+                <p className="text-red-600 font-medium mb-1">Error al cargar</p>
+                <p className="text-gray-500 text-sm">{tasksError}</p>
               </div>
             </div>
           ) : (
-            <div className="h-full gantt-container">
+            <div className="h-full gantt-container relative">
               {tasks.length === 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 m-4">
-                  <div className="flex items-center">
-                    <div className="text-blue-600 mr-3">ℹ️</div>
-                    <div>
-                      <h3 className="text-blue-800 font-medium">Vista Previa del Gantt</h3>
-                      <p className="text-blue-700 text-sm mt-1">
-                        Este es un ejemplo de cómo se verá el diagrama de Gantt. 
-                        Agrega tareas reales para ver tu proyecto en acción.
-                      </p>
+                <div className="absolute top-4 right-4 z-10">
+                  <div className="bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 rounded-lg px-3 py-2 shadow-sm">
+                    <div className="flex items-center text-xs">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></div>
+                      <span className="text-blue-700 font-medium">Vista previa</span>
                     </div>
                   </div>
                 </div>
