@@ -1,0 +1,120 @@
+/* Estilos personalizados para el componente Gantt */
+/* Integración con el diseño existente de la aplicación */
+
+.wx-willow-theme {
+  /* Personalización de colores para que coincidan con el tema de la app */
+  --wx-gantt-task-color: #3b82f6; /* blue-500 */
+  --wx-gantt-task-fill-color: #2563eb; /* blue-600 */
+  --wx-gantt-task-border-color: #2563eb;
+  
+  --wx-gantt-project-color: #10b981; /* emerald-500 */
+  --wx-gantt-project-fill-color: #059669; /* emerald-600 */
+  --wx-gantt-project-border-color: #059669;
+  
+  --wx-gantt-milestone-color: #8b5cf6; /* violet-500 */
+  
+  /* Mejoras en la tipografía */
+  --wx-grid-header-font: 600 0.875rem 'Inter', system-ui, sans-serif;
+  --wx-grid-body-font: 400 0.875rem 'Inter', system-ui, sans-serif;
+  --wx-timescale-font: 500 0.75rem 'Inter', system-ui, sans-serif;
+  
+  /* Colores de fondo y bordes más suaves */
+  --wx-gantt-border: 1px solid #e5e7eb; /* gray-200 */
+  --wx-gantt-select-color: #f3f4f6; /* gray-100 */
+  
+  /* Mejoras en las sombras */
+  --wx-gantt-bar-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  
+  /* Colores de días festivos más sutiles */
+  --wx-gantt-holiday-background: #f8fafc; /* slate-50 */
+  --wx-gantt-holiday-color: #64748b; /* slate-500 */
+  
+  /* Tooltips mejorados */
+  --wx-tooltip-background: #1f2937; /* gray-800 */
+  --wx-tooltip-font-color: #f9fafb; /* gray-50 */
+  
+  /* Marcadores de progreso */
+  --wx-gantt-progress-border-color: #d1d5db; /* gray-300 */
+}
+
+/* Estilos adicionales para mejorar la integración */
+.gantt-container {
+  font-family: 'Inter', system-ui, sans-serif;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Mejoras en la responsividad */
+@media (max-width: 768px) {
+  .wx-willow-theme {
+    --wx-grid-header-font: 600 0.75rem 'Inter', system-ui, sans-serif;
+    --wx-grid-body-font: 400 0.75rem 'Inter', system-ui, sans-serif;
+    --wx-timescale-font: 500 0.625rem 'Inter', system-ui, sans-serif;
+  }
+}
+
+/* Animaciones suaves para las barras de tareas */
+.wx-willow-theme .wx-gantt-bar {
+  transition: all 0.2s ease-in-out;
+}
+
+.wx-willow-theme .wx-gantt-bar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Mejoras en los enlaces entre tareas */
+.wx-willow-theme .wx-gantt-link {
+  --wx-gantt-link-color: #6b7280; /* gray-500 */
+  stroke-width: 2;
+}
+
+/* Estilos para el estado de carga */
+.gantt-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+}
+
+/* Estilos para mensajes de error */
+.gantt-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+  color: #dc2626;
+  text-align: center;
+  padding: 2rem;
+}
+
+.gantt-error h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.gantt-error p {
+  color: #7f1d1d;
+  margin-bottom: 1rem;
+}
+
+/* Mejoras en la accesibilidad */
+.wx-willow-theme {
+  --wx-gantt-focus-color: #3b82f6;
+  --wx-gantt-focus-outline: 2px solid var(--wx-gantt-focus-color);
+}
+
+/* Estilos para elementos enfocados */
+.wx-willow-theme .wx-gantt-bar:focus,
+.wx-willow-theme .wx-grid-cell:focus {
+  outline: var(--wx-gantt-focus-outline);
+  outline-offset: 2px;
+}
