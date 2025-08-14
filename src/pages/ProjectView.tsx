@@ -440,7 +440,7 @@ const ProjectView: React.FC = () => {
           ) : (
             <div className="h-full gantt-container relative">
               {tasks.length === 0 && (
-                <div className="absolute top-4 right-4 z-10">
+                <div className="absolute top-4 left-4 z-10">
                   <div className="bg-blue-50/80 backdrop-blur-sm border border-blue-200/50 rounded-lg px-3 py-2 shadow-sm">
                     <div className="flex items-center text-xs">
                       <div className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></div>
