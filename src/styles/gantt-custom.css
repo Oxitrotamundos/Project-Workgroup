@@ -1,81 +1,77 @@
-/* Estilos personalizados para el componente Gantt */
-/* Integración con el diseño existente de la aplicación usando Tailwind CSS */
+/* Estilos optimizados para el componente Gantt - Minimalista y elegante */
 
 .wx-willow-theme {
-  /* Colores base para summary/project tasks */
-  --wx-gantt-project-color: #10b981; /* emerald-500 */
-  --wx-gantt-project-fill-color: #059669; /* emerald-600 */
-  --wx-gantt-project-border-color: #047857; /* emerald-700 */
+  /* Paleta de colores minimalista */
+  --wx-gantt-project-color: #06b6d4; /* cyan-500 - más moderno */
+  --wx-gantt-project-fill-color: #0891b2; /* cyan-600 */
+  --wx-gantt-project-border-color: rgba(8, 145, 178, 0.3);
   
   /* Color por defecto para tareas individuales */
-  --wx-gantt-task-color: #3b82f6; /* blue-500 */
-  --wx-gantt-task-fill-color: #2563eb; /* blue-600 */
-  --wx-gantt-task-border-color: #1d4ed8; /* blue-700 */
+  --wx-gantt-task-color: #6366f1; /* indigo-500 - más suave */
+  --wx-gantt-task-fill-color: #4f46e5; /* indigo-600 */
+  --wx-gantt-task-border-color: rgba(79, 70, 229, 0.3);
   
   /* Milestones */
   --wx-gantt-milestone-color: #8b5cf6; /* violet-500 */
   
-  /* Tipografía mejorada con Tailwind */
-  --wx-grid-header-font: 600 0.875rem 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --wx-grid-body-font: 400 0.875rem 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --wx-timescale-font: 500 0.75rem 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Tipografía optimizada para velocidad */
+  --wx-grid-header-font: 500 0.8rem system-ui, sans-serif;
+  --wx-grid-body-font: 400 0.8rem system-ui, sans-serif;
+  --wx-timescale-font: 500 0.7rem system-ui, sans-serif;
   
-  /* Bordes y fondos con colores de Tailwind */
-  --wx-gantt-border: 1px solid #e5e7eb; /* gray-200 */
-  --wx-gantt-select-color: #f3f4f6; /* gray-100 */
+  /* Bordes ultra-sutiles */
+  --wx-gantt-border: 1px solid #f1f5f9; /* slate-100 */
+  --wx-gantt-select-color: #f8fafc; /* slate-50 */
   --wx-gantt-hover-color: #f9fafb; /* gray-50 */
   
-  /* Sombras mejoradas con Tailwind */
-  --wx-gantt-bar-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --wx-gantt-bar-hover-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  /* Sombras minimalistas */
+  --wx-gantt-bar-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --wx-gantt-bar-hover-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.08);
   
-  /* Días festivos */
-  --wx-gantt-holiday-background: #f8fafc; /* slate-50 */
-  --wx-gantt-holiday-color: #64748b; /* slate-500 */
+  /* Fondo limpio */
+  --wx-gantt-holiday-background: #fefefe;
+  --wx-gantt-holiday-color: #94a3b8; /* slate-400 */
   
-  /* Tooltips */
-  --wx-tooltip-background: #1f2937; /* gray-800 */
-  --wx-tooltip-font-color: #f9fafb; /* gray-50 */
-  --wx-tooltip-border-radius: 0.5rem; /* rounded-lg */
+  /* Tooltips discretos */
+  --wx-tooltip-background: rgba(15, 23, 42, 0.95); /* slate-900 con transparencia */
+  --wx-tooltip-font-color: #f1f5f9; /* slate-100 */
+  --wx-tooltip-border-radius: 0.375rem; /* rounded-md */
   
-  /* Progreso */
-  --wx-gantt-progress-border-color: #d1d5db; /* gray-300 */
-  --wx-gantt-progress-fill-color: #34d399; /* emerald-400 */
+  /* Progreso sutil */
+  --wx-gantt-progress-border-color: #e2e8f0; /* slate-200 */
+  --wx-gantt-progress-fill-color: #22d3ee; /* cyan-400 */
   
-  /* Roundness mejorado */
-  --wx-gantt-bar-border-radius: 0.5rem; /* rounded-lg */
+  /* Roundness minimalista */
+  --wx-gantt-bar-border-radius: 0.25rem; /* rounded */
   --wx-gantt-milestone-border-radius: 50%;
 }
 
-/* Contenedor principal con diseño Tailwind */
+/* Contenedor optimizado para velocidad */
 .gantt-container {
-  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  border-radius: 0.75rem; /* rounded-xl */
+  font-family: system-ui, sans-serif;
+  border-radius: 0.75rem;
   overflow: hidden;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); /* shadow-sm */
-  border: 1px solid #e5e7eb; /* border-gray-200 */
-  background-color: #ffffff; /* bg-white */
+  will-change: transform; /* Optimización para GPU */
 }
 
-/* Mejoras en la responsividad */
+/* Responsividad minimalista */
 @media (max-width: 768px) {
   .wx-willow-theme {
-    --wx-grid-header-font: 600 0.75rem 'Inter', system-ui, sans-serif;
-    --wx-grid-body-font: 400 0.75rem 'Inter', system-ui, sans-serif;
-    --wx-timescale-font: 500 0.625rem 'Inter', system-ui, sans-serif;
+    --wx-grid-header-font: 500 0.7rem system-ui, sans-serif;
+    --wx-grid-body-font: 400 0.7rem system-ui, sans-serif;
+    --wx-timescale-font: 500 0.6rem system-ui, sans-serif;
   }
 }
 
-/* Barras de tareas con roundness y colores individuales */
+/* Animaciones ultra-suaves y rápidas */
 .wx-willow-theme .wx-gantt-bar {
-  border-radius: var(--wx-gantt-bar-border-radius);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); /* ease-out */
-  box-shadow: var(--wx-gantt-bar-shadow);
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0.375rem;
+  will-change: transform;
 }
 
 .wx-willow-theme .wx-gantt-bar:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--wx-gantt-bar-hover-shadow);
+  transform: translateY(-0.5px);
 }
 
 /* Colores específicos para diferentes tipos de tareas */
@@ -102,16 +98,16 @@
   border-radius: 0.375rem; /* rounded-md - menos redondeado que las tareas */
 }
 
-/* Enlaces entre tareas mejorados */
+/* Enlaces discretos */
 .wx-willow-theme .wx-gantt-link {
-  --wx-gantt-link-color: #6b7280; /* gray-500 */
-  stroke-width: 2;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --wx-gantt-link-color: #cbd5e1; /* slate-300 */
+  stroke-width: 1.5;
+  opacity: 0.7;
 }
 
 .wx-willow-theme .wx-gantt-link:hover {
-  --wx-gantt-link-color: #374151; /* gray-700 */
-  stroke-width: 3;
+  --wx-gantt-link-color: #94a3b8; /* slate-400 */
+  opacity: 1;
 }
 
 /* Milestones con mejor roundness */
@@ -126,15 +122,13 @@
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
-/* Estados de carga y error con diseño Tailwind */
+/* Estados optimizados */
 .gantt-loading {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 400px;
-  background-color: #f9fafb; /* bg-gray-50 */
-  border-radius: 0.75rem; /* rounded-xl */
-  border: 1px solid #e5e7eb; /* border-gray-200 */
+  min-height: 300px;
+  background: linear-gradient(135deg, #fefefe 0%, #f8fafc 100%);
 }
 
 .gantt-error {
@@ -142,39 +136,31 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 400px;
-  background-color: #fef2f2; /* bg-red-50 */
-  border: 1px solid #fecaca; /* border-red-200 */
-  border-radius: 0.75rem; /* rounded-xl */
-  color: #dc2626; /* text-red-600 */
+  min-height: 300px;
+  background: #fefefe;
   text-align: center;
-  padding: 2rem; /* p-8 */
+  padding: 1.5rem;
 }
 
-.gantt-error h3 {
-  font-size: 1.125rem; /* text-lg */
-  font-weight: 600; /* font-semibold */
-  margin-bottom: 0.5rem; /* mb-2 */
-}
-
-.gantt-error p {
-  color: #7f1d1d; /* text-red-800 */
-  margin-bottom: 1rem; /* mb-4 */
-}
-
-/* Accesibilidad y focus mejorados */
+/* Accesibilidad minimalista */
 .wx-willow-theme {
-  --wx-gantt-focus-color: #3b82f6; /* blue-500 */
-  --wx-gantt-focus-outline: 2px solid var(--wx-gantt-focus-color);
-  --wx-gantt-focus-ring: 0 0 0 3px rgb(59 130 246 / 0.1); /* focus:ring-blue-500/10 */
+  --wx-gantt-focus-color: #6366f1;
+  --wx-gantt-focus-outline: 2px solid rgba(99, 102, 241, 0.5);
 }
 
-/* Estados de focus con anillo de Tailwind */
 .wx-willow-theme .wx-gantt-bar:focus,
 .wx-willow-theme .wx-grid-cell:focus {
   outline: var(--wx-gantt-focus-outline);
-  outline-offset: 2px;
-  box-shadow: var(--wx-gantt-focus-ring);
+  outline-offset: 1px;
+}
+
+/* Optimizaciones de rendimiento */
+.wx-willow-theme .wx-gantt-bar {
+  contain: layout style;
+}
+
+.wx-willow-theme .wx-grid-cell {
+  contain: layout;
 }
 
 /* Grid headers con mejor estilo */
@@ -190,22 +176,21 @@
   transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Scrollbars personalizados para mejor integración */
+/* Scrollbars minimalistas */
 .wx-willow-theme ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 .wx-willow-theme ::-webkit-scrollbar-track {
-  background: #f3f4f6; /* bg-gray-100 */
-  border-radius: 0.25rem; /* rounded */
+  background: transparent;
 }
 
 .wx-willow-theme ::-webkit-scrollbar-thumb {
-  background: #d1d5db; /* bg-gray-300 */
-  border-radius: 0.25rem; /* rounded */
+  background: #cbd5e1;
+  border-radius: 3px;
 }
 
 .wx-willow-theme ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af; /* bg-gray-400 */
+  background: #94a3b8;
 }
