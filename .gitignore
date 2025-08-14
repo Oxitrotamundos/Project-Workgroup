@@ -34,3 +34,4 @@ config/service-account-key.json
 *.njsproj
 *.sln
 *.sw?
+/demos

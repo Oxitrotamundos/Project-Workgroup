@@ -57,9 +57,28 @@ declare module 'wx-react-gantt' {
     children: ReactNode;
   }
 
+  export interface ToolbarItem {
+    id?: string;
+    comp?: string;
+    text?: string;
+    icon?: string;
+    type?: string;
+    css?: string;
+    layout?: string;
+    items?: ToolbarItem[];
+    handler?: (api: any) => void;
+  }
+
+  export interface ToolbarProps {
+    api?: any;
+    items?: ToolbarItem[];
+  }
+
   export const Gantt: ComponentType<GanttProps>;
   export const Willow: ComponentType<WillowProps>;
   export const WillowDark: ComponentType<WillowDarkProps>;
+  export const Toolbar: ComponentType<ToolbarProps>;
+  export const defaultToolbarButtons: ToolbarItem[];
 }
 
 declare module 'wx-react-gantt/dist/gantt.css';

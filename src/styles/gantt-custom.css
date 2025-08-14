@@ -194,3 +194,103 @@
 .wx-willow-theme ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Estilos para el Toolbar */
+.wx-toolbar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  padding: 8px 16px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.wx-toolbar .wx-button {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  border-radius: 6px !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  margin-right: 4px !important;
+}
+
+.wx-toolbar .wx-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.wx-toolbar .wx-button:active:not(:disabled) {
+  transform: translateY(0) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.wx-toolbar .wx-button:disabled {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+  cursor: not-allowed !important;
+}
+
+.wx-toolbar .wx-button.wx-primary {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+.wx-toolbar .wx-button.wx-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4338ca, #6d28d9) !important;
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.3) !important;
+}
+
+.wx-toolbar .wx-button.wx-danger {
+  background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: white !important;
+}
+
+.wx-toolbar .wx-button.wx-danger:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b91c1c, #991b1b) !important;
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3) !important;
+}
+
+.wx-toolbar .wx-separator {
+  width: 1px !important;
+  height: 24px !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  margin: 0 8px !important;
+}
+
+.wx-toolbar .wx-button i {
+  margin-right: 6px !important;
+  font-size: 14px !important;
+}
+
+/* Ajustes para el contenedor del Gantt con toolbar */
+.gantt-container .wx-gantt {
+  height: calc(100% - 50px) !important;
+}
+
+/* Responsive toolbar */
+@media (max-width: 768px) {
+  .wx-toolbar {
+    padding: 6px 12px !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+  }
+  
+  .wx-toolbar .wx-button {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    margin-right: 2px !important;
+  }
+  
+  .wx-toolbar .wx-button i {
+    margin-right: 4px !important;
+    font-size: 12px !important;
+  }
+}

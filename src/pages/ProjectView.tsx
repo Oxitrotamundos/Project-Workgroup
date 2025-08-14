@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Gantt, Willow } from 'wx-react-gantt';
+import { Gantt, Willow, Toolbar, defaultToolbarButtons } from 'wx-react-gantt';
 import 'wx-react-gantt/dist/gantt.css';
 import '../styles/gantt-custom.css';
 import { useAuth } from '../contexts/AuthContext';
@@ -45,6 +45,7 @@ const ProjectView: React.FC = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   
   // Hook para gestionar tareas del proyecto
   const { tasks, loading: tasksLoading, error: tasksError } = useTasks(projectId);
@@ -285,10 +286,16 @@ const ProjectView: React.FC = () => {
   // Configuración de columnas
   const columns = [
     { id: 'text', header: 'Tarea', flexGrow: 2 },
-    { id: 'start', header: 'Inicio', flexGrow: 1, align: 'center' as const },
+    { id: 'start', header: 'Inicio', align: 'center' as const, flexGrow: 1 },
     { id: 'duration', header: 'Duración', align: 'center' as const, flexGrow: 1 },
     { id: 'progress', header: 'Progreso', align: 'center' as const, flexGrow: 1 }
   ];
+
+  // Configuración del toolbar basada en los botones por defecto
+  const toolbarItems = defaultToolbarButtons.filter(button => {
+    // Mantener solo los botones esenciales
+    return button.id && ['add-task', 'edit-task', 'delete-task', 'indent-task', 'unindent-task'].includes(button.id);
+  });
 
   // Manejo de eventos del Gantt
   const handleGanttInit = (api: any) => {
@@ -309,9 +316,18 @@ const ProjectView: React.FC = () => {
       console.log('Task deleted:', event);
       // Aquí se podría eliminar la tarea de Firestore
     });
+
+    // Escuchar cambios en la selección
+    api.on('select-task', (event: any) => {
+      console.log('Task selected:', event.id);
+    });
+
+    api.on('unselect-task', () => {
+      console.log('Task unselected');
+    });
   };
 
-//TODO: Implementar las funcionalidades de Firestore - Atte. AB
+  //TODO: Implementar las funcionalidades de Firestore - Atte. AB
 
   if (loading) {
     return (
@@ -450,6 +466,7 @@ const ProjectView: React.FC = () => {
                 </div>
               )}
               <Willow>
+                <Toolbar api={apiRef.current} items={toolbarItems} />
                 <Gantt
                   tasks={ganttTasks}
                   links={ganttLinks}
