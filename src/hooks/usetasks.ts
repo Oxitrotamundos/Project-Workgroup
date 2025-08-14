@@ -19,6 +19,7 @@ interface UseTasksReturn {
   addTaskDependency: (taskId: string, dependencyId: string) => Promise<void>;
   removeTaskDependency: (taskId: string, dependencyId: string) => Promise<void>;
   refreshTasks: () => Promise<void>;
+  refetch: () => Promise<void>;
 }
 
 export const useTasks = (projectId?: string, filters?: TaskFilters): UseTasksReturn => {
@@ -154,7 +155,8 @@ export const useTasks = (projectId?: string, filters?: TaskFilters): UseTasksRet
     updateTaskProgress,
     addTaskDependency,
     removeTaskDependency,
-    refreshTasks
+    refreshTasks,
+    refetch: refreshTasks
   };
 };
 
