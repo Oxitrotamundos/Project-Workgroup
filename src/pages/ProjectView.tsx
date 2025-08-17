@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import 'wx-react-gantt/dist/gantt.css';
 import '../styles/gantt-custom.css';
@@ -14,6 +14,7 @@ import { ProjectStateManager } from '../components/ProjectLoadingStates';
 
 const ProjectView: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
+  const ganttApiRef = useRef<any>(null);
   
   // Hooks personalizados para manejar el estado y lógica
   const { project, loading, error, refetch } = useProject(projectId);
@@ -28,7 +29,22 @@ const ProjectView: React.FC = () => {
   // Handlers para las acciones del header
   const handleAddTask = () => {
     console.log('Add task clicked');
-    // Aquí se podría abrir un modal para crear una nueva tarea
+    // Crear una nueva tarea principal usando la API del Gantt
+    if (ganttApiRef.current) {
+      const today = new Date();
+      const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+      
+      ganttApiRef.current.exec('add-task', {
+        task: {
+          text: 'Nueva Tarea Principal',
+          start: today,
+          end: nextWeek,
+          duration: 7,
+          progress: 0,
+          type: 'task'
+        }
+      });
+    }
   };
 
   const handleViewTeam = () => {
@@ -72,6 +88,7 @@ const ProjectView: React.FC = () => {
               onTaskAdd={ganttActions.handleTaskAdd}
               onTaskDelete={ganttActions.handleTaskDelete}
               onTaskSelect={ganttActions.handleTaskSelect}
+              apiRef={ganttApiRef}
             />
           </div>
         </div>
