@@ -1,5 +1,38 @@
 /* Estilos optimizados para el componente Gantt - Minimalista y elegante */
 
+/* Estilos para la columna de acciones */
+.task-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+}
+
+.add-child-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+}
+
+.add-child-btn:hover {
+  background: #2563eb;
+  transform: scale(1.1);
+}
+
+.add-child-btn:active {
+  transform: scale(0.95);
+}
+
 .wx-willow-theme {
   /* Paleta de colores minimalista */
   --wx-gantt-project-color: #06b6d4; /* cyan-500 - más moderno */
