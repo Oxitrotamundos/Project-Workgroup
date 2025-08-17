@@ -21,7 +21,7 @@ const ProjectView: React.FC = () => {
   const { tasks, loading: tasksLoading, error: tasksError, refetch: refetchTasks } = useTasks(projectId);
   
   // Hook para manejar las acciones del Gantt
-  const ganttActions = useGanttActions({
+  useGanttActions({
     projectId: projectId || '',
     onTasksChange: refetchTasks
   });
@@ -84,10 +84,6 @@ const ProjectView: React.FC = () => {
               projectName={project?.name}
               loading={tasksLoading}
               error={tasksError}
-              onTaskUpdate={ganttActions.handleTaskUpdate}
-              onTaskAdd={ganttActions.handleTaskAdd}
-              onTaskDelete={ganttActions.handleTaskDelete}
-              onTaskSelect={ganttActions.handleTaskSelect}
               apiRef={ganttApiRef}
             />
           </div>
