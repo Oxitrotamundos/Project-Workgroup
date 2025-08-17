@@ -43,10 +43,6 @@ interface GanttChartProps {
   projectName?: string;
   loading?: boolean;
   error?: string | null;
-  onTaskUpdate?: (taskId: string, updates: Partial<Task>) => void;
-  onTaskAdd?: (task: Partial<Task>) => void;
-  onTaskDelete?: (taskId: string) => void;
-  onTaskSelect?: (taskId: string) => void;
   apiRef?: React.RefObject<any>;
 }
 
@@ -55,10 +51,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
   projectName,
   loading = false,
   error = null,
-  onTaskUpdate,
-  onTaskAdd,
-  onTaskDelete,
-  onTaskSelect,
   apiRef: externalApiRef
 }) => {
   const internalApiRef = useRef<any>(null);
@@ -312,31 +304,65 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   ], []);
 
-  // Función para convertir tarea a summary cuando tiene hijos
-  const toSummary = useCallback((id: number) => {
-    if (apiRef.current) {
-      const task = apiRef.current.getTask(id);
-      if (task && task.type !== 'summary') {
-        apiRef.current.exec('update-task', {
-          id,
-          task: { type: 'summary' }
-        });
-      }
-    }
-  }, []);
+  // Función para calcular diferencia de días
+  const dayDiff = (next: Date, prev: Date): number => {
+    const d = (next.getTime() - prev.getTime()) / 1000 / 60 / 60 / 24;
+    return Math.ceil(Math.abs(d));
+  };
 
-  // Función para convertir summary a tarea cuando no tiene hijos
-  const toTask = useCallback((id: number) => {
-    if (apiRef.current) {
-      const task = apiRef.current.getTask(id);
-      if (task && task.type === 'summary' && (!task.data || task.data.length === 0)) {
+  // Función para obtener el progreso de una summary task
+  const getSummaryProgress = (id: number): number => {
+    const [totalProgress, totalDuration] = collectProgressFromKids(id);
+    const res = totalProgress / totalDuration;
+    return isNaN(res) ? 0 : Math.round(res);
+  };
+
+  // Función para recopilar progreso de tareas hijas
+  const collectProgressFromKids = (id: number): [number, number] => {
+    let totalProgress = 0;
+    let totalDuration = 0;
+    
+    if (!apiRef.current) return [0, 0];
+    
+    const kids = apiRef.current.getTask(id).data;
+
+    kids?.forEach((kid: any) => {
+      let duration = 0;
+      if (kid.type !== 'milestone' && kid.type !== 'summary') {
+        duration = kid.duration || dayDiff(kid.end, kid.start);
+        totalDuration += duration;
+        totalProgress += duration * kid.progress;
+      }
+
+      const [p, d] = collectProgressFromKids(kid.id);
+      totalProgress += p;
+      totalDuration += d;
+    });
+    
+    return [totalProgress, totalDuration];
+  };
+
+  // Función para recalcular el progreso de summary tasks
+  const recalcSummaryProgress = (id: number, self: boolean = false) => {
+    if (!apiRef.current) return;
+    
+    const { tasks } = apiRef.current.getState();
+    const task = apiRef.current.getTask(id);
+
+    if (task && task.type !== 'milestone') {
+      const summary = self && task.type === 'summary' ? id : tasks.getSummaryId(id);
+
+      if (summary) {
+        const progress = getSummaryProgress(summary);
         apiRef.current.exec('update-task', {
-          id,
-          task: { type: 'task' }
+          id: summary,
+          task: { progress }
         });
       }
     }
-  }, []);
+  };
+
+
 
   // Función global para agregar subtarea
   const addChildTask = useCallback((parentId: number) => {
@@ -359,106 +385,58 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   }, []);
 
-  // Configurar eventos cuando el Gantt esté listo
-  useEffect(() => {
-    // Hacer la función global accesible
-    (window as any).addChildTask = addChildTask;
-
+  // Función de inicialización del Gantt
+  const initGantt = (api: any) => {
     if (apiRef.current) {
-      // Escuchar eventos de actualización
-      const handleUpdateTask = (event: any) => {
-        console.log('Task updated:', event);
-        if (onTaskUpdate) {
-          // Convertir de vuelta al formato de Firestore
-          const updates = {
-            name: event.task.text,
-            startDate: event.task.start,
-            endDate: event.task.end,
-            duration: event.task.duration,
-            progress: event.task.progress
-          };
-          onTaskUpdate(event.id.toString(), updates);
-        }
-      };
-
-      const handleAddTask = (event: any) => {
-        console.log('Task added:', event);
-        
-        // Si se agrega como hijo, convertir el padre a summary
-        if (event.mode === 'child' && event.target) {
-          toSummary(event.target);
-        }
-        
-        if (onTaskAdd) {
-          const newTask = {
-            name: event.task.text || 'Nueva Tarea',
-            startDate: event.task.start || new Date(),
-            endDate: event.task.end || new Date(),
-            duration: event.task.duration || 1,
-            progress: event.task.progress || 0,
-            description: event.task.details || ''
-          };
-          onTaskAdd(newTask);
-        }
-      };
-
-      const handleDeleteTask = (event: any) => {
-        console.log('Task deleted:', event);
-        
-        // Si se elimina una tarea, verificar si el padre debe convertirse a task
-        if (event.source) {
-          setTimeout(() => toTask(event.source), 100);
-        }
-        
-        if (onTaskDelete) {
-          onTaskDelete(event.id.toString());
-        }
-      };
-
-      const handleMoveTask = (event: any) => {
-        console.log('Task moved:', event);
-        
-        if (event.inProgress) return;
-        
-        // Si se mueve como hijo, convertir el nuevo padre a summary
-        if (event.mode === 'child' && event.target) {
-          toSummary(event.target);
-        }
-        
-        // Verificar si el padre anterior debe convertirse a task
-        if (event.source) {
-          setTimeout(() => toTask(event.source), 100);
-        }
-      };
-
-      const handleSelectTask = (event: any) => {
-        console.log('Task selected:', event.id);
-        if (onTaskSelect) {
-          onTaskSelect(event.id.toString());
-        }
-      };
-
-      // Registrar eventos
-      apiRef.current.on('update-task', handleUpdateTask);
-      apiRef.current.on('add-task', handleAddTask);
-      apiRef.current.on('delete-task', handleDeleteTask);
-      apiRef.current.on('move-task', handleMoveTask);
-      apiRef.current.on('select-task', handleSelectTask);
-
-      // Cleanup
-      return () => {
-        if (apiRef.current) {
-          apiRef.current.off('update-task', handleUpdateTask);
-          apiRef.current.off('add-task', handleAddTask);
-          apiRef.current.off('delete-task', handleDeleteTask);
-          apiRef.current.off('move-task', handleMoveTask);
-          apiRef.current.off('select-task', handleSelectTask);
-        }
-        // Limpiar función global
-        delete (window as any).addChildTask;
-      };
+      Object.assign(apiRef.current, api);
+    } else {
+      Object.defineProperty(apiRef, 'current', {
+        value: api,
+        writable: true,
+        configurable: true
+      });
     }
-  }, [onTaskUpdate, onTaskAdd, onTaskDelete, onTaskSelect, addChildTask, toSummary, toTask]);
+
+    // Inicializar el cálculo automático de progreso para summary tasks existentes
+    api.getState().tasks.forEach((task: any) => {
+      recalcSummaryProgress(task.id, true);
+    });
+
+    // Escuchar eventos solo para el cálculo de progreso automático
+    api.on('add-task', ({ id }: any) => {
+      recalcSummaryProgress(id);
+    });
+    
+    api.on('update-task', ({ id }: any) => {
+      recalcSummaryProgress(id);
+    });
+
+    api.on('delete-task', ({ source }: any) => {
+      recalcSummaryProgress(source, true);
+    });
+    
+    api.on('copy-task', ({ id }: any) => {
+      recalcSummaryProgress(id);
+    });
+    
+    api.on('move-task', ({ id, source, inProgress }: any) => {
+      if (inProgress) return;
+
+      if (api.getTask(id).parent !== source) {
+        recalcSummaryProgress(source, true);
+      }
+      recalcSummaryProgress(id);
+    });
+  };
+
+  // Configurar función global para agregar subtareas
+  useEffect(() => {
+    (window as any).addChildTask = addChildTask;
+    
+    return () => {
+      delete (window as any).addChildTask;
+    };
+  }, [addChildTask]);
 
   if (loading) {
     return (
@@ -498,11 +476,12 @@ const GanttChart: React.FC<GanttChartProps> = ({
       {/* Gantt Chart */}
       <Willow>
         <Gantt
+          init={initGantt}
           tasks={ganttData.tasks}
           links={ganttData.links}
           scales={scales}
           columns={columns}
-          api={apiRef}
+          cellWidth={30}
         />
       </Willow>
     </div>
