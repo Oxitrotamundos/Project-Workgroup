@@ -47,6 +47,7 @@ interface GanttChartProps {
   onTaskAdd?: (task: Partial<Task>) => void;
   onTaskDelete?: (taskId: string) => void;
   onTaskSelect?: (taskId: string) => void;
+  apiRef?: React.RefObject<any>;
 }
 
 const GanttChart: React.FC<GanttChartProps> = ({
@@ -57,9 +58,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
   onTaskUpdate,
   onTaskAdd,
   onTaskDelete,
-  onTaskSelect
+  onTaskSelect,
+  apiRef: externalApiRef
 }) => {
-  const apiRef = useRef<any>(null);
+  const internalApiRef = useRef<any>(null);
+  const apiRef = externalApiRef || internalApiRef;
 
   // Convertir tareas de Firestore al formato del Gantt
   const convertTasksToGantt = useCallback((tasks: Task[]): GanttTask[] => {
@@ -287,11 +290,80 @@ const GanttChart: React.FC<GanttChartProps> = ({
     { id: 'text', header: 'Tarea', flexGrow: 2 },
     { id: 'start', header: 'Inicio', align: 'center', flexGrow: 1 },
     { id: 'duration', header: 'Duración', align: 'center', flexGrow: 1 },
-    { id: 'progress', header: 'Progreso', align: 'center', flexGrow: 1 }
+    { id: 'progress', header: 'Progreso', align: 'center', flexGrow: 1 },
+    { 
+      id: 'action', 
+      header: 'Acciones', 
+      align: 'center', 
+      width: 50,
+      template: (task: any) => {
+        return `
+          <div class="task-actions">
+            <button 
+              class="add-child-btn" 
+              onclick="window.addChildTask(${task.id})" 
+              title="Agregar subtarea"
+            >
+              +
+            </button>
+          </div>
+        `;
+      }
+    }
   ], []);
+
+  // Función para convertir tarea a summary cuando tiene hijos
+  const toSummary = useCallback((id: number) => {
+    if (apiRef.current) {
+      const task = apiRef.current.getTask(id);
+      if (task && task.type !== 'summary') {
+        apiRef.current.exec('update-task', {
+          id,
+          task: { type: 'summary' }
+        });
+      }
+    }
+  }, []);
+
+  // Función para convertir summary a tarea cuando no tiene hijos
+  const toTask = useCallback((id: number) => {
+    if (apiRef.current) {
+      const task = apiRef.current.getTask(id);
+      if (task && task.type === 'summary' && (!task.data || task.data.length === 0)) {
+        apiRef.current.exec('update-task', {
+          id,
+          task: { type: 'task' }
+        });
+      }
+    }
+  }, []);
+
+  // Función global para agregar subtarea
+  const addChildTask = useCallback((parentId: number) => {
+    if (apiRef.current) {
+      const today = new Date();
+      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+      
+      apiRef.current.exec('add-task', {
+        target: parentId,
+        mode: 'child',
+        task: {
+          text: 'Nueva Subtarea',
+          start: today,
+          end: tomorrow,
+          duration: 1,
+          progress: 0,
+          type: 'task'
+        }
+      });
+    }
+  }, []);
 
   // Configurar eventos cuando el Gantt esté listo
   useEffect(() => {
+    // Hacer la función global accesible
+    (window as any).addChildTask = addChildTask;
+
     if (apiRef.current) {
       // Escuchar eventos de actualización
       const handleUpdateTask = (event: any) => {
@@ -311,6 +383,12 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
       const handleAddTask = (event: any) => {
         console.log('Task added:', event);
+        
+        // Si se agrega como hijo, convertir el padre a summary
+        if (event.mode === 'child' && event.target) {
+          toSummary(event.target);
+        }
+        
         if (onTaskAdd) {
           const newTask = {
             name: event.task.text || 'Nueva Tarea',
@@ -326,8 +404,30 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
       const handleDeleteTask = (event: any) => {
         console.log('Task deleted:', event);
+        
+        // Si se elimina una tarea, verificar si el padre debe convertirse a task
+        if (event.source) {
+          setTimeout(() => toTask(event.source), 100);
+        }
+        
         if (onTaskDelete) {
           onTaskDelete(event.id.toString());
+        }
+      };
+
+      const handleMoveTask = (event: any) => {
+        console.log('Task moved:', event);
+        
+        if (event.inProgress) return;
+        
+        // Si se mueve como hijo, convertir el nuevo padre a summary
+        if (event.mode === 'child' && event.target) {
+          toSummary(event.target);
+        }
+        
+        // Verificar si el padre anterior debe convertirse a task
+        if (event.source) {
+          setTimeout(() => toTask(event.source), 100);
         }
       };
 
@@ -342,6 +442,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
       apiRef.current.on('update-task', handleUpdateTask);
       apiRef.current.on('add-task', handleAddTask);
       apiRef.current.on('delete-task', handleDeleteTask);
+      apiRef.current.on('move-task', handleMoveTask);
       apiRef.current.on('select-task', handleSelectTask);
 
       // Cleanup
@@ -350,11 +451,14 @@ const GanttChart: React.FC<GanttChartProps> = ({
           apiRef.current.off('update-task', handleUpdateTask);
           apiRef.current.off('add-task', handleAddTask);
           apiRef.current.off('delete-task', handleDeleteTask);
+          apiRef.current.off('move-task', handleMoveTask);
           apiRef.current.off('select-task', handleSelectTask);
         }
+        // Limpiar función global
+        delete (window as any).addChildTask;
       };
     }
-  }, [onTaskUpdate, onTaskAdd, onTaskDelete, onTaskSelect]);
+  }, [onTaskUpdate, onTaskAdd, onTaskDelete, onTaskSelect, addChildTask, toSummary, toTask]);
 
   if (loading) {
     return (
