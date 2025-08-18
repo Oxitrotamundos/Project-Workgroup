@@ -62,8 +62,22 @@ export class FirestoreGanttDataProvider {
       // Limpiar el mapeo anterior
       this.idMapping.clear();
       
-      // Convertir tareas de Firestore al formato del Gantt
-      const ganttTasks = tasks.map((task: Task, index: number) => {
+      // Crear mapeo de firestoreId a ID numérico para resolver parentId
+      const firestoreToNumericMap = new Map<string, number>();
+      
+      // Primer paso: generar IDs numéricos y crear mapeo
+      tasks.forEach((task: Task, index: number) => {
+        const numericId = task.id.split('').reduce((acc: number, char: string) => {
+          return acc + char.charCodeAt(0);
+        }, 0) + index;
+        
+        // Guardar ambos mapeos
+        this.idMapping.set(numericId, task.id);
+        firestoreToNumericMap.set(task.id, numericId);
+      });
+      
+      // Segundo paso: convertir tareas de Firestore al formato del Gantt
+      const ganttTasks = tasks.map((task: Task) => {
         const startDate = task.startDate instanceof Date ? task.startDate : task.startDate.toDate();
         const endDate = task.endDate instanceof Date ? task.endDate : task.endDate.toDate();
         
@@ -71,15 +85,17 @@ export class FirestoreGanttDataProvider {
         const durationInMs = endDate.getTime() - startDate.getTime();
         const durationInDays = Math.ceil(durationInMs / (1000 * 60 * 60 * 24));
         
-        // Generar ID numérico único
-        const numericId = task.id.split('').reduce((acc: number, char: string) => {
-          return acc + char.charCodeAt(0);
-        }, 0) + index;
+        // Obtener el ID numérico de esta tarea
+        const numericId = firestoreToNumericMap.get(task.id)!;
         
-        // Guardar el mapeo de ID numérico a firestoreId
-        this.idMapping.set(numericId, task.id);
+        // Resolver el parentId si existe
+        let parentNumericId: number | undefined = undefined;
+        if (task.parentId) {
+          parentNumericId = firestoreToNumericMap.get(task.parentId);
+          console.log('FirestoreGanttDataProvider: Resolviendo jerarquía - Tarea:', task.name, 'Parent Firestore ID:', task.parentId, '-> Parent Numeric ID:', parentNumericId);
+        }
         
-        return {
+        const ganttTask: any = {
           id: numericId,
           text: task.name,
           start: startDate,
@@ -92,6 +108,13 @@ export class FirestoreGanttDataProvider {
           // Mantener referencia al ID original de Firestore
           firestoreId: task.id
         };
+        
+        // Establecer la relación padre-hijo si existe
+        if (parentNumericId !== undefined) {
+          ganttTask.parent = parentNumericId;
+        }
+        
+        return ganttTask;
       });
       
       console.log('FirestoreGanttDataProvider: Datos cargados:', {
@@ -156,6 +179,20 @@ export class FirestoreGanttDataProvider {
   private async handleAddTask(data: any): Promise<any> {
     console.log('FirestoreGanttDataProvider: Agregando tarea:', data);
     
+    // Determinar el parentId si la tarea es anidada
+    let parentId: string | undefined = undefined;
+    
+    if (data.mode === 'child' && data.target) {
+      // Buscar el firestoreId del padre usando el ID numérico target
+      parentId = this.idMapping.get(data.target);
+      console.log('FirestoreGanttDataProvider: Tarea anidada detectada. Target ID:', data.target, '-> Parent Firestore ID:', parentId);
+      
+      if (!parentId) {
+        console.warn('FirestoreGanttDataProvider: No se encontró el firestoreId para el target:', data.target);
+        console.warn('FirestoreGanttDataProvider: Mapeo actual:', Array.from(this.idMapping.entries()));
+      }
+    }
+    
     const taskData: CreateTaskData = {
       projectId: this.projectId,
       name: data.text || 'Nueva Tarea',
@@ -165,6 +202,7 @@ export class FirestoreGanttDataProvider {
       duration: data.duration || 7,
       progress: data.progress || 0,
       assigneeId: '',
+      parentId: parentId, // Establecer la relación padre-hijo
       dependencies: [],
       tags: [],
       priority: 'medium',
@@ -172,6 +210,8 @@ export class FirestoreGanttDataProvider {
       estimatedHours: data.duration * 8 || 56, // 8 horas por día
       status: 'not-started'
     };
+    
+    console.log('FirestoreGanttDataProvider: Creando tarea con datos:', taskData);
     
     const taskId = await TaskService.createTask(taskData);
     
