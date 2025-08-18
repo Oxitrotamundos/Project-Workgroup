@@ -85,6 +85,7 @@ export interface Task extends BaseDocument {
   duration: number; // en días
   progress: number; // 0-100
   assigneeId?: string;
+  parentId?: string; // ID de la tarea padre para jerarquía
   dependencies: string[]; // task IDs
   tags: string[];
   priority: TaskPriority;
@@ -104,6 +105,7 @@ export interface CreateTaskData {
   duration: number;
   progress: number;
   assigneeId?: string;
+  parentId?: string; // ID de la tarea padre para jerarquía
   dependencies: string[];
   tags: string[];
   priority: TaskPriority;
@@ -122,6 +124,7 @@ export interface UpdateTaskData {
   duration?: number;
   progress?: number;
   assigneeId?: string;
+  parentId?: string; // ID de la tarea padre para jerarquía
   dependencies?: string[];
   tags?: string[];
   priority?: TaskPriority;
