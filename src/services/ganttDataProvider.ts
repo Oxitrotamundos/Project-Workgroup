@@ -129,6 +129,20 @@ export class FirestoreGanttDataProvider {
         case 'move-task':
           return await this.handleMoveTask(data);
         
+        case 'drag-task':
+          return await this.handleDragTask(data);
+        
+        // Acciones de UI que no requieren sincronización con Firestore
+        case 'expand-scale':
+        case 'show-editor':
+        case 'hide-editor':
+        case 'select-task':
+        case 'unselect-task':
+        case 'expand-task':
+        case 'collapse-task':
+          console.log('FirestoreGanttDataProvider: Acción de UI ignorada:', action);
+          return { success: true, message: 'Acción de UI procesada localmente' };
+        
         default:
           console.warn('FirestoreGanttDataProvider: Acción no soportada:', action);
           return { success: false, error: 'Acción no soportada' };
@@ -161,7 +175,7 @@ export class FirestoreGanttDataProvider {
     
     const taskId = await TaskService.createTask(taskData);
     
-    // Emitir evento de actualización
+    // Solo emitir evento para operaciones que requieren recarga completa
     this.emit('data-updated', { action: 'add-task', taskId });
     
     return { success: true, id: taskId };
@@ -192,13 +206,50 @@ export class FirestoreGanttDataProvider {
       throw new Error('ID de Firestore debe ser un string');
     }
     
+    // Determinar la fuente de los datos de la tarea
+    let taskData = data;
+    
+    // Si los datos vienen en el formato { id, task, diff } (típico de update-task después de arrastre)
+    if (data.task && typeof data.task === 'object') {
+      console.log('FirestoreGanttDataProvider: Datos en formato task object:', data.task);
+      console.log('FirestoreGanttDataProvider: Propiedades de data.task:', Object.keys(data.task));
+      console.log('FirestoreGanttDataProvider: Contenido completo de data.task:', JSON.stringify(data.task, null, 2));
+      taskData = data.task;
+    }
+    
+    // Agregar logs para debug
+    console.log('FirestoreGanttDataProvider: taskData después de asignación:', taskData);
+    console.log('FirestoreGanttDataProvider: Propiedades de taskData:', Object.keys(taskData));
+    
+    // Si los datos de la tarea están vacíos o incompletos, obtener desde la API del Gantt
+    const hasValidData = taskData.text || taskData.start || taskData.end || taskData.name || taskData.startDate || taskData.endDate;
+    console.log('FirestoreGanttDataProvider: hasValidData:', hasValidData);
+    
+    if (!hasValidData && data.id && this._nextHandler && this._nextHandler.getTask) {
+      console.log('FirestoreGanttDataProvider: Datos vacíos detectados, obteniendo datos actualizados de la API del Gantt');
+      const updatedTask = this._nextHandler.getTask(data.id);
+      console.log('FirestoreGanttDataProvider: Tarea obtenida de la API:', updatedTask);
+      
+      if (updatedTask) {
+        taskData = {
+          text: updatedTask.text,
+          details: updatedTask.details,
+          start: updatedTask.start,
+          end: updatedTask.end,
+          duration: updatedTask.duration,
+          progress: updatedTask.progress
+        };
+        console.log('FirestoreGanttDataProvider: Datos actualizados obtenidos:', taskData);
+      }
+    }
+    
     const updateData: UpdateTaskData = {
-      name: data.text,
-      description: data.details,
-      startDate: data.start,
-      endDate: data.end,
-      duration: data.duration,
-      progress: data.progress
+      name: taskData.text || taskData.name,
+      description: taskData.details || taskData.description,
+      startDate: taskData.start || taskData.startDate,
+      endDate: taskData.end || taskData.endDate,
+      duration: taskData.duration,
+      progress: taskData.progress
     };
     
     // Filtrar campos undefined
@@ -210,10 +261,13 @@ export class FirestoreGanttDataProvider {
     
     console.log('FirestoreGanttDataProvider: Actualizando tarea con ID:', firestoreId, 'Datos:', updateData);
     
-    await TaskService.updateTask(firestoreId, updateData);
-    
-    // Emitir evento de actualización
-    this.emit('data-updated', { action: 'update-task', taskId: firestoreId });
+    // Solo actualizar si hay datos válidos para actualizar
+    if (Object.keys(updateData).length > 0) {
+      await TaskService.updateTask(firestoreId, updateData);
+      console.log('FirestoreGanttDataProvider: Tarea actualizada exitosamente sin recarga');
+    } else {
+      console.log('FirestoreGanttDataProvider: No hay datos para actualizar, omitiendo llamada a Firestore');
+    }
     
     return { success: true };
   }
@@ -221,21 +275,37 @@ export class FirestoreGanttDataProvider {
   private async handleDeleteTask(data: any): Promise<any> {
     console.log('FirestoreGanttDataProvider: Eliminando tarea:', data);
     
+    // Intentar obtener el firestoreId de los datos o del mapeo
+    let firestoreId = data.firestoreId;
+    
+    if (!firestoreId && data.id) {
+      // Si no hay firestoreId pero hay un ID numérico, buscar en el mapeo
+      firestoreId = this.idMapping.get(data.id);
+      console.log('FirestoreGanttDataProvider: Buscando firestoreId para eliminación, ID numérico:', data.id, '-> encontrado:', firestoreId);
+    }
+    
     // Verificar que tenemos un ID de Firestore válido
-    if (!data.firestoreId) {
-      console.error('FirestoreGanttDataProvider: No se encontró firestoreId en los datos:', data);
+    if (!firestoreId) {
+      console.error('FirestoreGanttDataProvider: No se encontró firestoreId en los datos ni en el mapeo:', data);
+      console.error('FirestoreGanttDataProvider: Mapeo actual:', Array.from(this.idMapping.entries()));
       throw new Error('ID de Firestore requerido para eliminación');
     }
     
     // Validar que el firestoreId es un string
-    if (typeof data.firestoreId !== 'string') {
-      console.error('FirestoreGanttDataProvider: firestoreId no es un string:', typeof data.firestoreId, data.firestoreId);
+    if (typeof firestoreId !== 'string') {
+      console.error('FirestoreGanttDataProvider: firestoreId no es un string:', typeof firestoreId, firestoreId);
       throw new Error('ID de Firestore debe ser un string');
     }
     
-    await TaskService.deleteTask(data.firestoreId);
+    await TaskService.deleteTask(firestoreId);
     
-    // Emitir evento de eliminación
+    // Remover del mapeo después de eliminar exitosamente
+    if (data.id) {
+      this.idMapping.delete(data.id);
+      console.log('FirestoreGanttDataProvider: Tarea eliminada del mapeo, ID:', data.id);
+    }
+    
+    // Emitir evento de eliminación - esto sí requiere recarga
     this.emit('data-updated', { action: 'delete-task', taskId: data.firestoreId });
     
     return { success: true };
@@ -245,8 +315,45 @@ export class FirestoreGanttDataProvider {
     console.log('FirestoreGanttDataProvider: Moviendo tarea:', data);
     
     // Implementar lógica de movimiento si es necesario
-    // Por ahora, tratarlo como una actualización
+    // Por ahora, tratarlo como una actualización sin recarga
     return await this.handleUpdateTask(data);
+  }
+
+  private async handleDragTask(data: any): Promise<any> {
+    console.log('FirestoreGanttDataProvider: Arrastrando tarea:', data);
+    
+    // Verificar si el arrastre está en progreso
+    // Si inProgress es true, solo permitir la actualización visual sin guardar en DB
+    if (data.inProgress) {
+      console.log('FirestoreGanttDataProvider: Arrastre en progreso, no guardando en DB');
+      // Retornar sin hacer nada para permitir la actualización visual
+      return;
+    }
+    
+    console.log('FirestoreGanttDataProvider: Arrastre completado, obteniendo datos actualizados de la tarea');
+    
+    // El arrastre se ha completado, obtener los datos actualizados de la tarea desde la API del gantt
+    if (this._nextHandler && this._nextHandler.getTask) {
+      const updatedTask = this._nextHandler.getTask(data.id);
+      console.log('FirestoreGanttDataProvider: Datos actualizados de la tarea:', updatedTask);
+      
+      if (updatedTask) {
+        const taskData = {
+          id: data.id,
+          start: updatedTask.start,
+          end: updatedTask.end,
+          duration: updatedTask.duration,
+          text: updatedTask.text,
+          progress: updatedTask.progress
+        };
+        
+        // Usar el método de actualización existente para persistir los cambios
+        return await this.handleUpdateTask(taskData);
+      }
+    }
+    
+    console.warn('FirestoreGanttDataProvider: No se pudo obtener los datos actualizados de la tarea');
+    return;
   }
 
   /**
