@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import Dashboard from './pages/Dashboard';
+import ProjectView from './pages/ProjectView';
 
 // Componente para manejar la redirección automática desde login
 const LoginWrapper = () => {
@@ -59,6 +60,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/project/:projectId"
+              element={
+                <ProtectedRoute>
+                  <ProjectView />
                 </ProtectedRoute>
               }
             />

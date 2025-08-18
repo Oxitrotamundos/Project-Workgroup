@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { UserService } from '../services/userService';
 import ProjectList from '../components/ProjectList';
@@ -7,6 +8,7 @@ import type { Project, CreateProjectData, UpdateProjectData } from '../types/fir
 import { useProjects } from '../hooks/useProjects';
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { projects, loading, error, createProject, updateProject, deleteProject, hasMore, loadMore } = useProjects();
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -56,9 +58,8 @@ const Dashboard: React.FC = () => {
   };
 
   const handleViewProject = (projectId: string) => {
-    // TODO: Navegar a la vista del proyecto/Gantt
-    console.log('Viewing project:', projectId);
-    alert(`Navegando al proyecto ${projectId}. Esta funcionalidad se implementará en la siguiente fase.`);
+    // Navegar a la vista del proyecto/Gantt
+    navigate(`/project/${projectId}`);
   };
 
   const handleProjectSubmit = async (data: CreateProjectData | UpdateProjectData) => {

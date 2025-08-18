@@ -1,0 +1,328 @@
+/* Estilos optimizados para el componente Gantt - Minimalista y elegante */
+
+/* Estilos para la columna de acciones */
+.task-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+}
+
+.add-child-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+}
+
+.add-child-btn:hover {
+  background: #2563eb;
+  transform: scale(1.1);
+}
+
+.add-child-btn:active {
+  transform: scale(0.95);
+}
+
+.wx-willow-theme {
+  /* Paleta de colores minimalista */
+  --wx-gantt-project-color: #06b6d4; /* cyan-500 - más moderno */
+  --wx-gantt-project-fill-color: #0891b2; /* cyan-600 */
+  --wx-gantt-project-border-color: rgba(8, 145, 178, 0.3);
+  
+  /* Color por defecto para tareas individuales */
+  --wx-gantt-task-color: #6366f1; /* indigo-500 - más suave */
+  --wx-gantt-task-fill-color: #4f46e5; /* indigo-600 */
+  --wx-gantt-task-border-color: rgba(79, 70, 229, 0.3);
+  
+  /* Milestones */
+  --wx-gantt-milestone-color: #8b5cf6; /* violet-500 */
+  
+  /* Tipografía optimizada para velocidad */
+  --wx-grid-header-font: 500 0.8rem system-ui, sans-serif;
+  --wx-grid-body-font: 400 0.8rem system-ui, sans-serif;
+  --wx-timescale-font: 500 0.7rem system-ui, sans-serif;
+  
+  /* Bordes ultra-sutiles */
+  --wx-gantt-border: 1px solid #f1f5f9; /* slate-100 */
+  --wx-gantt-select-color: #f8fafc; /* slate-50 */
+  --wx-gantt-hover-color: #f9fafb; /* gray-50 */
+  
+  /* Sombras minimalistas */
+  --wx-gantt-bar-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --wx-gantt-bar-hover-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.08);
+  
+  /* Fondo limpio */
+  --wx-gantt-holiday-background: #fefefe;
+  --wx-gantt-holiday-color: #94a3b8; /* slate-400 */
+  
+  /* Tooltips discretos */
+  --wx-tooltip-background: rgba(15, 23, 42, 0.95); /* slate-900 con transparencia */
+  --wx-tooltip-font-color: #f1f5f9; /* slate-100 */
+  --wx-tooltip-border-radius: 0.375rem; /* rounded-md */
+  
+  /* Progreso sutil */
+  --wx-gantt-progress-border-color: #e2e8f0; /* slate-200 */
+  --wx-gantt-progress-fill-color: #22d3ee; /* cyan-400 */
+  
+  /* Roundness minimalista */
+  --wx-gantt-bar-border-radius: 0.25rem; /* rounded */
+  --wx-gantt-milestone-border-radius: 50%;
+}
+
+/* Contenedor optimizado para velocidad */
+.gantt-container {
+  font-family: system-ui, sans-serif;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  will-change: transform; /* Optimización para GPU */
+}
+
+/* Responsividad minimalista */
+@media (max-width: 768px) {
+  .wx-willow-theme {
+    --wx-grid-header-font: 500 0.7rem system-ui, sans-serif;
+    --wx-grid-body-font: 400 0.7rem system-ui, sans-serif;
+    --wx-timescale-font: 500 0.6rem system-ui, sans-serif;
+  }
+}
+
+/* Animaciones ultra-suaves y rápidas */
+.wx-willow-theme .wx-gantt-bar {
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0.375rem;
+  will-change: transform;
+}
+
+.wx-willow-theme .wx-gantt-bar:hover {
+  transform: translateY(-0.5px);
+}
+
+/* Colores específicos para diferentes tipos de tareas */
+.wx-willow-theme .wx-gantt-bar[data-task-type="task"] {
+  /* Colores variados para tareas individuales */
+}
+
+.wx-willow-theme .wx-gantt-bar[data-task-id="1"] { background-color: #3b82f6; border-color: #1d4ed8; } /* blue */
+.wx-willow-theme .wx-gantt-bar[data-task-id="2"] { background-color: #ef4444; border-color: #dc2626; } /* red */
+.wx-willow-theme .wx-gantt-bar[data-task-id="3"] { background-color: #10b981; border-color: #047857; } /* emerald */
+.wx-willow-theme .wx-gantt-bar[data-task-id="4"] { background-color: #f59e0b; border-color: #d97706; } /* amber */
+.wx-willow-theme .wx-gantt-bar[data-task-id="5"] { background-color: #8b5cf6; border-color: #7c3aed; } /* violet */
+.wx-willow-theme .wx-gantt-bar[data-task-id="6"] { background-color: #06b6d4; border-color: #0891b2; } /* cyan */
+.wx-willow-theme .wx-gantt-bar[data-task-id="7"] { background-color: #84cc16; border-color: #65a30d; } /* lime */
+.wx-willow-theme .wx-gantt-bar[data-task-id="8"] { background-color: #ec4899; border-color: #db2777; } /* pink */
+.wx-willow-theme .wx-gantt-bar[data-task-id="9"] { background-color: #6366f1; border-color: #4f46e5; } /* indigo */
+.wx-willow-theme .wx-gantt-bar[data-task-id="10"] { background-color: #14b8a6; border-color: #0d9488; } /* teal */
+
+/* Summary tasks mantienen su estilo distintivo */
+.wx-willow-theme .wx-gantt-bar[data-task-type="summary"] {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%); /* emerald gradient */
+  border-color: #047857; /* emerald-700 */
+  height: 1.25rem; /* h-5 - más alto que las tareas normales */
+  border-radius: 0.375rem; /* rounded-md - menos redondeado que las tareas */
+}
+
+/* Enlaces discretos */
+.wx-willow-theme .wx-gantt-link {
+  --wx-gantt-link-color: #cbd5e1; /* slate-300 */
+  stroke-width: 1.5;
+  opacity: 0.7;
+}
+
+.wx-willow-theme .wx-gantt-link:hover {
+  --wx-gantt-link-color: #94a3b8; /* slate-400 */
+  opacity: 1;
+}
+
+/* Milestones con mejor roundness */
+.wx-willow-theme .wx-gantt-milestone {
+  border-radius: var(--wx-gantt-milestone-border-radius);
+  box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.wx-willow-theme .wx-gantt-milestone:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* Estados optimizados */
+.gantt-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  background: linear-gradient(135deg, #fefefe 0%, #f8fafc 100%);
+}
+
+.gantt-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  background: #fefefe;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+/* Accesibilidad minimalista */
+.wx-willow-theme {
+  --wx-gantt-focus-color: #6366f1;
+  --wx-gantt-focus-outline: 2px solid rgba(99, 102, 241, 0.5);
+}
+
+.wx-willow-theme .wx-gantt-bar:focus,
+.wx-willow-theme .wx-grid-cell:focus {
+  outline: var(--wx-gantt-focus-outline);
+  outline-offset: 1px;
+}
+
+/* Optimizaciones de rendimiento */
+.wx-willow-theme .wx-gantt-bar {
+  contain: layout style;
+}
+
+.wx-willow-theme .wx-grid-cell {
+  contain: layout;
+}
+
+/* Grid headers con mejor estilo */
+.wx-willow-theme .wx-grid-header {
+  background: linear-gradient(to bottom, #f9fafb, #f3f4f6); /* gradient from gray-50 to gray-100 */
+  border-bottom: 2px solid #e5e7eb; /* border-gray-200 */
+  font-weight: 600; /* font-semibold */
+}
+
+/* Celdas del grid con hover mejorado */
+.wx-willow-theme .wx-grid-cell:hover {
+  background-color: var(--wx-gantt-hover-color);
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Scrollbars minimalistas */
+.wx-willow-theme ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.wx-willow-theme ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wx-willow-theme ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.wx-willow-theme ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Estilos para el Toolbar */
+.wx-toolbar {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  padding: 8px 16px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.wx-toolbar .wx-button {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #374151 !important;
+  border-radius: 6px !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  margin-right: 4px !important;
+}
+
+.wx-toolbar .wx-button:hover:not(:disabled) {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+.wx-toolbar .wx-button:active:not(:disabled) {
+  transform: translateY(0) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.wx-toolbar .wx-button:disabled {
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #9ca3af !important;
+  cursor: not-allowed !important;
+}
+
+.wx-toolbar .wx-button.wx-primary {
+  background: #3b82f6 !important;
+  border-color: #2563eb !important;
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+.wx-toolbar .wx-button.wx-primary:hover:not(:disabled) {
+  background: #2563eb !important;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3) !important;
+}
+
+.wx-toolbar .wx-button.wx-danger {
+  background: #ef4444 !important;
+  border-color: #dc2626 !important;
+  color: white !important;
+}
+
+.wx-toolbar .wx-button.wx-danger:hover:not(:disabled) {
+  background: #dc2626 !important;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3) !important;
+}
+
+.wx-toolbar .wx-separator {
+  width: 1px !important;
+  height: 24px !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  margin: 0 8px !important;
+}
+
+.wx-toolbar .wx-button i {
+  margin-right: 6px !important;
+  font-size: 14px !important;
+}
+
+/* Ajustes para el contenedor del Gantt con toolbar */
+.gantt-container .wx-gantt {
+  height: calc(100% - 50px) !important;
+}
+
+/* Responsive toolbar */
+@media (max-width: 768px) {
+  .wx-toolbar {
+    padding: 6px 12px !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+  }
+  
+  .wx-toolbar .wx-button {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    margin-right: 2px !important;
+  }
+  
+  .wx-toolbar .wx-button i {
+    margin-right: 4px !important;
+    font-size: 12px !important;
+  }
+}
