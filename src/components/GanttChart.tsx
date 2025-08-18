@@ -47,14 +47,21 @@ const GanttChart: React.FC<GanttChartProps> = ({
       console.log('Inicializando FirestoreGanttDataProvider para proyecto:', projectId);
       const provider = new FirestoreGanttDataProvider(projectId);
       
-      // Configurar listener para actualizaciones automáticas
-      provider.on('data-updated', async () => {
-        console.log('Datos actualizados, recargando...');
-        try {
-          const data = await provider.getData();
-          setGanttData(data);
-        } catch (error) {
-          console.error('Error recargando datos:', error);
+      // Configurar listener solo para operaciones que requieren recarga completa (add/delete)
+      provider.on('data-updated', async (eventData: any) => {
+        console.log('Evento de actualización recibido:', eventData);
+        
+        // Solo recargar para operaciones que realmente lo requieren
+        if (eventData.action === 'add-task' || eventData.action === 'delete-task') {
+          console.log('Recargando datos para operación:', eventData.action);
+          try {
+            const data = await provider.getData();
+            setGanttData(data);
+          } catch (error) {
+            console.error('Error recargando datos:', error);
+          }
+        } else {
+          console.log('Operación no requiere recarga:', eventData.action);
         }
       });
       
