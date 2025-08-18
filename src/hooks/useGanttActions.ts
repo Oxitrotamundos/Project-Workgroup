@@ -42,26 +42,28 @@ export const useGanttActions = ({
     try {
       console.log('Adding new task:', task);
       
-      // TODO: Implementar creación de tarea en Firestore
-      // const taskData: Omit<Task, 'id'> = {
-      //   name: task.name || 'Nueva Tarea',
-      //   description: task.description || '',
-      //   startDate: task.startDate || new Date(),
-      //   endDate: task.endDate || new Date(),
-      //   duration: task.duration || 1,
-      //   progress: task.progress || 0,
-      //   status: task.status || 'not-started',
-      //   priority: task.priority || 'medium',
-      //   assigneeId: task.assigneeId,
-      //   projectId: projectId,
-      //   createdAt: new Date(),
-      //   updatedAt: new Date(),
-      //   dependencies: task.dependencies || [],
-      //   tags: task.tags || [],
-      //   color: task.color || '#3B82F6',
-      //   estimatedHours: task.estimatedHours || 8
-      // };
-      // await TaskService.createTask(taskData);
+      // Implementar creación de tarea en Firestore
+      const { TaskService } = await import('../services/taskservice');
+      
+      const taskData = {
+        name: task.name || 'Nueva Tarea',
+        description: task.description || '',
+        startDate: task.startDate instanceof Date ? task.startDate : task.startDate?.toDate() || new Date(),
+        endDate: task.endDate instanceof Date ? task.endDate : task.endDate?.toDate() || new Date(),
+        duration: task.duration || 1,
+        progress: task.progress || 0,
+        status: task.status || 'not-started',
+        priority: task.priority || 'medium',
+        assigneeId: task.assigneeId,
+        projectId: projectId,
+        dependencies: task.dependencies || [],
+        tags: task.tags || [],
+        color: task.color || '#3B82F6',
+        estimatedHours: task.estimatedHours || 8,
+        actualHours: 0
+      };
+      
+      await TaskService.createTask(taskData);
       
       console.log('Task added successfully');
       

@@ -1,28 +1,9 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Gantt, Willow, Toolbar, defaultToolbarButtons } from 'wx-react-gantt';
 import type { Task } from '../types/firestore';
+import { FirestoreGanttDataProvider } from '../services/ganttDataProvider';
 
-// Tipos para el componente Gantt
-interface GanttTask {
-  id: number;
-  text: string;
-  start: Date;
-  end: Date;
-  duration: number;
-  progress: number;
-  type: 'task' | 'summary' | 'milestone';
-  parent?: number;
-  lazy?: boolean;
-  open?: boolean;
-  details?: string;
-}
-
-interface GanttLink {
-  id: number;
-  source: number;
-  target: number;
-  type: 'e2s' | 's2s' | 'e2e' | 's2e';
-}
+// Tipos para el componente Gantt (eliminados los no utilizados)
 
 interface GanttScale {
   unit: 'day' | 'week' | 'month' | 'year';
@@ -40,235 +21,74 @@ interface GanttColumn {
 
 interface GanttChartProps {
   tasks: Task[];
-  projectName?: string;
+  projectId: string;
   loading?: boolean;
   error?: string | null;
   apiRef?: React.RefObject<any>;
+  onAddTask?: () => void;
 }
 
-const GanttChart: React.FC<GanttChartProps> = ({
-  tasks,
-  projectName,
-  loading = false,
-  error = null,
-  apiRef: externalApiRef
+const GanttChart: React.FC<GanttChartProps> = ({ 
+  tasks, 
+  projectId,
+  loading = false, 
+  error = null, 
+  apiRef: externalApiRef,
+  onAddTask 
 }) => {
   const internalApiRef = useRef<any>(null);
   const apiRef = externalApiRef || internalApiRef;
+  const [dataProvider, setDataProvider] = useState<FirestoreGanttDataProvider | null>(null);
+  const [ganttData, setGanttData] = useState<{ tasks: any[], links: any[] }>({ tasks: [], links: [] });
 
-  // Convertir tareas de Firestore al formato del Gantt
-  const convertTasksToGantt = useCallback((tasks: Task[]): GanttTask[] => {
-    return tasks.map((task, index) => {
-      const startDate = task.startDate instanceof Date ? task.startDate : task.startDate.toDate();
-      const endDate = task.endDate instanceof Date ? task.endDate : task.endDate.toDate();
+  // Inicializar el data provider
+  useEffect(() => {
+    if (projectId && !dataProvider) {
+      console.log('Inicializando FirestoreGanttDataProvider para proyecto:', projectId);
+      const provider = new FirestoreGanttDataProvider(projectId);
       
-      return {
-        id: parseInt(task.id.replace(/\D/g, '')) || index + 1,
-        text: task.name,
-        start: startDate,
-        end: endDate,
-        duration: task.duration,
-        progress: task.progress,
-        type: 'task' as const,
-        lazy: false,
-        details: task.description || ''
-      };
-    });
-  }, []);
-
-  // Función para generar datos de ejemplo más realistas
-  const generateSampleData = useCallback((): { tasks: GanttTask[], links: GanttLink[] } => {
-    const today = new Date();
-    const oneWeek = 7 * 24 * 60 * 60 * 1000;
-    const twoWeeks = 14 * 24 * 60 * 60 * 1000;
-    const threeWeeks = 21 * 24 * 60 * 60 * 1000;
-    const oneMonth = 30 * 24 * 60 * 60 * 1000;
-    const twoMonths = 60 * 24 * 60 * 60 * 1000;
-    const threeMonths = 90 * 24 * 60 * 60 * 1000;
-
-    const sampleTasks: GanttTask[] = [
-      {
-        id: 1,
-        text: projectName || 'Sistema de Gestión de Proyectos',
-        start: today,
-        end: new Date(today.getTime() + threeMonths),
-        duration: 90,
-        progress: 35,
-        type: 'summary',
-        open: true
-      },
-      {
-        id: 2,
-        text: 'Fase 1: Planificación y Análisis',
-        start: today,
-        end: new Date(today.getTime() + oneMonth),
-        duration: 30,
-        progress: 90,
-        type: 'summary',
-        parent: 1,
-        open: true
-      },
-      {
-        id: 3,
-        text: 'Análisis de Requisitos',
-        start: today,
-        end: new Date(today.getTime() + oneWeek),
-        duration: 7,
-        progress: 100,
-        type: 'task',
-        parent: 2
-      },
-      {
-        id: 4,
-        text: 'Diseño de UX/UI',
-        start: new Date(today.getTime() + oneWeek - 2 * 24 * 60 * 60 * 1000),
-        end: new Date(today.getTime() + twoWeeks + 3 * 24 * 60 * 60 * 1000),
-        duration: 10,
-        progress: 85,
-        type: 'task',
-        parent: 2
-      },
-      {
-        id: 5,
-        text: 'Arquitectura del Sistema',
-        start: new Date(today.getTime() + twoWeeks),
-        end: new Date(today.getTime() + oneMonth),
-        duration: 14,
-        progress: 75,
-        type: 'task',
-        parent: 2
-      },
-      {
-        id: 6,
-        text: 'Fase 2: Desarrollo',
-        start: new Date(today.getTime() + oneMonth),
-        end: new Date(today.getTime() + twoMonths + oneWeek),
-        duration: 37,
-        progress: 40,
-        type: 'summary',
-        parent: 1,
-        open: true
-      },
-      {
-        id: 7,
-        text: 'Configuración del Entorno',
-        start: new Date(today.getTime() + oneMonth),
-        end: new Date(today.getTime() + oneMonth + 3 * 24 * 60 * 60 * 1000),
-        duration: 3,
-        progress: 100,
-        type: 'task',
-        parent: 6
-      },
-      {
-        id: 8,
-        text: 'Desarrollo Frontend',
-        start: new Date(today.getTime() + oneMonth + 3 * 24 * 60 * 60 * 1000),
-        end: new Date(today.getTime() + twoMonths),
-        duration: 27,
-        progress: 55,
-        type: 'task',
-        parent: 6
-      },
-      {
-        id: 9,
-        text: 'Desarrollo Backend',
-        start: new Date(today.getTime() + oneMonth + 3 * 24 * 60 * 60 * 1000),
-        end: new Date(today.getTime() + twoMonths + 5 * 24 * 60 * 60 * 1000),
-        duration: 32,
-        progress: 35,
-        type: 'task',
-        parent: 6
-      },
-      {
-        id: 10,
-        text: 'Integración de APIs',
-        start: new Date(today.getTime() + twoMonths),
-        end: new Date(today.getTime() + twoMonths + oneWeek),
-        duration: 7,
-        progress: 20,
-        type: 'task',
-        parent: 6
-      },
-      {
-        id: 11,
-        text: 'Fase 3: Testing y Despliegue',
-        start: new Date(today.getTime() + twoMonths + oneWeek),
-        end: new Date(today.getTime() + threeMonths),
-        duration: 23,
-        progress: 0,
-        type: 'summary',
-        parent: 1,
-        open: true
-      },
-      {
-        id: 12,
-        text: 'Pruebas Unitarias',
-        start: new Date(today.getTime() + twoMonths + oneWeek),
-        end: new Date(today.getTime() + twoMonths + twoWeeks),
-        duration: 7,
-        progress: 0,
-        type: 'task',
-        parent: 11
-      },
-      {
-        id: 13,
-        text: 'Pruebas de Integración',
-        start: new Date(today.getTime() + twoMonths + oneWeek + 5 * 24 * 60 * 60 * 1000),
-        end: new Date(today.getTime() + twoMonths + threeWeeks),
-        duration: 9,
-        progress: 0,
-        type: 'task',
-        parent: 11
-      },
-      {
-        id: 14,
-        text: 'Despliegue en Producción',
-        start: new Date(today.getTime() + twoMonths + threeWeeks),
-        end: new Date(today.getTime() + threeMonths - 3 * 24 * 60 * 60 * 1000),
-        duration: 4,
-        progress: 0,
-        type: 'task',
-        parent: 11
-      },
-      {
-        id: 15,
-        text: 'Lanzamiento',
-        start: new Date(today.getTime() + threeMonths),
-        end: new Date(today.getTime() + threeMonths),
-        duration: 0,
-        progress: 0,
-        type: 'milestone',
-        parent: 1
-      }
-    ];
-
-    const sampleLinks: GanttLink[] = [
-      { id: 1, source: 3, target: 4, type: 'e2s' },
-      { id: 2, source: 4, target: 5, type: 's2s' },
-      { id: 3, source: 5, target: 7, type: 'e2s' },
-      { id: 4, source: 7, target: 8, type: 'e2s' },
-      { id: 5, source: 7, target: 9, type: 'e2s' },
-      { id: 6, source: 8, target: 10, type: 'e2s' },
-      { id: 7, source: 9, target: 10, type: 'e2s' },
-      { id: 8, source: 10, target: 12, type: 'e2s' },
-      { id: 9, source: 12, target: 13, type: 's2s' },
-      { id: 10, source: 13, target: 14, type: 'e2s' },
-      { id: 11, source: 14, target: 15, type: 'e2s' }
-    ];
-
-    return { tasks: sampleTasks, links: sampleLinks };
-  }, [projectName]);
-
-  // Preparar datos para el Gantt
-  const ganttData = React.useMemo(() => {
-    if (tasks.length > 0) {
-      return {
-        tasks: convertTasksToGantt(tasks),
-        links: [] as GanttLink[]
-      };
+      // Configurar listener para actualizaciones automáticas
+      provider.on('data-updated', async () => {
+        console.log('Datos actualizados, recargando...');
+        try {
+          const data = await provider.getData();
+          setGanttData(data);
+        } catch (error) {
+          console.error('Error recargando datos:', error);
+        }
+      });
+      
+      setDataProvider(provider);
     }
-    return generateSampleData();
-  }, [tasks, convertTasksToGantt, generateSampleData]);
+    
+    return () => {
+      if (dataProvider) {
+        dataProvider.destroy();
+      }
+    };
+  }, [projectId]);
+  
+  // Cargar datos iniciales
+  useEffect(() => {
+    if (dataProvider) {
+      const loadData = async () => {
+        try {
+          console.log('Cargando datos iniciales...');
+          const data = await dataProvider.getData();
+          setGanttData(data);
+        } catch (error) {
+          console.error('Error cargando datos iniciales:', error);
+        }
+      };
+      
+      loadData();
+    }
+  }, [dataProvider]);
+
+
+
+  // Los datos ahora vienen del FirestoreGanttDataProvider
+  // ganttData se actualiza automáticamente cuando cambian los datos en Firestore
 
   // Configuración de escalas de tiempo
   const scales: GanttScale[] = React.useMemo(() => [
@@ -386,7 +206,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
   }, []);
 
   // Función de inicialización del Gantt
-  const initGantt = (api: any) => {
+  const initGantt = useCallback((api: any) => {
     if (apiRef.current) {
       Object.assign(apiRef.current, api);
     } else {
@@ -397,14 +217,15 @@ const GanttChart: React.FC<GanttChartProps> = ({
       });
     }
 
+    // Configurar el data provider como el siguiente en la cadena de eventos
+    if (dataProvider) {
+      console.log('Configurando FirestoreGanttDataProvider como siguiente en la cadena');
+      api.setNext(dataProvider);
+    }
+
     // Inicializar el cálculo automático de progreso para summary tasks existentes
     api.getState().tasks.forEach((task: any) => {
       recalcSummaryProgress(task.id, true);
-    });
-
-    // Escuchar eventos solo para el cálculo de progreso automático
-    api.on('add-task', ({ id }: any) => {
-      recalcSummaryProgress(id);
     });
     
     api.on('update-task', ({ id }: any) => {
@@ -427,7 +248,16 @@ const GanttChart: React.FC<GanttChartProps> = ({
       }
       recalcSummaryProgress(id);
     });
-  };
+
+    console.log('Gantt API inicializado correctamente con FirestoreGanttDataProvider');
+  }, [dataProvider]);
+
+  // Efecto para inicializar el Gantt cuando el dataProvider esté listo
+  useEffect(() => {
+    if (apiRef.current && dataProvider) {
+      initGantt(apiRef.current);
+    }
+  }, [dataProvider, initGantt]);
 
   // Configurar función global para agregar subtareas
   useEffect(() => {
@@ -463,9 +293,32 @@ const GanttChart: React.FC<GanttChartProps> = ({
     );
   }
 
-  // Filtrar los botones 'New task', 'Edit' y 'Delete' de la barra de herramientas
+  // Mostrar estado vacío cuando no hay tareas
+  if (!loading && tasks.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-blue-500 text-2xl">📋</span>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay tareas en este proyecto</h3>
+          <p className="text-gray-500 text-sm mb-4">
+            Comienza agregando tu primera tarea para ver el diagrama de Gantt.
+          </p>
+          <button 
+             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+             onClick={onAddTask}
+           >
+             Agregar primera tarea
+           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Filtrar solo los botones 'Edit' y 'Delete' de la barra de herramientas, mantener 'add-task'
   const toolbarItems = defaultToolbarButtons.filter(button => 
-    button.id !== 'add-task' && button.id !== 'edit-task' && button.id !== 'delete-task'
+    button.id !== 'edit-task' && button.id !== 'delete-task'
   );
 
   return (

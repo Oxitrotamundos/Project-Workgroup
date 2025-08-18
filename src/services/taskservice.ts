@@ -30,6 +30,11 @@ export class TaskService {
    */
   static async createTask(data: CreateTaskData): Promise<string> {
     try {
+      // Verificar si Firebase está configurado
+      if (!db) {
+        throw new Error('Firebase no está configurado correctamente. Verifica el archivo .env');
+      }
+
       const taskData = {
         ...data,
         createdAt: Timestamp.now(),
@@ -37,9 +42,22 @@ export class TaskService {
       };
 
       const docRef = await addDoc(collection(db, COLLECTION_NAME), taskData);
+      console.log('Tarea creada exitosamente con ID:', docRef.id);
       return docRef.id;
     } catch (error) {
       console.error('Error creating task:', error);
+      
+      if (error instanceof Error) {
+        // Si es un error de configuración de Firebase, mantener el mensaje original
+        if (error.message.includes('Firebase') || error.message.includes('.env')) {
+          throw error;
+        }
+        // Si es un error de permisos o conexión de Firebase
+        if (error.message.includes('permission') || error.message.includes('PERMISSION_DENIED')) {
+          throw new Error('Error de permisos en Firebase. Verifica las reglas de Firestore.');
+        }
+      }
+      
       throw new Error('Error al crear la tarea');
     }
   }

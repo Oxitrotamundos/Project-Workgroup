@@ -38,7 +38,7 @@ declare module 'wx-react-gantt' {
     cellHeight?: number;
     readonly?: boolean;
     init?: (api: any) => void;
-    // Allow passing a ref to the Gantt API, following demos usage
+    // Allow passing a ref to the Gantt API
     api?: any;
     apiRef?: any;
     onTaskClick?: (task: GanttTask) => void;

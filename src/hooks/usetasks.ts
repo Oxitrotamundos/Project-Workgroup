@@ -12,7 +12,7 @@ interface UseTasksReturn {
   tasks: Task[];
   loading: boolean;
   error: string | null;
-  createTask: (data: CreateTaskData) => Promise<void>;
+  createTask: (data: CreateTaskData) => Promise<string>;
   updateTask: (id: string, data: UpdateTaskData) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   updateTaskProgress: (id: string, progress: number) => Promise<void>;
@@ -29,7 +29,12 @@ export const useTasks = (projectId?: string, filters?: TaskFilters): UseTasksRet
   const [error, setError] = useState<string | null>(null);
 
   const loadTasks = useCallback(async () => {
+    console.log('useTasks: Iniciando loadTasks...');
+    console.log('useTasks: Usuario:', user ? 'autenticado' : 'no autenticado');
+    console.log('useTasks: ProjectId:', projectId);
+    
     if (!user) {
+      console.log('useTasks: No hay usuario, limpiando tareas');
       setTasks([]);
       setLoading(false);
       return;
@@ -43,11 +48,15 @@ export const useTasks = (projectId?: string, filters?: TaskFilters): UseTasksRet
 
       if (projectId) {
         // Cargar tareas de un proyecto específico
+        console.log('useTasks: Cargando tareas del proyecto:', projectId);
         loadedTasks = await TaskService.getProjectTasks(projectId, filters);
       } else {
         // Cargar tareas del usuario
+        console.log('useTasks: Cargando tareas del usuario:', user.uid);
         loadedTasks = await TaskService.getUserTasks(user.uid, filters);
       }
+      
+      console.log('useTasks: Tareas cargadas:', loadedTasks.length);
 
       setTasks(loadedTasks);
     } catch (err) {
@@ -63,13 +72,17 @@ export const useTasks = (projectId?: string, filters?: TaskFilters): UseTasksRet
     loadTasks();
   }, [loadTasks]);
 
-  const createTask = useCallback(async (data: CreateTaskData) => {
+  const createTask = useCallback(async (data: CreateTaskData): Promise<string> => {
+    console.log('useTasks: Iniciando createTask con datos:', data);
     try {
       setError(null);
-      await TaskService.createTask(data);
+      const taskId = await TaskService.createTask(data);
+      console.log('useTasks: Tarea creada con ID:', taskId);
       await loadTasks(); // Recargar tareas después de crear
+      console.log('useTasks: Tareas recargadas');
+      return taskId;
     } catch (err) {
-      console.error('Error creating task:', err);
+      console.error('useTasks: Error creating task:', err);
       const errorMessage = err instanceof Error ? err.message : 'Error al crear la tarea';
       setError(errorMessage);
       throw new Error(errorMessage);

@@ -18,7 +18,7 @@ const ProjectView: React.FC = () => {
   
   // Hooks personalizados para manejar el estado y lógica
   const { project, loading, error, refetch } = useProject(projectId);
-  const { tasks, loading: tasksLoading, error: tasksError, refetch: refetchTasks } = useTasks(projectId);
+  const { tasks, loading: tasksLoading, error: tasksError, refetch: refetchTasks, createTask } = useTasks(projectId);
   
   // Hook para manejar las acciones del Gantt
   useGanttActions({
@@ -27,23 +27,48 @@ const ProjectView: React.FC = () => {
   });
 
   // Handlers para las acciones del header
-  const handleAddTask = () => {
-    console.log('Add task clicked');
-    // Crear una nueva tarea principal usando la API del Gantt
-    if (ganttApiRef.current) {
+  const handleAddTask = async () => {
+    if (!projectId) return;
+    
+    console.log('Iniciando creación de tarea...');
+    console.log('Project ID:', projectId);
+    
+    try {
       const today = new Date();
       const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
       
-      ganttApiRef.current.exec('add-task', {
-        task: {
-          text: 'Nueva Tarea Principal',
-          start: today,
-          end: nextWeek,
-          duration: 7,
-          progress: 0,
-          type: 'task'
-        }
-      });
+      const newTaskData = {
+        projectId,
+        name: 'Nueva Tarea Principal',
+        description: 'Descripción de la nueva tarea',
+        startDate: today,
+        endDate: nextWeek,
+        duration: 7,
+        progress: 0,
+        dependencies: [],
+        tags: [],
+        priority: 'medium' as const,
+        color: '#3B82F6',
+        estimatedHours: 40,
+        status: 'not-started' as const
+      };
+      
+      console.log('Datos de la tarea:', newTaskData);
+      
+      // Usar la función createTask del hook que maneja automáticamente la recarga
+      const taskId = await createTask(newTaskData);
+      
+      console.log('Nueva tarea creada exitosamente con ID:', taskId);
+    } catch (error) {
+      console.error('Error al crear la tarea:', error);
+      
+      // Verificar si es un error de configuración de Firebase
+      if (error instanceof Error && error.message.includes('Firebase')) {
+        console.error('Error de configuración de Firebase. Asegúrate de que el archivo .env esté configurado correctamente.');
+        alert('Error: Firebase no está configurado. Por favor, configura el archivo .env con las credenciales de Firebase.');
+      } else {
+        alert('Error al crear la tarea. Revisa la consola para más detalles.');
+      }
     }
   };
 
@@ -57,7 +82,7 @@ const ProjectView: React.FC = () => {
     // Aquí se podría cambiar entre diferentes vistas del Gantt
   };
 
-  //TODO: Implementar las funcionalidades de Firestore - Atte. AB
+  // Funcionalidades de Firestore implementadas para creación de tareas
 
   return (
     <ProjectStateManager
@@ -81,10 +106,11 @@ const ProjectView: React.FC = () => {
           <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-gray-100 h-[calc(100vh-200px)] overflow-hidden">
             <GanttChart
               tasks={tasks}
-              projectName={project?.name}
+              projectId={projectId || ''}
               loading={tasksLoading}
               error={tasksError}
               apiRef={ganttApiRef}
+              onAddTask={handleAddTask}
             />
           </div>
         </div>
