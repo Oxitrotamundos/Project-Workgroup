@@ -303,8 +303,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
       recalcSummaryProgress(id);
     });
 
+    // Configurar listeners estándar para el progreso de summary tasks
+
     console.log('Gantt API inicializado correctamente con FirestoreGanttDataProvider');
-  }, [dataProvider]);
+  }, [dataProvider, projectId]);
 
   // Efecto para inicializar el Gantt cuando el dataProvider esté listo
   useEffect(() => {
@@ -370,10 +372,52 @@ const GanttChart: React.FC<GanttChartProps> = ({
     );
   }
 
-  // Filtrar solo los botones 'Edit' y 'Delete' de la barra de herramientas, mantener 'add-task'
-  const toolbarItems = defaultToolbarButtons.filter(button =>
-    button.id !== 'edit-task' && button.id !== 'delete-task'
-  );
+  /**
+   * Handler personalizado para el botón "New Task" del toolbar.
+   * 
+   * IMPORTANTE: Los botones del defaultToolbarButtons no vienen con handlers
+   * asignados por defecto. Para que el botón "New Task" funcione, necesitamos
+   * asignar manualmente un handler personalizado que use nuestro TaskManager.
+   * 
+   * Esta solución garantiza que:
+   * - El botón "New Task" crea tareas usando el TaskManager centralizado
+   * - Las tareas se sincronizan automáticamente con el GanttChart
+   * - Se mantiene la consistencia del flujo de creación de tareas
+   */
+  const handleAddTaskFromToolbar = async () => {
+    try {
+      await taskManager.createTask({
+        projectId,
+        name: 'Nueva Tarea',
+        description: 'Tarea creada desde el toolbar',
+        priority: 'medium',
+        estimatedHours: 40
+      });
+    } catch (error) {
+      console.error('GanttChart: Error creando tarea desde toolbar:', error);
+    }
+  };
+
+  /**
+   * Configuración personalizada del toolbar.
+   * 
+   * - Filtra botones 'edit-task' y 'delete-task' (no implementados)
+   * - Asigna handler personalizado al botón 'add-task' para usar TaskManager
+   * - Mantiene todos los demás botones con su funcionalidad original
+   */
+  const toolbarItems = defaultToolbarButtons
+    .filter(button => button.id !== 'edit-task' && button.id !== 'delete-task')
+    .map(button => {
+      if (button.id === 'add-task') {
+        return {
+          ...button,
+          handler: handleAddTaskFromToolbar
+        };
+      }
+      return button;
+    });
+
+
 
   return (
     <div className="h-full gantt-container relative">
