@@ -73,10 +73,25 @@ export const useTasks = (projectId?: string, filters?: TaskFilters): UseTasksRet
   }, [loadTasks]);
 
   const createTask = useCallback(async (data: CreateTaskData): Promise<string> => {
-    console.log('useTasks: Iniciando createTask con datos:', data);
+    console.log('useTasks: Usando TaskManager para crear tarea:', data);
     try {
       setError(null);
-      const taskId = await TaskService.createTask(data);
+      
+      // Usar TaskManager en lugar de TaskService directamente
+      const { taskManager } = await import('../services/taskManager');
+      const taskId = await taskManager.createTask({
+        projectId: data.projectId,
+        name: data.name,
+        description: data.description,
+        assigneeId: data.assigneeId,
+        parentId: data.parentId,
+        priority: data.priority,
+        estimatedHours: data.estimatedHours,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        duration: data.duration
+      });
+      
       console.log('useTasks: Tarea creada con ID:', taskId);
       await loadTasks(); // Recargar tareas después de crear
       console.log('useTasks: Tareas recargadas');

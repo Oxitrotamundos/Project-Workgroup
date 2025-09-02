@@ -4,7 +4,7 @@
  */
 
 import { TaskService } from './taskservice';
-import type { Task, CreateTaskData, UpdateTaskData } from '../types/firestore';
+import type { Task, UpdateTaskData } from '../types/firestore';
 
 export interface GanttDataProviderData {
   tasks: any[];
@@ -19,6 +19,13 @@ export class FirestoreGanttDataProvider {
 
   constructor(projectId: string) {
     this.projectId = projectId;
+  }
+
+  /**
+   * Obtener el ID de Firestore a partir del ID numérico del Gantt
+   */
+  getFirestoreIdFromGanttId(ganttId: number): string | undefined {
+    return this.idMapping.get(ganttId);
   }
 
   /**
@@ -177,48 +184,55 @@ export class FirestoreGanttDataProvider {
   }
 
   private async handleAddTask(data: any): Promise<any> {
-    console.log('FirestoreGanttDataProvider: Agregando tarea:', data);
+    console.log('FirestoreGanttDataProvider: Redirigiendo creación de tarea al TaskManager');
     
-    // Determinar el parentId si la tarea es anidada
-    let parentId: string | undefined = undefined;
+    // Importar dinámicamente para evitar dependencias circulares
+    const { taskManager } = await import('./taskManager');
     
-    if (data.mode === 'child' && data.target) {
-      // Buscar el firestoreId del padre usando el ID numérico target
-      parentId = this.idMapping.get(data.target);
-      console.log('FirestoreGanttDataProvider: Tarea anidada detectada. Target ID:', data.target, '-> Parent Firestore ID:', parentId);
+    // Determinar si es una tarea principal o subtarea
+    const parentFirestoreId = data.mode === 'child' && data.target 
+      ? this.getFirestoreIdFromGanttId(data.target)
+      : undefined;
+    
+    console.log('FirestoreGanttDataProvider: Parent Firestore ID:', parentFirestoreId);
+    
+    try {
+      let taskId: string;
       
-      if (!parentId) {
-        console.warn('FirestoreGanttDataProvider: No se encontró el firestoreId para el target:', data.target);
-        console.warn('FirestoreGanttDataProvider: Mapeo actual:', Array.from(this.idMapping.entries()));
+      if (parentFirestoreId) {
+        // Crear subtarea usando TaskManager
+        taskId = await taskManager.createSubtask(parentFirestoreId, {
+          projectId: this.projectId,
+          name: data.text || 'Nueva Subtarea',
+          description: data.details || '',
+          priority: 'medium',
+          estimatedHours: (data.duration || 1) * 8
+        });
+      } else {
+        // Crear tarea principal usando TaskManager
+        taskId = await taskManager.createTask({
+          projectId: this.projectId,
+          name: data.text || 'Nueva Tarea',
+          description: data.details || '',
+          startDate: data.start,
+          endDate: data.end,
+          duration: data.duration,
+          priority: 'medium',
+          estimatedHours: (data.duration || 7) * 8
+        });
       }
+      
+      console.log('FirestoreGanttDataProvider: Tarea creada con ID:', taskId);
+      
+      // No emitir evento aquí ya que TaskManager ya emitió el evento 'task-created'
+      // Esto evita duplicar actualizaciones
+      console.log('FirestoreGanttDataProvider: Tarea creada por TaskManager, no emitiendo evento duplicado');
+      
+      return { success: true, id: taskId };
+    } catch (error) {
+      console.error('FirestoreGanttDataProvider: Error creando tarea:', error);
+      throw error;
     }
-    
-    const taskData: CreateTaskData = {
-      projectId: this.projectId,
-      name: data.text || 'Nueva Tarea',
-      description: data.details || '',
-      startDate: data.start || new Date(),
-      endDate: data.end || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 días por defecto
-      duration: data.duration || 7,
-      progress: data.progress || 0,
-      assigneeId: '',
-      parentId: parentId, // Establecer la relación padre-hijo
-      dependencies: [],
-      tags: [],
-      priority: 'medium',
-      color: '#3B82F6',
-      estimatedHours: data.duration * 8 || 56, // 8 horas por día
-      status: 'not-started'
-    };
-    
-    console.log('FirestoreGanttDataProvider: Creando tarea con datos:', taskData);
-    
-    const taskId = await TaskService.createTask(taskData);
-    
-    // Solo emitir evento para operaciones que requieren recarga completa
-    this.emit('data-updated', { action: 'add-task', taskId });
-    
-    return { success: true, id: taskId };
   }
 
   private async handleUpdateTask(data: any): Promise<any> {
