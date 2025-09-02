@@ -1,12 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, Users, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, Users } from 'lucide-react';
 import type { Project } from '../types/firestore';
 
 interface ProjectHeaderProps {
   project: Project;
   tasksCount: number;
-  onAddTask?: () => void;
   onViewTeam?: () => void;
   onChangeView?: () => void;
 }
@@ -14,7 +13,6 @@ interface ProjectHeaderProps {
 const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   project,
   tasksCount,
-  onAddTask,
   onViewTeam,
   onChangeView
 }) => {
@@ -36,10 +34,6 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               </button>
               <div className="h-4 w-px bg-gray-200"></div>
               <div className="flex items-center space-x-3">
-                <div 
-                  className="w-3 h-3 rounded-full shadow-sm" 
-                  style={{ backgroundColor: project.color }}
-                ></div>
                 <h1 className="text-lg font-semibold text-gray-800">{project.name}</h1>
               </div>
             </div>
@@ -58,13 +52,6 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               >
                 <Users className="w-3.5 h-3.5 mr-1.5" />
                 Equipo
-              </button>
-              <button 
-                onClick={onAddTask}
-                className="flex items-center px-3 py-1.5 bg-blue-500 text-white text-xs rounded-md hover:bg-blue-600 transition-all duration-200 shadow-sm hover:shadow"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Tarea
               </button>
             </div>
           </div>
