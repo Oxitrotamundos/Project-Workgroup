@@ -16,6 +16,7 @@ export class FirestoreGanttDataProvider {
   private listeners: Map<string, Function[]> = new Map();
   private _nextHandler: any = null;
   private idMapping: Map<number, string> = new Map(); // Mapeo de ID numérico a firestoreId
+  private tempIdMapping: Map<string, string> = new Map(); // Mapeo de ID temporal a firestoreId
 
   constructor(projectId: string) {
     this.projectId = projectId;
@@ -66,8 +67,9 @@ export class FirestoreGanttDataProvider {
       
       const tasks = await TaskService.getProjectTasks(this.projectId);
       
-      // Limpiar el mapeo anterior
+      // Limpiar los mapeos anteriores
       this.idMapping.clear();
+      // Note: No limpiar tempIdMapping aquí para preservar mapeos de tareas recién creadas
       
       // Crear mapeo de firestoreId a ID numérico para resolver parentId
       const firestoreToNumericMap = new Map<string, number>();
@@ -232,6 +234,12 @@ export class FirestoreGanttDataProvider {
       
       console.log('FirestoreGanttDataProvider: Tarea creada con ID:', taskId);
       
+      // Si hay un ID temporal en los datos, crear mapeo para futuras actualizaciones
+      if (data.id && typeof data.id === 'string' && data.id.startsWith('temp://')) {
+        console.log('FirestoreGanttDataProvider: Creando mapeo temporal:', data.id, '->', taskId);
+        this.tempIdMapping.set(data.id, taskId);
+      }
+      
       // No emitir evento de recarga cuando se crean tareas desde el Gantt
       // El Gantt ya maneja estas actualizaciones localmente y evitamos colapsos
       console.log('FirestoreGanttDataProvider: Tarea creada desde Gantt, evitando recarga para preservar estado UI');
@@ -250,9 +258,15 @@ export class FirestoreGanttDataProvider {
     let firestoreId = data.firestoreId;
     
     if (!firestoreId && data.id) {
-      // Si no hay firestoreId pero hay un ID numérico, buscar en el mapeo
-      firestoreId = this.idMapping.get(data.id);
-      console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID numérico:', data.id, '-> encontrado:', firestoreId);
+      // Primero verificar si es un ID temporal
+      if (typeof data.id === 'string' && data.id.startsWith('temp://')) {
+        firestoreId = this.tempIdMapping.get(data.id);
+        console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID temporal:', data.id, '-> encontrado:', firestoreId);
+      } else {
+        // Si no hay firestoreId pero hay un ID numérico, buscar en el mapeo
+        firestoreId = this.idMapping.get(data.id);
+        console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID numérico:', data.id, '-> encontrado:', firestoreId);
+      }
     }
     
     // Verificar que tenemos un ID de Firestore válido
@@ -490,9 +504,11 @@ export class FirestoreGanttDataProvider {
   }
 
   /**
-   * Limpiar listeners
+   * Limpiar listeners y mapeos
    */
   destroy(): void {
     this.listeners.clear();
+    this.idMapping.clear();
+    this.tempIdMapping.clear();
   }
 }
