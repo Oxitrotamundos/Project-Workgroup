@@ -109,7 +109,7 @@ export class FirestoreGanttDataProvider {
           end: endDate,
           duration: durationInDays,
           progress: task.progress,
-          type: 'task',
+          type: task.type || 'task', // Usar el tipo de la tarea de Firestore
           lazy: false,
           details: task.description || '',
           // Mantener referencia al ID original de Firestore
@@ -206,6 +206,7 @@ export class FirestoreGanttDataProvider {
           name: data.text || 'Nueva Subtarea',
           description: data.details || '',
           priority: 'medium',
+          type: data.type || 'task',
           estimatedHours: (data.duration || 1) * 8
         });
       } else {
@@ -218,6 +219,7 @@ export class FirestoreGanttDataProvider {
           endDate: data.end,
           duration: data.duration,
           priority: 'medium',
+          type: data.type || 'task',
           estimatedHours: (data.duration || 7) * 8
         });
       }
@@ -291,7 +293,8 @@ export class FirestoreGanttDataProvider {
           start: updatedTask.start,
           end: updatedTask.end,
           duration: updatedTask.duration,
-          progress: updatedTask.progress
+          progress: updatedTask.progress,
+          type: updatedTask.type
         };
         console.log('FirestoreGanttDataProvider: Datos actualizados obtenidos:', taskData);
       }
@@ -303,7 +306,8 @@ export class FirestoreGanttDataProvider {
       startDate: taskData.start || taskData.startDate,
       endDate: taskData.end || taskData.endDate,
       duration: taskData.duration,
-      progress: taskData.progress
+      progress: taskData.progress,
+      type: taskData.type // Incluir el tipo de tarea
     };
     
     // Filtrar campos undefined
@@ -444,7 +448,8 @@ export class FirestoreGanttDataProvider {
           end: updatedTask.end,
           duration: updatedTask.duration,
           text: updatedTask.text,
-          progress: updatedTask.progress
+          progress: updatedTask.progress,
+          type: updatedTask.type
         };
         
         // Usar el método de actualización existente para persistir los cambios

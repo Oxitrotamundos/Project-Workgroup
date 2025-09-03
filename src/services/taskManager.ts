@@ -8,6 +8,7 @@ export interface TaskCreationOptions {
   parentId?: string;
   assigneeId?: string;
   priority?: 'low' | 'medium' | 'high' | 'critical';
+  type?: 'task' | 'summary' | 'milestone';
   estimatedHours?: number;
   startDate?: Date;
   endDate?: Date;
@@ -100,7 +101,8 @@ export class TaskManager {
       dependencies: [],
       tags: [],
       priority: options.priority || 'medium',
-      color: this.getColorForPriority(options.priority || 'medium'),
+      type: options.type || 'task',
+      color: this.getColorForTaskType(options.type || 'task'),
       estimatedHours: options.estimatedHours || (options.duration || 7) * 8, // 8 horas por día por defecto
       status: 'not-started'
     };
@@ -168,6 +170,7 @@ export class TaskManager {
       parentId: parentId || ganttTaskData.parent,
       assigneeId: ganttTaskData.assignee || '',
       priority: ganttTaskData.priority || 'medium',
+      type: ganttTaskData.type || 'task',
       estimatedHours: ganttTaskData.duration * 8 || 56
     };
 
@@ -193,7 +196,10 @@ export class TaskManager {
       if (updates.parentId !== undefined) updateData.parentId = updates.parentId;
       if (updates.priority !== undefined) {
         updateData.priority = updates.priority;
-        updateData.color = this.getColorForPriority(updates.priority);
+      }
+      if (updates.type !== undefined) {
+        updateData.type = updates.type;
+        updateData.color = this.getColorForTaskType(updates.type);
       }
       if (updates.estimatedHours !== undefined) updateData.estimatedHours = updates.estimatedHours;
 
@@ -255,6 +261,18 @@ export class TaskManager {
       critical: '#EF4444' // Rojo
     };
     return colors[priority];
+  }
+
+  /**
+   * Obtener color basado en tipo de tarea
+   */
+  private getColorForTaskType(type: 'task' | 'summary' | 'milestone'): string {
+    const colors = {
+      task: '#3B82F6',     // Azul para tareas normales
+      summary: '#8B5CF6',  // Púrpura para tareas resumen
+      milestone: '#F59E0B' // Amarillo/Naranja para milestones
+    };
+    return colors[type];
   }
 
   /**
