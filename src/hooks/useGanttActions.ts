@@ -42,28 +42,19 @@ export const useGanttActions = ({
     try {
       console.log('Adding new task:', task);
       
-      // Implementar creación de tarea en Firestore
-      const { TaskService } = await import('../services/taskservice');
-      
-      const taskData = {
+      // Usar TaskManager para crear la tarea
+      const { taskManager } = await import('../services/taskManager');
+      await taskManager.createTask({
+        projectId,
         name: task.name || 'Nueva Tarea',
         description: task.description || '',
-        startDate: task.startDate instanceof Date ? task.startDate : task.startDate?.toDate() || new Date(),
-        endDate: task.endDate instanceof Date ? task.endDate : task.endDate?.toDate() || new Date(),
-        duration: task.duration || 1,
-        progress: task.progress || 0,
-        status: task.status || 'not-started',
+        assigneeId: task.assigneeId || '',
         priority: task.priority || 'medium',
-        assigneeId: task.assigneeId,
-        projectId: projectId,
-        dependencies: task.dependencies || [],
-        tags: task.tags || [],
-        color: task.color || '#3B82F6',
         estimatedHours: task.estimatedHours || 8,
-        actualHours: 0
-      };
-      
-      await TaskService.createTask(taskData);
+        startDate: task.startDate instanceof Date ? task.startDate : task.startDate?.toDate(),
+        endDate: task.endDate instanceof Date ? task.endDate : task.endDate?.toDate(),
+        duration: task.duration
+      });
       
       console.log('Task added successfully');
       

@@ -246,6 +246,13 @@
   font-weight: 500 !important;
   transition: all 0.2s ease !important;
   margin-right: 4px !important;
+  
+  /* Alineación perfecta de contenido */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 32px !important;
+  vertical-align: middle !important;
 }
 
 .wx-toolbar .wx-button:hover:not(:disabled) {
@@ -300,6 +307,29 @@
 .wx-toolbar .wx-button i {
   margin-right: 6px !important;
   font-size: 14px !important;
+  
+  /* Alineación perfecta de iconos */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  vertical-align: baseline !important;
+}
+
+/* Para botones que solo tienen icono (sin texto) */
+.wx-toolbar .wx-button:not(:has(> span)):not(:has(> .wx-button-text)) i,
+.wx-toolbar .wx-button.wx-icon i {
+  margin-right: 0 !important;
+}
+
+/* Corrección específica para iconos wxi */
+.wx-toolbar .wx-button i[class^="wxi-"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 16px !important;
+  height: 16px !important;
+  line-height: 1 !important;
 }
 
 /* Ajustes para el contenedor del Gantt con toolbar */
@@ -324,5 +354,7 @@
   .wx-toolbar .wx-button i {
     margin-right: 4px !important;
     font-size: 12px !important;
+    width: 14px !important;
+    height: 14px !important;
   }
 }

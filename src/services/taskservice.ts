@@ -26,6 +26,24 @@ const COLLECTION_NAME = 'tasks';
  */
 export class TaskService {
   /**
+   * Obtener el próximo número de orden para un proyecto
+   */
+  static async getNextOrderForProject(projectId: string): Promise<number> {
+    try {
+      const tasks = await this.getProjectTasks(projectId);
+      if (tasks.length === 0) {
+        return 1;
+      }
+      
+      const maxOrder = Math.max(...tasks.map(task => task.order || 0));
+      return maxOrder + 1;
+    } catch (error) {
+      console.error('Error getting next order:', error);
+      return 1;
+    }
+  }
+
+  /**
    * Crear una nueva tarea
    */
   static async createTask(data: CreateTaskData): Promise<string> {
@@ -35,8 +53,15 @@ export class TaskService {
         throw new Error('Firebase no está configurado correctamente. Verifica el archivo .env');
       }
 
+      // Obtener el próximo orden si no se proporciona
+      let order = data.order;
+      if (typeof order !== 'number') {
+        order = await this.getNextOrderForProject(data.projectId);
+      }
+
       const taskData = {
         ...data,
+        order,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       };
@@ -75,6 +100,7 @@ export class TaskService {
         return {
           id: docSnap.id,
           ...data,
+          order: data.order || 0, // Orden por defecto para tareas existetentes sin un campo de orden
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
           startDate: data.startDate?.toDate() || new Date(),
@@ -97,6 +123,7 @@ export class TaskService {
       let q = query(
         collection(db, COLLECTION_NAME),
         where('projectId', '==', projectId),
+        orderBy('order', 'asc'),
         orderBy('startDate', 'asc')
       );
 
@@ -119,6 +146,7 @@ export class TaskService {
         return {
           id: doc.id,
           ...data,
+          order: data.order || 0, // Orden por defecto para tareas existetentes sin un campo de orden
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
           startDate: data.startDate?.toDate() || new Date(),
@@ -190,6 +218,7 @@ export class TaskService {
         return {
           id: doc.id,
           ...data,
+          order: data.order || 0, // Orden por defecto para tareas existetentes sin un campo de orden
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
           startDate: data.startDate?.toDate() || new Date(),
@@ -255,6 +284,65 @@ export class TaskService {
     } catch (error) {
       console.error('Error removing task dependency:', error);
       throw new Error('Error al remover dependencia de la tarea');
+    }
+  }
+
+  /**
+   * Actualizar orden de tareas después de mover una tarea
+   */
+  static async updateTaskOrder(projectId: string, movedTaskId: string, targetTaskId: string | null, mode: 'before' | 'after'): Promise<void> {
+    try {
+      const tasks = await this.getProjectTasks(projectId);
+      const movedTask = tasks.find(t => t.id === movedTaskId);
+      
+      if (!movedTask) {
+        throw new Error('Tarea a mover no encontrada');
+      }
+
+      // Si no hay target, mover al final
+      if (!targetTaskId) {
+        const maxOrder = Math.max(...tasks.map(t => t.order || 0));
+        await this.updateTask(movedTaskId, { order: maxOrder + 1 });
+        return;
+      }
+
+      const targetTask = tasks.find(t => t.id === targetTaskId);
+      if (!targetTask) {
+        throw new Error('Tarea objetivo no encontrada');
+      }
+
+      // Ordenar tareas por orden actual
+      const sortedTasks = tasks.sort((a, b) => (a.order || 0) - (b.order || 0));
+      const targetIndex = sortedTasks.findIndex(t => t.id === targetTaskId);
+      
+      let newOrder: number;
+      
+      if (mode === 'before') {
+        if (targetIndex === 0) {
+          // Insertar al principio
+          newOrder = (targetTask.order || 1) / 2;
+        } else {
+          // Insertar entre la tarea anterior y la objetivo
+          const prevTask = sortedTasks[targetIndex - 1];
+          newOrder = ((prevTask.order || 0) + (targetTask.order || 0)) / 2;
+        }
+      } else {
+        // mode === 'after'
+        if (targetIndex === sortedTasks.length - 1) {
+          // Insertar al final
+          newOrder = (targetTask.order || 0) + 1;
+        } else {
+          // Insertar entre la objetivo y la siguiente
+          const nextTask = sortedTasks[targetIndex + 1];
+          newOrder = ((targetTask.order || 0) + (nextTask.order || 0)) / 2;
+        }
+      }
+
+      await this.updateTask(movedTaskId, { order: newOrder });
+      
+    } catch (error) {
+      console.error('Error updating task order:', error);
+      throw new Error('Error al actualizar el orden de las tareas');
     }
   }
 }

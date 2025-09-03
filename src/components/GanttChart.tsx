@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Gantt, Willow, Toolbar, defaultToolbarButtons } from 'wx-react-gantt';
 import type { Task } from '../types/firestore';
 import { FirestoreGanttDataProvider } from '../services/ganttDataProvider';
+import { taskManager } from '../services/taskManager';
 
 // Tipos para el componente Gantt (eliminados los no utilizados)
 
@@ -28,29 +29,29 @@ interface GanttChartProps {
   onAddTask?: () => void;
 }
 
-const GanttChart: React.FC<GanttChartProps> = ({ 
-  tasks, 
+const GanttChart: React.FC<GanttChartProps> = ({
+  tasks,
   projectId,
-  loading = false, 
-  error = null, 
+  loading = false,
+  error = null,
   apiRef: externalApiRef,
-  onAddTask 
+  onAddTask
 }) => {
   const internalApiRef = useRef<any>(null);
   const apiRef = externalApiRef || internalApiRef;
   const [dataProvider, setDataProvider] = useState<FirestoreGanttDataProvider | null>(null);
   const [ganttData, setGanttData] = useState<{ tasks: any[], links: any[] }>({ tasks: [], links: [] });
 
-  // Inicializar el data provider
+  // Inicializar el data provider y suscribirse a eventos del TaskManager
   useEffect(() => {
     if (projectId && !dataProvider) {
       console.log('Inicializando FirestoreGanttDataProvider para proyecto:', projectId);
       const provider = new FirestoreGanttDataProvider(projectId);
-      
+
       // Configurar listener solo para operaciones que requieren recarga completa (add/delete)
       provider.on('data-updated', async (eventData: any) => {
         console.log('Evento de actualización recibido:', eventData);
-        
+
         // Solo recargar para operaciones que realmente lo requieren
         if (eventData.action === 'add-task' || eventData.action === 'delete-task') {
           console.log('Recargando datos para operación:', eventData.action);
@@ -64,17 +65,39 @@ const GanttChart: React.FC<GanttChartProps> = ({
           console.log('Operación no requiere recarga:', eventData.action);
         }
       });
-      
+
+      // Suscribirse a eventos del TaskManager para tareas creadas externamente
+      const handleTaskManagerEvent = async (eventData: any) => {
+        console.log('GanttChart: Evento de TaskManager recibido:', eventData);
+
+        if (eventData.projectId === projectId && eventData.action === 'task-created') {
+          console.log('GanttChart: Recargando datos por tarea creada externamente');
+          try {
+            const data = await provider.getData();
+            setGanttData(data);
+          } catch (error) {
+            console.error('Error recargando datos desde TaskManager:', error);
+          }
+        }
+      };
+
+      taskManager.on(handleTaskManagerEvent);
+
       setDataProvider(provider);
+
+      // Cleanup
+      return () => {
+        taskManager.off(handleTaskManagerEvent);
+      };
     }
-    
+
     return () => {
       if (dataProvider) {
         dataProvider.destroy();
       }
     };
   }, [projectId]);
-  
+
   // Cargar datos iniciales
   useEffect(() => {
     if (dataProvider) {
@@ -87,10 +110,27 @@ const GanttChart: React.FC<GanttChartProps> = ({
           console.error('Error cargando datos iniciales:', error);
         }
       };
-      
+
       loadData();
     }
   }, [dataProvider]);
+
+  // Actualizar datos cuando cambian las tareas desde props
+  useEffect(() => {
+    if (dataProvider && tasks.length > 0) {
+      const loadData = async () => {
+        try {
+          console.log('Recargando datos del Gantt debido a cambios en tasks prop...');
+          const data = await dataProvider.getData();
+          setGanttData(data);
+        } catch (error) {
+          console.error('Error recargando datos del Gantt:', error);
+        }
+      };
+
+      loadData();
+    }
+  }, [tasks, dataProvider]);
 
 
 
@@ -110,10 +150,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
     { id: 'start', header: 'Inicio', align: 'center', flexGrow: 1 },
     { id: 'duration', header: 'Duración', align: 'center', flexGrow: 1 },
     { id: 'progress', header: 'Progreso', align: 'center', flexGrow: 1 },
-    { 
-      id: 'action', 
-      header: 'Acciones', 
-      align: 'center', 
+    {
+      id: 'action',
+      header: 'Acciones',
+      align: 'center',
       width: 50,
       template: (task: any) => {
         return `
@@ -148,9 +188,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const collectProgressFromKids = (id: number): [number, number] => {
     let totalProgress = 0;
     let totalDuration = 0;
-    
+
     if (!apiRef.current) return [0, 0];
-    
+
     const kids = apiRef.current.getTask(id).data;
 
     kids?.forEach((kid: any) => {
@@ -165,14 +205,14 @@ const GanttChart: React.FC<GanttChartProps> = ({
       totalProgress += p;
       totalDuration += d;
     });
-    
+
     return [totalProgress, totalDuration];
   };
 
   // Función para recalcular el progreso de summary tasks
   const recalcSummaryProgress = (id: number, self: boolean = false) => {
     if (!apiRef.current) return;
-    
+
     const { tasks } = apiRef.current.getState();
     const task = apiRef.current.getTask(id);
 
@@ -192,25 +232,32 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
 
   // Función global para agregar subtarea
-  const addChildTask = useCallback((parentId: number) => {
-    if (apiRef.current) {
-      const today = new Date();
-      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-      
-      apiRef.current.exec('add-task', {
-        target: parentId,
-        mode: 'child',
-        task: {
-          text: 'Nueva Subtarea',
-          start: today,
-          end: tomorrow,
-          duration: 1,
-          progress: 0,
-          type: 'task'
-        }
+  const addChildTask = useCallback(async (parentId: number) => {
+    if (!apiRef.current || !dataProvider) return;
+
+    try {
+      // Obtener el firestoreId del padre usando el mapeo
+      const parentFirestoreId = dataProvider.getFirestoreIdFromGanttId(parentId);
+
+      if (!parentFirestoreId) {
+        console.error('No se encontró el ID de Firestore para la tarea padre:', parentId);
+        return;
+      }
+
+      // Usar el TaskManager para crear la subtarea
+      await taskManager.createSubtask(parentFirestoreId, {
+        projectId,
+        name: 'Nueva Subtarea',
+        description: 'Subtarea creada desde el Gantt',
+        priority: 'medium',
+        estimatedHours: 8
       });
+
+      console.log('Subtarea creada exitosamente para padre:', parentFirestoreId);
+    } catch (error) {
+      console.error('Error creando subtarea:', error);
     }
-  }, []);
+  }, [dataProvider, projectId]);
 
   // Función de inicialización del Gantt
   const initGantt = useCallback((api: any) => {
@@ -234,7 +281,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
     api.getState().tasks.forEach((task: any) => {
       recalcSummaryProgress(task.id, true);
     });
-    
+
     api.on('update-task', ({ id }: any) => {
       recalcSummaryProgress(id);
     });
@@ -242,11 +289,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
     api.on('delete-task', ({ source }: any) => {
       recalcSummaryProgress(source, true);
     });
-    
+
     api.on('copy-task', ({ id }: any) => {
       recalcSummaryProgress(id);
     });
-    
+
     api.on('move-task', ({ id, source, inProgress }: any) => {
       if (inProgress) return;
 
@@ -256,8 +303,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
       recalcSummaryProgress(id);
     });
 
+    // Configurar listeners estándar para el progreso de summary tasks
+
     console.log('Gantt API inicializado correctamente con FirestoreGanttDataProvider');
-  }, [dataProvider]);
+  }, [dataProvider, projectId]);
 
   // Efecto para inicializar el Gantt cuando el dataProvider esté listo
   useEffect(() => {
@@ -269,7 +318,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
   // Configurar función global para agregar subtareas
   useEffect(() => {
     (window as any).addChildTask = addChildTask;
-    
+
     return () => {
       delete (window as any).addChildTask;
     };
@@ -312,21 +361,63 @@ const GanttChart: React.FC<GanttChartProps> = ({
           <p className="text-gray-500 text-sm mb-4">
             Comienza agregando tu primera tarea para ver el diagrama de Gantt.
           </p>
-          <button 
-             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-             onClick={onAddTask}
-           >
-             Agregar primera tarea
-           </button>
+          <button
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={onAddTask}
+          >
+            Agregar primera tarea
+          </button>
         </div>
       </div>
     );
   }
 
-  // Filtrar solo los botones 'Edit' y 'Delete' de la barra de herramientas, mantener 'add-task'
-  const toolbarItems = defaultToolbarButtons.filter(button => 
-    button.id !== 'edit-task' && button.id !== 'delete-task'
-  );
+  /**
+   * Handler personalizado para el botón "New Task" del toolbar.
+   * 
+   * IMPORTANTE: Los botones del defaultToolbarButtons no vienen con handlers
+   * asignados por defecto. Para que el botón "New Task" funcione, necesitamos
+   * asignar manualmente un handler personalizado que use nuestro TaskManager.
+   * 
+   * Esta solución garantiza que:
+   * - El botón "New Task" crea tareas usando el TaskManager centralizado
+   * - Las tareas se sincronizan automáticamente con el GanttChart
+   * - Se mantiene la consistencia del flujo de creación de tareas
+   */
+  const handleAddTaskFromToolbar = async () => {
+    try {
+      await taskManager.createTask({
+        projectId,
+        name: 'Nueva Tarea',
+        description: 'Tarea creada desde el toolbar',
+        priority: 'medium',
+        estimatedHours: 40
+      });
+    } catch (error) {
+      console.error('GanttChart: Error creando tarea desde toolbar:', error);
+    }
+  };
+
+  /**
+   * Configuración personalizada del toolbar.
+   * 
+   * - Filtra botones 'edit-task' y 'delete-task' (no implementados)
+   * - Asigna handler personalizado al botón 'add-task' para usar TaskManager
+   * - Mantiene todos los demás botones con su funcionalidad original
+   */
+  const toolbarItems = defaultToolbarButtons
+    .filter(button => button.id !== 'edit-task' && button.id !== 'delete-task')
+    .map(button => {
+      if (button.id === 'add-task') {
+        return {
+          ...button,
+          handler: handleAddTaskFromToolbar
+        };
+      }
+      return button;
+    });
+
+
 
   return (
     <div className="h-full gantt-container relative">
