@@ -42,6 +42,7 @@ export interface Task {
   estimatedHours: number;
   actualHours?: number;
   status: 'not-started' | 'in-progress' | 'completed' | 'blocked';
+  order: number; // Orden para posicionamiento de tareas
   createdAt: Date;
   updatedAt: Date;
 }

@@ -83,7 +83,6 @@ const ProjectView: React.FC = () => {
         <ProjectHeader
           project={project!}
           tasksCount={tasks.length}
-          onAddTask={handleAddTask}
           onViewTeam={handleViewTeam}
           onChangeView={handleChangeView}
         />

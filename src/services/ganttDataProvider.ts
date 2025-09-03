@@ -3,7 +3,7 @@
  * pero se conecta con Firestore en lugar de un servidor REST
  */
 
-import { TaskService } from './taskservice';
+import { TaskService } from './taskService';
 import type { Task, UpdateTaskData } from '../types/firestore';
 
 export interface GanttDataProviderData {
@@ -368,9 +368,55 @@ export class FirestoreGanttDataProvider {
   private async handleMoveTask(data: any): Promise<any> {
     console.log('FirestoreGanttDataProvider: Moviendo tarea:', data);
     
-    // Implementar lógica de movimiento si es necesario
-    // Por ahora, tratarlo como una actualización sin recarga
-    return await this.handleUpdateTask(data);
+    // Verificar si el arrastre está en progreso
+    if (data.inProgress) {
+      console.log('FirestoreGanttDataProvider: Movimiento en progreso, no guardando orden');
+      return;
+    }
+    
+    try {
+      // Obtener el firestoreId de la tarea que se está moviendo
+      let movedTaskFirestoreId = data.firestoreId;
+      if (!movedTaskFirestoreId && data.id) {
+        movedTaskFirestoreId = this.idMapping.get(data.id);
+      }
+      
+      // Obtener el firestoreId de la tarea objetivo
+      let targetTaskFirestoreId = null;
+      if (data.target) {
+        targetTaskFirestoreId = this.idMapping.get(data.target);
+        console.log('FirestoreGanttDataProvider: Target task ID:', data.target, '-> Firestore ID:', targetTaskFirestoreId);
+      }
+      
+      if (!movedTaskFirestoreId) {
+        console.error('FirestoreGanttDataProvider: No se pudo obtener el ID de Firestore de la tarea movida');
+        return;
+      }
+      
+      console.log('FirestoreGanttDataProvider: Actualizando orden - Moved:', movedTaskFirestoreId, 'Target:', targetTaskFirestoreId, 'Mode:', data.mode);
+      
+      // Importar TaskService dinámicamente para evitar circular imports
+      const { TaskService } = await import('./taskService');
+      
+      // Actualizar el orden en Firestore
+      await TaskService.updateTaskOrder(
+        this.projectId,
+        movedTaskFirestoreId,
+        targetTaskFirestoreId || null,
+        data.mode || 'after'
+      );
+      
+      console.log('FirestoreGanttDataProvider: Orden actualizado exitosamente');
+      
+      // Emitir evento para que el componente recargue los datos
+      this.emit('data-updated', { action: 'move-task' });
+      
+      return { success: true };
+      
+    } catch (error) {
+      console.error('FirestoreGanttDataProvider: Error al actualizar orden de tarea:', error);
+      throw error;
+    }
   }
 
   private async handleDragTask(data: any): Promise<any> {

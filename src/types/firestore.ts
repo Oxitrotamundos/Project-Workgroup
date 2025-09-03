@@ -93,6 +93,7 @@ export interface Task extends BaseDocument {
   estimatedHours: number;
   actualHours?: number;
   status: TaskStatus;
+  order: number; // Orden para posicionamiento de tareas
 }
 
 // Datos para crear tarea
@@ -113,6 +114,7 @@ export interface CreateTaskData {
   estimatedHours: number;
   actualHours?: number;
   status: TaskStatus;
+  order?: number; //Orden para posicionamiento de tareas(Opcional al crear)
 }
 
 // Datos para actualizar tarea
@@ -132,6 +134,7 @@ export interface UpdateTaskData {
   estimatedHours?: number;
   actualHours?: number;
   status?: TaskStatus;
+  order?: number; //Orden para posicionamiento de tareas
 }
 
 // Colección: workload

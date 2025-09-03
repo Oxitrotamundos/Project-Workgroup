@@ -1,4 +1,4 @@
-import { TaskService } from './taskservice';
+import { TaskService } from './taskService';
 import type { CreateTaskData, Task } from '../types/firestore';
 
 export interface TaskCreationOptions {
