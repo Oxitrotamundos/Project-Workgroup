@@ -256,18 +256,6 @@ export class TaskManager {
     }
   }
 
-  /**
-   * Obtener color basado en prioridad
-   */
-  private getColorForPriority(priority: 'low' | 'medium' | 'high' | 'critical'): string {
-    const colors = {
-      low: '#10B981',     // Verde
-      medium: '#3B82F6',  // Azul
-      high: '#F59E0B',    // Amarillo/Naranja
-      critical: '#EF4444' // Rojo
-    };
-    return colors[priority];
-  }
 
   /**
    * Obtener color basado en tipo de tarea

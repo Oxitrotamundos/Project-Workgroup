@@ -14,7 +14,7 @@ export interface GanttDataProviderData {
 export class FirestoreGanttDataProvider {
   private projectId: string;
   private listeners: Map<string, Function[]> = new Map();
-  private _nextHandler: any = null;
+  private _ganttApi: any = null; // Referencia directa al API del Gantt
   private idMapping: Map<number, string> = new Map(); // Mapeo de ID numérico a firestoreId
   private tempIdMapping: Map<string, string> = new Map(); // Mapeo de ID temporal a firestoreId
 
@@ -30,10 +30,10 @@ export class FirestoreGanttDataProvider {
   }
 
   /**
-   * Configurar el siguiente handler en la cadena de eventos
+   * Configurar referencia directa al API del Gantt (para consultas sin crear loops)
    */
-  setNext(handler: any): void {
-    this._nextHandler = handler;
+  setGanttApi(api: any): void {
+    this._ganttApi = api;
   }
 
   /**
@@ -46,10 +46,8 @@ export class FirestoreGanttDataProvider {
       // Procesar la acción localmente
       const result = await this.send(action, data);
       
-      // Si hay un siguiente handler en la cadena, ejecutarlo también
-      if (this._nextHandler && this._nextHandler.exec) {
-        await this._nextHandler.exec(action, data);
-      }
+      // Note: No llamamos a _nextHandler.exec() para evitar loops infinitos
+      // Solo usamos _ganttApi para consultas directas sin generar eventos
       
       return result;
     } catch (error) {
@@ -301,9 +299,9 @@ export class FirestoreGanttDataProvider {
     const hasValidData = taskData.text || taskData.start || taskData.end || taskData.name || taskData.startDate || taskData.endDate;
     console.log('FirestoreGanttDataProvider: hasValidData:', hasValidData);
     
-    if (!hasValidData && data.id && this._nextHandler && this._nextHandler.getTask) {
+    if (!hasValidData && data.id && this._ganttApi && this._ganttApi.getTask) {
       console.log('FirestoreGanttDataProvider: Datos vacíos detectados, obteniendo datos actualizados de la API del Gantt');
-      const updatedTask = this._nextHandler.getTask(data.id);
+      const updatedTask = this._ganttApi.getTask(data.id);
       console.log('FirestoreGanttDataProvider: Tarea obtenida de la API:', updatedTask);
       
       if (updatedTask) {
@@ -403,13 +401,21 @@ export class FirestoreGanttDataProvider {
       // Obtener el firestoreId de la tarea que se está moviendo
       let movedTaskFirestoreId = data.firestoreId;
       if (!movedTaskFirestoreId && data.id) {
-        movedTaskFirestoreId = this.idMapping.get(data.id);
+        // Primero verificar si es un ID temporal
+        if (typeof data.id === 'string' && data.id.startsWith('temp://')) {
+          movedTaskFirestoreId = this.tempIdMapping.get(data.id);
+          console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID temporal en move:', data.id, '-> encontrado:', movedTaskFirestoreId);
+        } else {
+          // Si no es temporal, buscar en el mapeo numérico
+          movedTaskFirestoreId = this.idMapping.get(data.id);
+          console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID numérico en move:', data.id, '-> encontrado:', movedTaskFirestoreId);
+        }
       }
       
       // Obtener el firestoreId de la tarea objetivo
-      let targetTaskFirestoreId = null;
+      let targetTaskFirestoreId: string | null = null;
       if (data.target) {
-        targetTaskFirestoreId = this.idMapping.get(data.target);
+        targetTaskFirestoreId = this.idMapping.get(data.target) || null;
         console.log('FirestoreGanttDataProvider: Target task ID:', data.target, '-> Firestore ID:', targetTaskFirestoreId);
       }
       
@@ -422,6 +428,45 @@ export class FirestoreGanttDataProvider {
       
       // Importar TaskService dinámicamente para evitar circular imports
       const { TaskService } = await import('./taskService');
+      
+      // Verificar si necesitamos actualizar la jerarquía (parentId)
+      let newParentId: string | null = null;
+      
+      
+      // Obtener los datos actualizados de la tarea movida desde el Gantt
+      if (this._ganttApi && this._ganttApi.getTask && data.id) {
+        const movedTask = this._ganttApi.getTask(data.id);
+        console.log('FirestoreGanttDataProvider: Tarea movida después del movimiento:', movedTask);
+        
+        if (movedTask) {
+          if (movedTask.parent) {
+            // La tarea tiene un parent, obtener su firestoreId
+            const parentFirestoreId = this.idMapping.get(movedTask.parent);
+            if (parentFirestoreId) {
+              newParentId = parentFirestoreId;
+              console.log('FirestoreGanttDataProvider: Nueva jerarquía detectada, parentId:', newParentId);
+            } else {
+              console.warn('FirestoreGanttDataProvider: Parent ID no encontrado en mapeo:', movedTask.parent);
+              // No actualizar parentId si no podemos resolver la referencia
+              return { success: false, error: 'Parent ID no encontrado en mapeo' };
+            }
+          } else {
+            // La tarea no tiene parent, está en el nivel raíz
+            newParentId = null;
+            console.log('FirestoreGanttDataProvider: Tarea movida a nivel raíz');
+          }
+        } else {
+          console.warn('FirestoreGanttDataProvider: No se pudo obtener datos actualizados de la tarea movida');
+          // No actualizar si no tenemos datos confiables
+          return { success: false, error: 'No se pudo obtener datos de la tarea' };
+        }
+      }
+      
+      // Actualizar parentId si es necesario
+      if (newParentId !== undefined) {
+        console.log('FirestoreGanttDataProvider: Actualizando parentId de', movedTaskFirestoreId, 'a', newParentId);
+        await TaskService.updateTask(movedTaskFirestoreId, { parentId: newParentId || undefined });
+      }
       
       // Actualizar el orden en Firestore
       await TaskService.updateTaskOrder(
@@ -458,8 +503,8 @@ export class FirestoreGanttDataProvider {
     console.log('FirestoreGanttDataProvider: Arrastre completado, obteniendo datos actualizados de la tarea');
     
     // El arrastre se ha completado, obtener los datos actualizados de la tarea desde la API del gantt
-    if (this._nextHandler && this._nextHandler.getTask) {
-      const updatedTask = this._nextHandler.getTask(data.id);
+    if (this._ganttApi && this._ganttApi.getTask) {
+      const updatedTask = this._ganttApi.getTask(data.id);
       console.log('FirestoreGanttDataProvider: Datos actualizados de la tarea:', updatedTask);
       
       if (updatedTask) {

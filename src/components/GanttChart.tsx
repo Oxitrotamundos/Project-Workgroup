@@ -278,6 +278,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
     if (dataProvider) {
       console.log('Configurando FirestoreGanttDataProvider como siguiente en la cadena');
       api.setNext(dataProvider);
+      // Pasar referencia del API al dataProvider para consultas directas (sin crear loop)
+      dataProvider.setGanttApi(api);
     }
 
     // Inicializar el cálculo automático de progreso para summary tasks existentes
