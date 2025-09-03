@@ -170,8 +170,10 @@ export class FirestoreGanttDataProvider {
         case 'unselect-task':
         case 'expand-task':
         case 'collapse-task':
-          console.log('FirestoreGanttDataProvider: Acción de UI ignorada:', action);
-          return { success: true, message: 'Acción de UI procesada localmente' };
+        case 'open-task':
+        case 'close-task':
+          console.log('FirestoreGanttDataProvider: Acción de expansión/colapso procesada localmente:', action);
+          return { success: true, message: 'Acción de expansión procesada localmente' };
         
         default:
           console.warn('FirestoreGanttDataProvider: Acción no soportada:', action);
@@ -201,14 +203,17 @@ export class FirestoreGanttDataProvider {
       
       if (parentFirestoreId) {
         // Crear subtarea usando TaskManager
+        console.log('FirestoreGanttDataProvider: Creando subtarea con skipEvent=true');
         taskId = await taskManager.createSubtask(parentFirestoreId, {
           projectId: this.projectId,
           name: data.text || 'Nueva Subtarea',
           description: data.details || '',
           priority: 'medium',
           type: data.type || 'task',
-          estimatedHours: (data.duration || 1) * 8
+          estimatedHours: (data.duration || 1) * 8,
+          skipEvent: true // Evitar evento que causa recarga completa
         });
+        console.log('FirestoreGanttDataProvider: Subtarea creada con skipEvent, ID:', taskId);
       } else {
         // Crear tarea principal usando TaskManager
         taskId = await taskManager.createTask({
@@ -220,15 +225,16 @@ export class FirestoreGanttDataProvider {
           duration: data.duration,
           priority: 'medium',
           type: data.type || 'task',
-          estimatedHours: (data.duration || 7) * 8
+          estimatedHours: (data.duration || 7) * 8,
+          skipEvent: true // Evitar evento que causa recarga desde el Gantt
         });
       }
       
       console.log('FirestoreGanttDataProvider: Tarea creada con ID:', taskId);
       
-      // No emitir evento aquí ya que TaskManager ya emitió el evento 'task-created'
-      // Esto evita duplicar actualizaciones
-      console.log('FirestoreGanttDataProvider: Tarea creada por TaskManager, no emitiendo evento duplicado');
+      // No emitir evento de recarga cuando se crean tareas desde el Gantt
+      // El Gantt ya maneja estas actualizaciones localmente y evitamos colapsos
+      console.log('FirestoreGanttDataProvider: Tarea creada desde Gantt, evitando recarga para preservar estado UI');
       
       return { success: true, id: taskId };
     } catch (error) {
@@ -363,8 +369,9 @@ export class FirestoreGanttDataProvider {
       console.log('FirestoreGanttDataProvider: Tarea eliminada del mapeo, ID:', data.id);
     }
     
-    // Emitir evento de eliminación - esto sí requiere recarga
-    this.emit('data-updated', { action: 'delete-task', taskId: data.firestoreId });
+    // No emitir evento de recarga para eliminaciones desde el Gantt
+    // El Gantt ya maneja la eliminación localmente
+    console.log('FirestoreGanttDataProvider: Tarea eliminada, evitando recarga para preservar estado UI');
     
     return { success: true };
   }

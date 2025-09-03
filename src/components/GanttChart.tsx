@@ -66,12 +66,12 @@ const GanttChart: React.FC<GanttChartProps> = ({
         }
       });
 
-      // Suscribirse a eventos del TaskManager para tareas creadas externamente
+      // Suscribirse a eventos del TaskManager solo para tareas creadas externamente (fuera del Gantt)
       const handleTaskManagerEvent = async (eventData: any) => {
         console.log('GanttChart: Evento de TaskManager recibido:', eventData);
 
         if (eventData.projectId === projectId && eventData.action === 'task-created') {
-          console.log('GanttChart: Recargando datos por tarea creada externamente');
+          console.log('GanttChart: Tarea creada externamente, recargando datos del Gantt');
           try {
             const data = await provider.getData();
             setGanttData(data);
@@ -244,16 +244,19 @@ const GanttChart: React.FC<GanttChartProps> = ({
         return;
       }
 
-      // Usar el TaskManager para crear la subtarea
+      // Crear subtarea con skipEvent=true para evitar recarga del componente
       await taskManager.createSubtask(parentFirestoreId, {
         projectId,
         name: 'Nueva Subtarea',
         description: 'Subtarea creada desde el Gantt',
         priority: 'medium',
-        estimatedHours: 8
+        type: 'task',
+        estimatedHours: 8,
+        skipEvent: true // Evitar evento que causaría recarga y colapso
       });
 
       console.log('Subtarea creada exitosamente para padre:', parentFirestoreId);
+
     } catch (error) {
       console.error('Error creando subtarea:', error);
     }

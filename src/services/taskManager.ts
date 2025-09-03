@@ -13,6 +13,7 @@ export interface TaskCreationOptions {
   startDate?: Date;
   endDate?: Date;
   duration?: number;
+  skipEvent?: boolean; // Flag para evitar emitir eventos
 }
 
 export interface TaskManagerEventData {
@@ -118,13 +119,18 @@ export class TaskManager {
       // Obtener la tarea creada para el evento
       const createdTask = await TaskService.getTask(taskId);
 
-      // Emitir evento de creación
-      this.emit({
-        action: 'task-created',
-        taskId,
-        task: createdTask || undefined,
-        projectId: options.projectId
-      });
+      // Emitir evento de creación solo si no se especifica skipEvent
+      if (!options.skipEvent) {
+        console.log('TaskManager: Emitiendo evento task-created para:', taskId);
+        this.emit({
+          action: 'task-created',
+          taskId,
+          task: createdTask || undefined,
+          projectId: options.projectId
+        });
+      } else {
+        console.log('TaskManager: Omitiendo evento de creación por skipEvent=true para tarea:', taskId);
+      }
 
       return taskId;
     } catch (error) {
@@ -145,7 +151,7 @@ export class TaskManager {
       throw new Error('Tarea padre no encontrada');
     }
 
-    // Crear subtarea con referencia al padre
+    // Crear subtarea con referencia al padre, preservando el flag skipEvent
     return this.createTask({
       ...options,
       parentId: parentTaskId,
