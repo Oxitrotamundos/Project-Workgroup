@@ -6,6 +6,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   where,
   orderBy,
@@ -174,8 +175,23 @@ export class TaskService {
   static async updateTask(id: string, data: UpdateTaskData): Promise<void> {
     try {
       const docRef = doc(db, COLLECTION_NAME, id);
+      
+      // Filtrar campos undefined y manejar casos especiales antes de enviar a Firestore
+      const cleanedData: any = {};
+      Object.keys(data).forEach(key => {
+        const value = (data as any)[key];
+        if (value !== undefined) {
+          // Caso especial: si parentId es null, usar deleteField() para eliminar el campo
+          if (key === 'parentId' && value === null) {
+            cleanedData[key] = deleteField();
+          } else {
+            cleanedData[key] = value;
+          }
+        }
+      });
+      
       const updateData = {
-        ...data,
+        ...cleanedData,
         updatedAt: Timestamp.now()
       };
 

@@ -129,7 +129,7 @@ export interface UpdateTaskData {
   duration?: number;
   progress?: number;
   assigneeId?: string;
-  parentId?: string; // ID de la tarea padre para jerarquía
+  parentId?: string | null; // ID de la tarea padre para jerarquía
   dependencies?: string[];
   tags?: string[];
   priority?: TaskPriority;

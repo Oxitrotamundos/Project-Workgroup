@@ -252,6 +252,8 @@ export class FirestoreGanttDataProvider {
   private async handleUpdateTask(data: any): Promise<any> {
     console.log('FirestoreGanttDataProvider: Actualizando tarea:', data);
     
+    // NOTE: La detección por eventSource no funciona, procesamos jerarquía en move-task directamente
+    
     // Intentar obtener el firestoreId de los datos o del mapeo
     let firestoreId = data.firestoreId;
     
@@ -429,43 +431,14 @@ export class FirestoreGanttDataProvider {
       // Importar TaskService dinámicamente para evitar circular imports
       const { TaskService } = await import('./taskService');
       
-      // Verificar si necesitamos actualizar la jerarquía (parentId)
-      let newParentId: string | null = null;
+      // Procesar cambios de jerarquía después del movimiento
+      console.log('FirestoreGanttDataProvider: Movimiento completado, procesando jerarquía');
+      const hierarchyResult = await this.processTaskHierarchyUpdate({ id: data.id });
       
-      
-      // Obtener los datos actualizados de la tarea movida desde el Gantt
-      if (this._ganttApi && this._ganttApi.getTask && data.id) {
-        const movedTask = this._ganttApi.getTask(data.id);
-        console.log('FirestoreGanttDataProvider: Tarea movida después del movimiento:', movedTask);
-        
-        if (movedTask) {
-          if (movedTask.parent) {
-            // La tarea tiene un parent, obtener su firestoreId
-            const parentFirestoreId = this.idMapping.get(movedTask.parent);
-            if (parentFirestoreId) {
-              newParentId = parentFirestoreId;
-              console.log('FirestoreGanttDataProvider: Nueva jerarquía detectada, parentId:', newParentId);
-            } else {
-              console.warn('FirestoreGanttDataProvider: Parent ID no encontrado en mapeo:', movedTask.parent);
-              // No actualizar parentId si no podemos resolver la referencia
-              return { success: false, error: 'Parent ID no encontrado en mapeo' };
-            }
-          } else {
-            // La tarea no tiene parent, está en el nivel raíz
-            newParentId = null;
-            console.log('FirestoreGanttDataProvider: Tarea movida a nivel raíz');
-          }
-        } else {
-          console.warn('FirestoreGanttDataProvider: No se pudo obtener datos actualizados de la tarea movida');
-          // No actualizar si no tenemos datos confiables
-          return { success: false, error: 'No se pudo obtener datos de la tarea' };
-        }
-      }
-      
-      // Actualizar parentId si es necesario
-      if (newParentId !== undefined) {
-        console.log('FirestoreGanttDataProvider: Actualizando parentId de', movedTaskFirestoreId, 'a', newParentId);
-        await TaskService.updateTask(movedTaskFirestoreId, { parentId: newParentId || undefined });
+      // Solo continuar si la jerarquía se actualizó correctamente
+      if (!hierarchyResult.success) {
+        console.error('FirestoreGanttDataProvider: Error en jerarquía, abortando actualización de orden');
+        return hierarchyResult;
       }
       
       // Actualizar el orden en Firestore
@@ -478,8 +451,8 @@ export class FirestoreGanttDataProvider {
       
       console.log('FirestoreGanttDataProvider: Orden actualizado exitosamente');
       
-      // Emitir evento para que el componente recargue los datos
-      this.emit('data-updated', { action: 'move-task' });
+      // NOTE: No emitir evento de recarga ya que el Gantt maneja la UI localmente
+      console.log('FirestoreGanttDataProvider: Movimiento procesado exitosamente sin recarga');
       
       return { success: true };
       
@@ -487,6 +460,84 @@ export class FirestoreGanttDataProvider {
       console.error('FirestoreGanttDataProvider: Error al actualizar orden de tarea:', error);
       throw error;
     }
+  }
+
+  private async processTaskHierarchyUpdate(data: any): Promise<any> {
+    console.log('FirestoreGanttDataProvider: Procesando actualización de jerarquía:', data);
+    
+    // Obtener el ID de la tarea que fue movida
+    let taskId = data.id;
+    if (data.task && data.task.id) {
+      taskId = data.task.id;
+    }
+    
+    if (!taskId) {
+      console.warn('FirestoreGanttDataProvider: No se pudo determinar el ID de la tarea movida');
+      return { success: false, error: 'ID de tarea no encontrado' };
+    }
+    
+    // Obtener el firestoreId de la tarea movida
+    let movedTaskFirestoreId: string | undefined;
+    if (typeof taskId === 'string' && taskId.startsWith('temp://')) {
+      movedTaskFirestoreId = this.tempIdMapping.get(taskId);
+      console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID temporal en jerarquía:', taskId, '-> encontrado:', movedTaskFirestoreId);
+    } else {
+      movedTaskFirestoreId = this.idMapping.get(taskId);
+      console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID numérico en jerarquía:', taskId, '-> encontrado:', movedTaskFirestoreId);
+    }
+    
+    if (!movedTaskFirestoreId) {
+      console.error('FirestoreGanttDataProvider: No se pudo obtener el ID de Firestore de la tarea movida para jerarquía');
+      return { success: false, error: 'Firestore ID no encontrado' };
+    }
+    
+    // Obtener los datos actualizados de la tarea movida desde el Gantt
+    let newParentId: string | null = null;
+    if (this._ganttApi && this._ganttApi.getTask && taskId) {
+      const movedTask = this._ganttApi.getTask(taskId);
+      console.log('FirestoreGanttDataProvider: Tarea movida después del movimiento:', movedTask);
+      
+      if (movedTask) {
+        if (movedTask.parent) {
+          // La tarea tiene un parent, obtener su firestoreId
+          const parentFirestoreId = this.idMapping.get(movedTask.parent);
+          if (parentFirestoreId) {
+            newParentId = parentFirestoreId;
+            console.log('FirestoreGanttDataProvider: Nueva jerarquía detectada, parentId:', newParentId);
+          } else {
+            console.warn('FirestoreGanttDataProvider: Parent ID no encontrado en mapeo:', movedTask.parent);
+            return { success: false, error: 'Parent ID no encontrado en mapeo' };
+          }
+        } else {
+          // La tarea no tiene parent, está en el nivel raíz
+          newParentId = null;
+          console.log('FirestoreGanttDataProvider: Tarea movida a nivel raíz');
+        }
+      } else {
+        console.warn('FirestoreGanttDataProvider: No se pudo obtener datos actualizados de la tarea movida');
+        return { success: false, error: 'No se pudo obtener datos de la tarea' };
+      }
+    }
+    
+    // Actualizar parentId si es necesario
+    if (newParentId !== undefined) {
+      console.log('FirestoreGanttDataProvider: Actualizando parentId de', movedTaskFirestoreId, 'a', newParentId);
+      try {
+        const { TaskService } = await import('./taskService');
+        
+        // TaskService maneja correctamente null (usa deleteField()) y string (parentId válido)  
+        await TaskService.updateTask(movedTaskFirestoreId, { parentId: newParentId });
+        console.log('FirestoreGanttDataProvider: ParentId actualizado exitosamente');
+      } catch (error) {
+        console.error('FirestoreGanttDataProvider: Error actualizando parentId:', error);
+        // En caso de error, la jerarquía en el Gantt puede estar desincronizada con Firestore
+        // Se necesitaría una recarga completa para sincronizar
+        this.emit('data-updated', { action: 'sync-error', error });
+        return { success: false, error: 'Error actualizando jerarquía' };
+      }
+    }
+    
+    return { success: true };
   }
 
   private async handleDragTask(data: any): Promise<any> {

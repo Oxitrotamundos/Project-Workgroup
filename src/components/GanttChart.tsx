@@ -53,6 +53,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         console.log('Evento de actualización recibido:', eventData);
 
         // Solo recargar para operaciones que realmente lo requieren
+        // NOTE: move-task no requiere recarga ya que el Gantt maneja la UI localmente
         if (eventData.action === 'add-task' || eventData.action === 'delete-task') {
           console.log('Recargando datos para operación:', eventData.action);
           try {
@@ -60,6 +61,15 @@ const GanttChart: React.FC<GanttChartProps> = ({
             setGanttData(data);
           } catch (error) {
             console.error('Error recargando datos:', error);
+          }
+        } else if (eventData.action === 'sync-error') {
+          // Error de sincronización - necesita recarga completa para consistencia
+          console.warn('Error de sincronización detectado, recargando datos para consistencia');
+          try {
+            const data = await provider.getData();
+            setGanttData(data);
+          } catch (error) {
+            console.error('Error recargando datos después de error de sync:', error);
           }
         } else {
           console.log('Operación no requiere recarga:', eventData.action);
