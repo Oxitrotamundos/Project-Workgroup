@@ -14,8 +14,9 @@ export interface GanttDataProviderData {
 export class FirestoreGanttDataProvider {
   private projectId: string;
   private listeners: Map<string, Function[]> = new Map();
-  private _nextHandler: any = null;
+  private _ganttApi: any = null; // Referencia directa al API del Gantt
   private idMapping: Map<number, string> = new Map(); // Mapeo de ID numérico a firestoreId
+  private tempIdMapping: Map<string, string> = new Map(); // Mapeo de ID temporal a firestoreId
 
   constructor(projectId: string) {
     this.projectId = projectId;
@@ -29,10 +30,10 @@ export class FirestoreGanttDataProvider {
   }
 
   /**
-   * Configurar el siguiente handler en la cadena de eventos
+   * Configurar referencia directa al API del Gantt (para consultas sin crear loops)
    */
-  setNext(handler: any): void {
-    this._nextHandler = handler;
+  setGanttApi(api: any): void {
+    this._ganttApi = api;
   }
 
   /**
@@ -45,10 +46,8 @@ export class FirestoreGanttDataProvider {
       // Procesar la acción localmente
       const result = await this.send(action, data);
       
-      // Si hay un siguiente handler en la cadena, ejecutarlo también
-      if (this._nextHandler && this._nextHandler.exec) {
-        await this._nextHandler.exec(action, data);
-      }
+      // Note: No llamamos a _nextHandler.exec() para evitar loops infinitos
+      // Solo usamos _ganttApi para consultas directas sin generar eventos
       
       return result;
     } catch (error) {
@@ -66,8 +65,9 @@ export class FirestoreGanttDataProvider {
       
       const tasks = await TaskService.getProjectTasks(this.projectId);
       
-      // Limpiar el mapeo anterior
+      // Limpiar los mapeos anteriores
       this.idMapping.clear();
+      // Note: No limpiar tempIdMapping aquí para preservar mapeos de tareas recién creadas
       
       // Crear mapeo de firestoreId a ID numérico para resolver parentId
       const firestoreToNumericMap = new Map<string, number>();
@@ -109,7 +109,7 @@ export class FirestoreGanttDataProvider {
           end: endDate,
           duration: durationInDays,
           progress: task.progress,
-          type: 'task',
+          type: task.type || 'task', // Usar el tipo de la tarea de Firestore
           lazy: false,
           details: task.description || '',
           // Mantener referencia al ID original de Firestore
@@ -170,8 +170,10 @@ export class FirestoreGanttDataProvider {
         case 'unselect-task':
         case 'expand-task':
         case 'collapse-task':
-          console.log('FirestoreGanttDataProvider: Acción de UI ignorada:', action);
-          return { success: true, message: 'Acción de UI procesada localmente' };
+        case 'open-task':
+        case 'close-task':
+          console.log('FirestoreGanttDataProvider: Acción de expansión/colapso procesada localmente:', action);
+          return { success: true, message: 'Acción de expansión procesada localmente' };
         
         default:
           console.warn('FirestoreGanttDataProvider: Acción no soportada:', action);
@@ -201,13 +203,17 @@ export class FirestoreGanttDataProvider {
       
       if (parentFirestoreId) {
         // Crear subtarea usando TaskManager
+        console.log('FirestoreGanttDataProvider: Creando subtarea con skipEvent=true');
         taskId = await taskManager.createSubtask(parentFirestoreId, {
           projectId: this.projectId,
           name: data.text || 'Nueva Subtarea',
           description: data.details || '',
           priority: 'medium',
-          estimatedHours: (data.duration || 1) * 8
+          type: data.type || 'task',
+          estimatedHours: (data.duration || 1) * 8,
+          skipEvent: true // Evitar evento que causa recarga completa
         });
+        console.log('FirestoreGanttDataProvider: Subtarea creada con skipEvent, ID:', taskId);
       } else {
         // Crear tarea principal usando TaskManager
         taskId = await taskManager.createTask({
@@ -218,15 +224,23 @@ export class FirestoreGanttDataProvider {
           endDate: data.end,
           duration: data.duration,
           priority: 'medium',
-          estimatedHours: (data.duration || 7) * 8
+          type: data.type || 'task',
+          estimatedHours: (data.duration || 7) * 8,
+          skipEvent: true // Evitar evento que causa recarga desde el Gantt
         });
       }
       
       console.log('FirestoreGanttDataProvider: Tarea creada con ID:', taskId);
       
-      // No emitir evento aquí ya que TaskManager ya emitió el evento 'task-created'
-      // Esto evita duplicar actualizaciones
-      console.log('FirestoreGanttDataProvider: Tarea creada por TaskManager, no emitiendo evento duplicado');
+      // Si hay un ID temporal en los datos, crear mapeo para futuras actualizaciones
+      if (data.id && typeof data.id === 'string' && data.id.startsWith('temp://')) {
+        console.log('FirestoreGanttDataProvider: Creando mapeo temporal:', data.id, '->', taskId);
+        this.tempIdMapping.set(data.id, taskId);
+      }
+      
+      // No emitir evento de recarga cuando se crean tareas desde el Gantt
+      // El Gantt ya maneja estas actualizaciones localmente y evitamos colapsos
+      console.log('FirestoreGanttDataProvider: Tarea creada desde Gantt, evitando recarga para preservar estado UI');
       
       return { success: true, id: taskId };
     } catch (error) {
@@ -238,13 +252,21 @@ export class FirestoreGanttDataProvider {
   private async handleUpdateTask(data: any): Promise<any> {
     console.log('FirestoreGanttDataProvider: Actualizando tarea:', data);
     
+    // NOTE: La detección por eventSource no funciona, procesamos jerarquía en move-task directamente
+    
     // Intentar obtener el firestoreId de los datos o del mapeo
     let firestoreId = data.firestoreId;
     
     if (!firestoreId && data.id) {
-      // Si no hay firestoreId pero hay un ID numérico, buscar en el mapeo
-      firestoreId = this.idMapping.get(data.id);
-      console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID numérico:', data.id, '-> encontrado:', firestoreId);
+      // Primero verificar si es un ID temporal
+      if (typeof data.id === 'string' && data.id.startsWith('temp://')) {
+        firestoreId = this.tempIdMapping.get(data.id);
+        console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID temporal:', data.id, '-> encontrado:', firestoreId);
+      } else {
+        // Si no hay firestoreId pero hay un ID numérico, buscar en el mapeo
+        firestoreId = this.idMapping.get(data.id);
+        console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID numérico:', data.id, '-> encontrado:', firestoreId);
+      }
     }
     
     // Verificar que tenemos un ID de Firestore válido
@@ -279,9 +301,9 @@ export class FirestoreGanttDataProvider {
     const hasValidData = taskData.text || taskData.start || taskData.end || taskData.name || taskData.startDate || taskData.endDate;
     console.log('FirestoreGanttDataProvider: hasValidData:', hasValidData);
     
-    if (!hasValidData && data.id && this._nextHandler && this._nextHandler.getTask) {
+    if (!hasValidData && data.id && this._ganttApi && this._ganttApi.getTask) {
       console.log('FirestoreGanttDataProvider: Datos vacíos detectados, obteniendo datos actualizados de la API del Gantt');
-      const updatedTask = this._nextHandler.getTask(data.id);
+      const updatedTask = this._ganttApi.getTask(data.id);
       console.log('FirestoreGanttDataProvider: Tarea obtenida de la API:', updatedTask);
       
       if (updatedTask) {
@@ -291,7 +313,8 @@ export class FirestoreGanttDataProvider {
           start: updatedTask.start,
           end: updatedTask.end,
           duration: updatedTask.duration,
-          progress: updatedTask.progress
+          progress: updatedTask.progress,
+          type: updatedTask.type
         };
         console.log('FirestoreGanttDataProvider: Datos actualizados obtenidos:', taskData);
       }
@@ -303,7 +326,8 @@ export class FirestoreGanttDataProvider {
       startDate: taskData.start || taskData.startDate,
       endDate: taskData.end || taskData.endDate,
       duration: taskData.duration,
-      progress: taskData.progress
+      progress: taskData.progress,
+      type: taskData.type // Incluir el tipo de tarea
     };
     
     // Filtrar campos undefined
@@ -359,8 +383,9 @@ export class FirestoreGanttDataProvider {
       console.log('FirestoreGanttDataProvider: Tarea eliminada del mapeo, ID:', data.id);
     }
     
-    // Emitir evento de eliminación - esto sí requiere recarga
-    this.emit('data-updated', { action: 'delete-task', taskId: data.firestoreId });
+    // No emitir evento de recarga para eliminaciones desde el Gantt
+    // El Gantt ya maneja la eliminación localmente
+    console.log('FirestoreGanttDataProvider: Tarea eliminada, evitando recarga para preservar estado UI');
     
     return { success: true };
   }
@@ -378,13 +403,21 @@ export class FirestoreGanttDataProvider {
       // Obtener el firestoreId de la tarea que se está moviendo
       let movedTaskFirestoreId = data.firestoreId;
       if (!movedTaskFirestoreId && data.id) {
-        movedTaskFirestoreId = this.idMapping.get(data.id);
+        // Primero verificar si es un ID temporal
+        if (typeof data.id === 'string' && data.id.startsWith('temp://')) {
+          movedTaskFirestoreId = this.tempIdMapping.get(data.id);
+          console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID temporal en move:', data.id, '-> encontrado:', movedTaskFirestoreId);
+        } else {
+          // Si no es temporal, buscar en el mapeo numérico
+          movedTaskFirestoreId = this.idMapping.get(data.id);
+          console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID numérico en move:', data.id, '-> encontrado:', movedTaskFirestoreId);
+        }
       }
       
       // Obtener el firestoreId de la tarea objetivo
-      let targetTaskFirestoreId = null;
+      let targetTaskFirestoreId: string | null = null;
       if (data.target) {
-        targetTaskFirestoreId = this.idMapping.get(data.target);
+        targetTaskFirestoreId = this.idMapping.get(data.target) || null;
         console.log('FirestoreGanttDataProvider: Target task ID:', data.target, '-> Firestore ID:', targetTaskFirestoreId);
       }
       
@@ -398,6 +431,16 @@ export class FirestoreGanttDataProvider {
       // Importar TaskService dinámicamente para evitar circular imports
       const { TaskService } = await import('./taskService');
       
+      // Procesar cambios de jerarquía después del movimiento
+      console.log('FirestoreGanttDataProvider: Movimiento completado, procesando jerarquía');
+      const hierarchyResult = await this.processTaskHierarchyUpdate({ id: data.id });
+      
+      // Solo continuar si la jerarquía se actualizó correctamente
+      if (!hierarchyResult.success) {
+        console.error('FirestoreGanttDataProvider: Error en jerarquía, abortando actualización de orden');
+        return hierarchyResult;
+      }
+      
       // Actualizar el orden en Firestore
       await TaskService.updateTaskOrder(
         this.projectId,
@@ -408,8 +451,8 @@ export class FirestoreGanttDataProvider {
       
       console.log('FirestoreGanttDataProvider: Orden actualizado exitosamente');
       
-      // Emitir evento para que el componente recargue los datos
-      this.emit('data-updated', { action: 'move-task' });
+      // NOTE: No emitir evento de recarga ya que el Gantt maneja la UI localmente
+      console.log('FirestoreGanttDataProvider: Movimiento procesado exitosamente sin recarga');
       
       return { success: true };
       
@@ -417,6 +460,84 @@ export class FirestoreGanttDataProvider {
       console.error('FirestoreGanttDataProvider: Error al actualizar orden de tarea:', error);
       throw error;
     }
+  }
+
+  private async processTaskHierarchyUpdate(data: any): Promise<any> {
+    console.log('FirestoreGanttDataProvider: Procesando actualización de jerarquía:', data);
+    
+    // Obtener el ID de la tarea que fue movida
+    let taskId = data.id;
+    if (data.task && data.task.id) {
+      taskId = data.task.id;
+    }
+    
+    if (!taskId) {
+      console.warn('FirestoreGanttDataProvider: No se pudo determinar el ID de la tarea movida');
+      return { success: false, error: 'ID de tarea no encontrado' };
+    }
+    
+    // Obtener el firestoreId de la tarea movida
+    let movedTaskFirestoreId: string | undefined;
+    if (typeof taskId === 'string' && taskId.startsWith('temp://')) {
+      movedTaskFirestoreId = this.tempIdMapping.get(taskId);
+      console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID temporal en jerarquía:', taskId, '-> encontrado:', movedTaskFirestoreId);
+    } else {
+      movedTaskFirestoreId = this.idMapping.get(taskId);
+      console.log('FirestoreGanttDataProvider: Buscando firestoreId para ID numérico en jerarquía:', taskId, '-> encontrado:', movedTaskFirestoreId);
+    }
+    
+    if (!movedTaskFirestoreId) {
+      console.error('FirestoreGanttDataProvider: No se pudo obtener el ID de Firestore de la tarea movida para jerarquía');
+      return { success: false, error: 'Firestore ID no encontrado' };
+    }
+    
+    // Obtener los datos actualizados de la tarea movida desde el Gantt
+    let newParentId: string | null = null;
+    if (this._ganttApi && this._ganttApi.getTask && taskId) {
+      const movedTask = this._ganttApi.getTask(taskId);
+      console.log('FirestoreGanttDataProvider: Tarea movida después del movimiento:', movedTask);
+      
+      if (movedTask) {
+        if (movedTask.parent) {
+          // La tarea tiene un parent, obtener su firestoreId
+          const parentFirestoreId = this.idMapping.get(movedTask.parent);
+          if (parentFirestoreId) {
+            newParentId = parentFirestoreId;
+            console.log('FirestoreGanttDataProvider: Nueva jerarquía detectada, parentId:', newParentId);
+          } else {
+            console.warn('FirestoreGanttDataProvider: Parent ID no encontrado en mapeo:', movedTask.parent);
+            return { success: false, error: 'Parent ID no encontrado en mapeo' };
+          }
+        } else {
+          // La tarea no tiene parent, está en el nivel raíz
+          newParentId = null;
+          console.log('FirestoreGanttDataProvider: Tarea movida a nivel raíz');
+        }
+      } else {
+        console.warn('FirestoreGanttDataProvider: No se pudo obtener datos actualizados de la tarea movida');
+        return { success: false, error: 'No se pudo obtener datos de la tarea' };
+      }
+    }
+    
+    // Actualizar parentId si es necesario
+    if (newParentId !== undefined) {
+      console.log('FirestoreGanttDataProvider: Actualizando parentId de', movedTaskFirestoreId, 'a', newParentId);
+      try {
+        const { TaskService } = await import('./taskService');
+        
+        // TaskService maneja correctamente null (usa deleteField()) y string (parentId válido)  
+        await TaskService.updateTask(movedTaskFirestoreId, { parentId: newParentId });
+        console.log('FirestoreGanttDataProvider: ParentId actualizado exitosamente');
+      } catch (error) {
+        console.error('FirestoreGanttDataProvider: Error actualizando parentId:', error);
+        // En caso de error, la jerarquía en el Gantt puede estar desincronizada con Firestore
+        // Se necesitaría una recarga completa para sincronizar
+        this.emit('data-updated', { action: 'sync-error', error });
+        return { success: false, error: 'Error actualizando jerarquía' };
+      }
+    }
+    
+    return { success: true };
   }
 
   private async handleDragTask(data: any): Promise<any> {
@@ -433,8 +554,8 @@ export class FirestoreGanttDataProvider {
     console.log('FirestoreGanttDataProvider: Arrastre completado, obteniendo datos actualizados de la tarea');
     
     // El arrastre se ha completado, obtener los datos actualizados de la tarea desde la API del gantt
-    if (this._nextHandler && this._nextHandler.getTask) {
-      const updatedTask = this._nextHandler.getTask(data.id);
+    if (this._ganttApi && this._ganttApi.getTask) {
+      const updatedTask = this._ganttApi.getTask(data.id);
       console.log('FirestoreGanttDataProvider: Datos actualizados de la tarea:', updatedTask);
       
       if (updatedTask) {
@@ -444,7 +565,8 @@ export class FirestoreGanttDataProvider {
           end: updatedTask.end,
           duration: updatedTask.duration,
           text: updatedTask.text,
-          progress: updatedTask.progress
+          progress: updatedTask.progress,
+          type: updatedTask.type
         };
         
         // Usar el método de actualización existente para persistir los cambios
@@ -478,9 +600,11 @@ export class FirestoreGanttDataProvider {
   }
 
   /**
-   * Limpiar listeners
+   * Limpiar listeners y mapeos
    */
   destroy(): void {
     this.listeners.clear();
+    this.idMapping.clear();
+    this.tempIdMapping.clear();
   }
 }

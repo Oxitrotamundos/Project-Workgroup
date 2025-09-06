@@ -40,6 +40,7 @@ const ProjectView: React.FC = () => {
         description: 'Descripción de la nueva tarea',
         assigneeId: user.id,
         priority: 'medium',
+        type: 'task',
         estimatedHours: 40
       });
 

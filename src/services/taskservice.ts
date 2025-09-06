@@ -6,6 +6,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   where,
   orderBy,
@@ -16,7 +17,8 @@ import type {
   Task,
   CreateTaskData,
   UpdateTaskData,
-  TaskFilters
+  TaskFilters,
+  TaskType
 } from '../types/firestore';
 
 const COLLECTION_NAME = 'tasks';
@@ -101,6 +103,7 @@ export class TaskService {
           id: docSnap.id,
           ...data,
           order: data.order || 0, // Orden por defecto para tareas existetentes sin un campo de orden
+          type: data.type || 'task', // Tipo por defecto para tareas existentes sin campo de tipo
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
           startDate: data.startDate?.toDate() || new Date(),
@@ -140,6 +143,10 @@ export class TaskService {
         q = query(q, where('priority', '==', filters.priority));
       }
 
+      if (filters?.type) {
+        q = query(q, where('type', '==', filters.type));
+      }
+
       const snapshot = await getDocs(q);
       const tasks = snapshot.docs.map(doc => {
         const data = doc.data();
@@ -147,6 +154,7 @@ export class TaskService {
           id: doc.id,
           ...data,
           order: data.order || 0, // Orden por defecto para tareas existetentes sin un campo de orden
+          type: data.type || 'task', // Tipo por defecto para tareas existentes sin campo de tipo
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
           startDate: data.startDate?.toDate() || new Date(),
@@ -167,8 +175,23 @@ export class TaskService {
   static async updateTask(id: string, data: UpdateTaskData): Promise<void> {
     try {
       const docRef = doc(db, COLLECTION_NAME, id);
+      
+      // Filtrar campos undefined y manejar casos especiales antes de enviar a Firestore
+      const cleanedData: any = {};
+      Object.keys(data).forEach(key => {
+        const value = (data as any)[key];
+        if (value !== undefined) {
+          // Caso especial: si parentId es null, usar deleteField() para eliminar el campo
+          if (key === 'parentId' && value === null) {
+            cleanedData[key] = deleteField();
+          } else {
+            cleanedData[key] = value;
+          }
+        }
+      });
+      
       const updateData = {
-        ...data,
+        ...cleanedData,
         updatedAt: Timestamp.now()
       };
 
@@ -219,6 +242,7 @@ export class TaskService {
           id: doc.id,
           ...data,
           order: data.order || 0, // Orden por defecto para tareas existetentes sin un campo de orden
+          type: data.type || 'task', // Tipo por defecto para tareas existentes sin campo de tipo
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
           startDate: data.startDate?.toDate() || new Date(),
@@ -284,6 +308,19 @@ export class TaskService {
     } catch (error) {
       console.error('Error removing task dependency:', error);
       throw new Error('Error al remover dependencia de la tarea');
+    }
+  }
+
+  /**
+   * Obtener tareas por tipo
+   */
+  static async getTasksByType(projectId: string, type: TaskType): Promise<Task[]> {
+    try {
+      const filters: TaskFilters = { type };
+      return await this.getProjectTasks(projectId, filters);
+    } catch (error) {
+      console.error('Error getting tasks by type:', error);
+      return [];
     }
   }
 

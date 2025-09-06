@@ -42,6 +42,7 @@ export interface Task {
   estimatedHours: number;
   actualHours?: number;
   status: 'not-started' | 'in-progress' | 'completed' | 'blocked';
+  type: 'task' | 'summary' | 'milestone'; // Tipo de tarea
   order: number; // Orden para posicionamiento de tareas
   createdAt: Date;
   updatedAt: Date;
@@ -97,6 +98,7 @@ export interface TaskFormData {
   endDate: string;
   assigneeId: string;
   priority: Task['priority'];
+  type: Task['type'];
   color: string;
   estimatedHours: number;
   tags: string[];

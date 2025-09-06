@@ -90,7 +90,7 @@ const Dashboard: React.FC = () => {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <h1 className="text-xl font-bold text-gray-900">Gantt Workgroup</h1>
+                <h1 className="text-xl font-bold text-gray-900">Project Workgroup</h1>
               </div>
             </div>
             

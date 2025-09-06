@@ -9,6 +9,7 @@ export type UserRole = 'admin' | 'pm' | 'member';
 export type ProjectStatus = 'planning' | 'active' | 'completed' | 'on-hold';
 export type TaskStatus = 'not-started' | 'in-progress' | 'completed' | 'blocked';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
+export type TaskType = 'task' | 'summary' | 'milestone';
 
 // Interfaz base para documentos con timestamps
 export interface BaseDocument {
@@ -93,6 +94,7 @@ export interface Task extends BaseDocument {
   estimatedHours: number;
   actualHours?: number;
   status: TaskStatus;
+  type: TaskType; // Tipo de tarea: task, summary, milestone
   order: number; // Orden para posicionamiento de tareas
 }
 
@@ -114,6 +116,7 @@ export interface CreateTaskData {
   estimatedHours: number;
   actualHours?: number;
   status: TaskStatus;
+  type: TaskType; // Tipo de tarea: task, summary, milestone
   order?: number; //Orden para posicionamiento de tareas(Opcional al crear)
 }
 
@@ -126,7 +129,7 @@ export interface UpdateTaskData {
   duration?: number;
   progress?: number;
   assigneeId?: string;
-  parentId?: string; // ID de la tarea padre para jerarquía
+  parentId?: string | null; // ID de la tarea padre para jerarquía
   dependencies?: string[];
   tags?: string[];
   priority?: TaskPriority;
@@ -134,6 +137,7 @@ export interface UpdateTaskData {
   estimatedHours?: number;
   actualHours?: number;
   status?: TaskStatus;
+  type?: TaskType; // Tipo de tarea: task, summary, milestone
   order?: number; //Orden para posicionamiento de tareas
 }
 
@@ -178,6 +182,7 @@ export interface TaskFilters {
   assigneeId?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
+  type?: TaskType;
   tags?: string[];
   startDate?: Date;
   endDate?: Date;
@@ -393,6 +398,12 @@ export const STATUS_COLORS: Record<TaskStatus, string> = {
   'blocked': '#EF4444'
 };
 
+export const TASK_TYPE_COLORS: Record<TaskType, string> = {
+  'task': '#3B82F6',
+  'summary': '#8B5CF6',
+  'milestone': '#F59E0B'
+};
+
 // Funciones de utilidad para tipos
 export function isValidUserRole(role: string): role is UserRole {
   return ['admin', 'pm', 'member'].includes(role);
@@ -408,4 +419,8 @@ export function isValidTaskStatus(status: string): status is TaskStatus {
 
 export function isValidTaskPriority(priority: string): priority is TaskPriority {
   return ['low', 'medium', 'high', 'critical'].includes(priority);
+}
+
+export function isValidTaskType(type: string): type is TaskType {
+  return ['task', 'summary', 'milestone'].includes(type);
 }

@@ -53,6 +53,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         console.log('Evento de actualización recibido:', eventData);
 
         // Solo recargar para operaciones que realmente lo requieren
+        // NOTE: move-task no requiere recarga ya que el Gantt maneja la UI localmente
         if (eventData.action === 'add-task' || eventData.action === 'delete-task') {
           console.log('Recargando datos para operación:', eventData.action);
           try {
@@ -61,17 +62,26 @@ const GanttChart: React.FC<GanttChartProps> = ({
           } catch (error) {
             console.error('Error recargando datos:', error);
           }
+        } else if (eventData.action === 'sync-error') {
+          // Error de sincronización - necesita recarga completa para consistencia
+          console.warn('Error de sincronización detectado, recargando datos para consistencia');
+          try {
+            const data = await provider.getData();
+            setGanttData(data);
+          } catch (error) {
+            console.error('Error recargando datos después de error de sync:', error);
+          }
         } else {
           console.log('Operación no requiere recarga:', eventData.action);
         }
       });
 
-      // Suscribirse a eventos del TaskManager para tareas creadas externamente
+      // Suscribirse a eventos del TaskManager solo para tareas creadas externamente (fuera del Gantt)
       const handleTaskManagerEvent = async (eventData: any) => {
         console.log('GanttChart: Evento de TaskManager recibido:', eventData);
 
         if (eventData.projectId === projectId && eventData.action === 'task-created') {
-          console.log('GanttChart: Recargando datos por tarea creada externamente');
+          console.log('GanttChart: Tarea creada externamente, recargando datos del Gantt');
           try {
             const data = await provider.getData();
             setGanttData(data);
@@ -244,16 +254,19 @@ const GanttChart: React.FC<GanttChartProps> = ({
         return;
       }
 
-      // Usar el TaskManager para crear la subtarea
+      // Crear subtarea con skipEvent=true para evitar recarga del componente
       await taskManager.createSubtask(parentFirestoreId, {
         projectId,
         name: 'Nueva Subtarea',
         description: 'Subtarea creada desde el Gantt',
         priority: 'medium',
-        estimatedHours: 8
+        type: 'task',
+        estimatedHours: 8,
+        skipEvent: true // Evitar evento que causaría recarga y colapso
       });
 
       console.log('Subtarea creada exitosamente para padre:', parentFirestoreId);
+
     } catch (error) {
       console.error('Error creando subtarea:', error);
     }
@@ -275,6 +288,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
     if (dataProvider) {
       console.log('Configurando FirestoreGanttDataProvider como siguiente en la cadena');
       api.setNext(dataProvider);
+      // Pasar referencia del API al dataProvider para consultas directas (sin crear loop)
+      dataProvider.setGanttApi(api);
     }
 
     // Inicializar el cálculo automático de progreso para summary tasks existentes

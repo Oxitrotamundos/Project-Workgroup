@@ -8,10 +8,12 @@ export interface TaskCreationOptions {
   parentId?: string;
   assigneeId?: string;
   priority?: 'low' | 'medium' | 'high' | 'critical';
+  type?: 'task' | 'summary' | 'milestone';
   estimatedHours?: number;
   startDate?: Date;
   endDate?: Date;
   duration?: number;
+  skipEvent?: boolean; // Flag para evitar emitir eventos
 }
 
 export interface TaskManagerEventData {
@@ -100,7 +102,8 @@ export class TaskManager {
       dependencies: [],
       tags: [],
       priority: options.priority || 'medium',
-      color: this.getColorForPriority(options.priority || 'medium'),
+      type: options.type || 'task',
+      color: this.getColorForTaskType(options.type || 'task'),
       estimatedHours: options.estimatedHours || (options.duration || 7) * 8, // 8 horas por día por defecto
       status: 'not-started'
     };
@@ -116,13 +119,18 @@ export class TaskManager {
       // Obtener la tarea creada para el evento
       const createdTask = await TaskService.getTask(taskId);
 
-      // Emitir evento de creación
-      this.emit({
-        action: 'task-created',
-        taskId,
-        task: createdTask || undefined,
-        projectId: options.projectId
-      });
+      // Emitir evento de creación solo si no se especifica skipEvent
+      if (!options.skipEvent) {
+        console.log('TaskManager: Emitiendo evento task-created para:', taskId);
+        this.emit({
+          action: 'task-created',
+          taskId,
+          task: createdTask || undefined,
+          projectId: options.projectId
+        });
+      } else {
+        console.log('TaskManager: Omitiendo evento de creación por skipEvent=true para tarea:', taskId);
+      }
 
       return taskId;
     } catch (error) {
@@ -143,7 +151,7 @@ export class TaskManager {
       throw new Error('Tarea padre no encontrada');
     }
 
-    // Crear subtarea con referencia al padre
+    // Crear subtarea con referencia al padre, preservando el flag skipEvent
     return this.createTask({
       ...options,
       parentId: parentTaskId,
@@ -168,6 +176,7 @@ export class TaskManager {
       parentId: parentId || ganttTaskData.parent,
       assigneeId: ganttTaskData.assignee || '',
       priority: ganttTaskData.priority || 'medium',
+      type: ganttTaskData.type || 'task',
       estimatedHours: ganttTaskData.duration * 8 || 56
     };
 
@@ -193,7 +202,10 @@ export class TaskManager {
       if (updates.parentId !== undefined) updateData.parentId = updates.parentId;
       if (updates.priority !== undefined) {
         updateData.priority = updates.priority;
-        updateData.color = this.getColorForPriority(updates.priority);
+      }
+      if (updates.type !== undefined) {
+        updateData.type = updates.type;
+        updateData.color = this.getColorForTaskType(updates.type);
       }
       if (updates.estimatedHours !== undefined) updateData.estimatedHours = updates.estimatedHours;
 
@@ -244,17 +256,17 @@ export class TaskManager {
     }
   }
 
+
   /**
-   * Obtener color basado en prioridad
+   * Obtener color basado en tipo de tarea
    */
-  private getColorForPriority(priority: 'low' | 'medium' | 'high' | 'critical'): string {
+  private getColorForTaskType(type: 'task' | 'summary' | 'milestone'): string {
     const colors = {
-      low: '#10B981',     // Verde
-      medium: '#3B82F6',  // Azul
-      high: '#F59E0B',    // Amarillo/Naranja
-      critical: '#EF4444' // Rojo
+      task: '#3B82F6',     // Azul para tareas normales
+      summary: '#8B5CF6',  // Púrpura para tareas resumen
+      milestone: '#F59E0B' // Amarillo/Naranja para milestones
     };
-    return colors[priority];
+    return colors[type];
   }
 
   /**
