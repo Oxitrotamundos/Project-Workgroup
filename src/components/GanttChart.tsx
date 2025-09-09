@@ -41,6 +41,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const apiRef = externalApiRef || internalApiRef;
   const [dataProvider, setDataProvider] = useState<FirestoreGanttDataProvider | null>(null);
   const [ganttData, setGanttData] = useState<{ tasks: any[], links: any[] }>({ tasks: [], links: [] });
+  const mutationObserverRef = useRef<MutationObserver | null>(null);
+  const taskStateRef = useRef<Map<number, boolean>>(new Map());
 
   // Inicializar el data provider y suscribirse a eventos del TaskManager
   useEffect(() => {
@@ -98,12 +100,24 @@ const GanttChart: React.FC<GanttChartProps> = ({
       // Cleanup
       return () => {
         taskManager.off(handleTaskManagerEvent);
+        
+        // Cleanup mutation observer
+        if (mutationObserverRef.current) {
+          mutationObserverRef.current.disconnect();
+          mutationObserverRef.current = null;
+        }
       };
     }
 
     return () => {
       if (dataProvider) {
         dataProvider.destroy();
+      }
+      
+      // Cleanup mutation observer
+      if (mutationObserverRef.current) {
+        mutationObserverRef.current.disconnect();
+        mutationObserverRef.current = null;
       }
     };
   }, [projectId]);
@@ -239,6 +253,96 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   };
 
+  // Collapse detection workaround using DOM observation
+  const setupCollapseDetection = useCallback((api: any, provider: FirestoreGanttDataProvider | null) => {
+    if (!provider || mutationObserverRef.current) return;
+
+    console.log('Setting up collapse detection using DOM observation');
+
+    // Initialize task state tracking
+    const tasks = api.getState().tasks;
+    tasks.forEach((task: any) => {
+      if (task.data && task.data.length > 0) {
+        // Task has children, track its open state
+        const isOpen = !task.$collapsed; // SVAR Gantt uses $collapsed property
+        taskStateRef.current.set(task.id, isOpen);
+      }
+    });
+
+    // Create mutation observer to detect DOM changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && 
+            (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+          
+          const element = mutation.target as HTMLElement;
+          
+          // Look for collapse/expand indicators in the DOM
+          if (element.classList && 
+              (element.classList.contains('wx-gantt-tree-cell') ||
+               element.querySelector('.wx-gantt-tree-cell'))) {
+            
+            // Check if this is a collapse/expand action
+            setTimeout(() => {
+              detectCollapseChanges(api, provider);
+            }, 50);
+          }
+        }
+      });
+    });
+
+    // Start observing the gantt container
+    const ganttContainer = document.querySelector('.wx-gantt');
+    if (ganttContainer) {
+      observer.observe(ganttContainer, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+        attributeFilter: ['class', 'style']
+      });
+      mutationObserverRef.current = observer;
+      console.log('DOM observation started for collapse detection');
+    } else {
+      console.warn('Gantt container not found for collapse detection');
+    }
+  }, []);
+
+  // Detect collapse changes by comparing current state with previous state
+  const detectCollapseChanges = useCallback(async (api: any, provider: FirestoreGanttDataProvider | null) => {
+    if (!api || !provider) return;
+
+    try {
+      const tasks = api.getState().tasks;
+      
+      tasks.forEach(async (task: any) => {
+        if (task.data && task.data.length > 0) {
+          // Task has children, check if state changed
+          const currentlyOpen = !task.$collapsed;
+          const previouslyOpen = taskStateRef.current.get(task.id);
+          
+          if (previouslyOpen !== undefined && previouslyOpen !== currentlyOpen) {
+            console.log(`Task ${task.id} collapse state changed: ${previouslyOpen} -> ${currentlyOpen}`);
+            
+            // Update our tracking
+            taskStateRef.current.set(task.id, currentlyOpen);
+            
+            // If task was collapsed (previouslyOpen=true, currentlyOpen=false)
+            if (previouslyOpen && !currentlyOpen) {
+              console.log('Task collapsed:', task.id);
+              await provider.handleExpandCollapseState({
+                id: task.id,
+                isOpen: false
+              });
+            }
+            // If task was expanded (handled by open-task event already)
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error in collapse detection:', error);
+    }
+  }, []);
+
 
 
   // Función global para agregar subtarea
@@ -317,6 +421,25 @@ const GanttChart: React.FC<GanttChartProps> = ({
       }
       recalcSummaryProgress(id);
     });
+
+    // Listen to expand events (built-in SVAR event)
+    api.on('open-task', async (ev: any) => {
+      console.log('Task expanded:', ev.id);
+      // Update our state tracking
+      taskStateRef.current.set(ev.id, true);
+      
+      if (dataProvider && dataProvider.handleExpandCollapseState) {
+        await dataProvider.handleExpandCollapseState({
+          id: ev.id,
+          isOpen: true
+        });
+      }
+    });
+
+    // Setup collapse detection using DOM observation
+    setTimeout(() => {
+      setupCollapseDetection(api, dataProvider);
+    }, 100);
 
     // Configurar listeners estándar para el progreso de summary tasks
 
