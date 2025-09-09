@@ -1,8 +1,4 @@
 {
-  "firestore": {
-    "rules": "firestore/firestore.rules",
-    "indexes": "firestore/firestore.indexes.json"
-  },
   "hosting": {
     "public": "dist",
     "ignore": [
@@ -16,5 +12,9 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "firestore": {
+    "rules": "firestore/firestore.rules",
+    "indexes": "firestore/firestore.indexes.json"
   }
 }

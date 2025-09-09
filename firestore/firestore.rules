@@ -60,8 +60,18 @@ service cloud.firestore {
     
     // Reglas para la colección de proyectos
     match /projects/{projectId} {
-      // Lectura: miembros del proyecto, propietarios o admins pueden leer
-      allow read: if isProjectMember(projectId) || isProjectOwner(projectId) || isAdmin();
+      // Lectura: permitir si el usuario está autenticado y:
+      // - Es miembro del proyecto (verificado directamente en el documento)
+      // - Es propietario del proyecto (verificado directamente en el documento)  
+      // - Es admin
+      // - La consulta es por members array-contains o ownerId (para getUserProjects)
+      allow read: if isAuthenticated() && (
+        // Permitir acceso directo si es miembro o propietario según el documento
+        request.auth.uid in resource.data.members ||
+        request.auth.uid == resource.data.ownerId ||
+        // Permitir si es admin
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
       
       // Creación: usuarios autenticados pueden crear proyectos
       allow create: if isAuthenticated() && 

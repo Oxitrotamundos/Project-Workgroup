@@ -154,20 +154,7 @@
         }
       ]
     },
-    {
-      "collectionGroup": "tasks",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "projectId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "dependencies",
-          "arrayConfig": "CONTAINS"
-        }
-      ]
-    },
+    
     {
       "collectionGroup": "workload",
       "queryScope": "COLLECTION",
