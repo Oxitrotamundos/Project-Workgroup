@@ -112,6 +112,7 @@ export class FirestoreGanttDataProvider {
           type: task.type || 'task', // Usar el tipo de la tarea de Firestore
           lazy: false,
           details: task.description || '',
+          open: task.open ?? true, // NEW: Restore expand state
           // Mantener referencia al ID original de Firestore
           firestoreId: task.id
         };
@@ -597,6 +598,27 @@ export class FirestoreGanttDataProvider {
         console.error('Error en callback de evento:', error);
       }
     });
+  }
+
+  /**
+   * Handle expand/collapse state changes
+   */
+  async handleExpandCollapseState(data: any): Promise<void> {
+    const { id, isOpen } = data;
+ 
+    // Get Firestore ID from mapping
+    const firestoreId = this.getFirestoreIdFromGanttId(id);
+    if (!firestoreId) {
+      console.warn('Could not find Firestore ID for expand/collapse event:', id);
+      return;
+    }
+ 
+    // Import TaskService dynamically to avoid circular imports
+    const { TaskService } = await import('./taskService');
+ 
+    // Update in Firestore
+    await TaskService.updateTaskExpandState(firestoreId, isOpen);
+    console.log(`Expand state updated for task ${firestoreId}: ${isOpen}`);
   }
 
   /**
