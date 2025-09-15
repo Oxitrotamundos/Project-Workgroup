@@ -184,25 +184,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
   // Configuración de columnas
   const columns: GanttColumn[] = React.useMemo(() => [
     { id: 'text', header: 'Tarea', flexGrow: 2 },
-    { 
-      id: 'description', 
-      header: 'Descripción', 
-      flexGrow: 1.5,
-      template: (task: any) => {
-        if (!dataProvider) return '';
-        
-        const fullTaskData = dataProvider.getFullTaskDataByGanttId(task.id);
-        const description = fullTaskData?.description || '';
-        
-        // Truncar descripción para mantener UI limpia
-        const maxLength = 60;
-        const truncated = description.length > maxLength 
-          ? description.substring(0, maxLength) + '...'
-          : description;
-          
-        return `<span title="${description}">${truncated}</span>`;
-      }
-    },
     { id: 'start', header: 'Inicio', align: 'center', flexGrow: 1 },
     { id: 'duration', header: 'Duración', align: 'center', flexGrow: 1 },
     { id: 'progress', header: 'Progreso', align: 'center', flexGrow: 1 },
@@ -214,9 +195,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
       template: (task: any) => {
         return `
           <div class="task-actions">
-            <button 
-              class="add-child-btn" 
-              onclick="window.addChildTask(${task.id})" 
+            <button
+              class="add-child-btn"
+              onclick="window.addChildTask(${task.id})"
               title="Agregar subtarea"
             >
               +
