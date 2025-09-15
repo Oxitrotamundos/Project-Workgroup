@@ -41,6 +41,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const apiRef = externalApiRef || internalApiRef;
   const [dataProvider, setDataProvider] = useState<FirestoreGanttDataProvider | null>(null);
   const [ganttData, setGanttData] = useState<{ tasks: any[], links: any[] }>({ tasks: [], links: [] });
+  const mutationObserverRef = useRef<MutationObserver | null>(null);
+  const taskStateRef = useRef<Map<number, boolean>>(new Map());
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Inicializar el data provider y suscribirse a eventos del TaskManager
   useEffect(() => {
@@ -98,12 +101,36 @@ const GanttChart: React.FC<GanttChartProps> = ({
       // Cleanup
       return () => {
         taskManager.off(handleTaskManagerEvent);
+        
+        // Cleanup mutation observer
+        if (mutationObserverRef.current) {
+          mutationObserverRef.current.disconnect();
+          mutationObserverRef.current = null;
+        }
+        
+        // Cleanup polling
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
       };
     }
 
     return () => {
       if (dataProvider) {
         dataProvider.destroy();
+      }
+      
+      // Cleanup mutation observer
+      if (mutationObserverRef.current) {
+        mutationObserverRef.current.disconnect();
+        mutationObserverRef.current = null;
+      }
+      
+      // Cleanup polling
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
     };
   }, [projectId]);
@@ -168,9 +195,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
       template: (task: any) => {
         return `
           <div class="task-actions">
-            <button 
-              class="add-child-btn" 
-              onclick="window.addChildTask(${task.id})" 
+            <button
+              class="add-child-btn"
+              onclick="window.addChildTask(${task.id})"
               title="Agregar subtarea"
             >
               +
@@ -179,7 +206,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         `;
       }
     }
-  ], []);
+  ], [dataProvider]);
 
   // Función para calcular diferencia de días
   const dayDiff = (next: Date, prev: Date): number => {
@@ -201,7 +228,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
     if (!apiRef.current) return [0, 0];
 
-    const kids = apiRef.current.getTask(id).data;
+    const task = apiRef.current.getTask(id);
+    if (!task) return [0, 0];
+    
+    const kids = task.data;
 
     kids?.forEach((kid: any) => {
       let duration = 0;
@@ -223,10 +253,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const recalcSummaryProgress = (id: number, self: boolean = false) => {
     if (!apiRef.current) return;
 
-    const { tasks } = apiRef.current.getState();
+    const state = apiRef.current.getState();
+    const tasks = state?.tasks;
     const task = apiRef.current.getTask(id);
 
-    if (task && task.type !== 'milestone') {
+    if (task && task.type !== 'milestone' && tasks && typeof tasks.getSummaryId === 'function') {
       const summary = self && task.type === 'summary' ? id : tasks.getSummaryId(id);
 
       if (summary) {
@@ -238,6 +269,169 @@ const GanttChart: React.FC<GanttChartProps> = ({
       }
     }
   };
+
+  // Optimized collapse detection using multiple methods
+  const setupCollapseDetection = useCallback((api: any, provider: FirestoreGanttDataProvider | null) => {
+    if (!provider || mutationObserverRef.current) return;
+
+    // Initialize task state tracking
+    const initializeTaskStates = () => {
+      const tasks = api.getState()?.tasks;
+      if (tasks && Array.isArray(tasks)) {
+        tasks.forEach((task: any) => {
+          if (task.data && task.data.length > 0) {
+            // Task has children, track its open state
+            const isOpen = !task.$collapsed; // wx-react-gantt uses $collapsed property
+            taskStateRef.current.set(task.id, isOpen);
+          }
+        });
+      }
+    };
+
+    // Initialize immediately and after small delay to catch late-loading tasks
+    initializeTaskStates();
+    setTimeout(initializeTaskStates, 200);
+
+    // Enhanced mutation observer with better detection
+    const observer = new MutationObserver((mutations) => {
+      let shouldDetectChanges = false;
+      
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && 
+            (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+          
+          const element = mutation.target as HTMLElement;
+          
+          // Look for any gantt-related class changes that might indicate expand/collapse
+          if (element.classList && 
+              (element.classList.contains('wx-gantt-tree-cell') ||
+               element.classList.contains('wx-gantt-task') ||
+               element.classList.contains('wx-gantt-row') ||
+               element.querySelector('.wx-gantt-tree-cell'))) {
+            
+            shouldDetectChanges = true;
+          }
+        }
+        
+        // Also detect when child elements are added/removed (collapse/expand effects)
+        if (mutation.type === 'childList') {
+          const element = mutation.target as HTMLElement;
+          if (element.classList && 
+              (element.classList.contains('wx-gantt') ||
+               element.closest('.wx-gantt'))) {
+            shouldDetectChanges = true;
+          }
+        }
+      });
+      
+      if (shouldDetectChanges) {
+        // Use immediate detection for better responsiveness
+        setTimeout(() => {
+          detectCollapseChanges(api, provider);
+        }, 10);
+      }
+    });
+
+    // Start observing the gantt container
+    const ganttContainer = document.querySelector('.wx-gantt');
+    if (ganttContainer) {
+      observer.observe(ganttContainer, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+        attributeFilter: ['class', 'style']
+      });
+      mutationObserverRef.current = observer;
+    }
+  }, []);
+
+  // Optimized collapse detection
+  const detectCollapseChanges = useCallback(async (api: any, provider: FirestoreGanttDataProvider | null) => {
+    if (!api || !provider) {
+      return;
+    }
+
+    try {
+      // Get tasks using the most reliable method (_tasks from state)
+      let taskArray: any[] = [];
+
+      // Primary method: Get tasks from state._tasks (most reliable)
+      const state = api.getState();
+      if (state?._tasks && Array.isArray(state._tasks)) {
+        taskArray = state._tasks;
+      }
+
+      // Fallback methods if primary fails
+      if (taskArray.length === 0) {
+        if (typeof api.getTaskIds === 'function') {
+          const taskIds = api.getTaskIds();
+          if (Array.isArray(taskIds)) {
+            taskArray = taskIds.map(id => api.getTask(id)).filter(task => task);
+          }
+        }
+
+        if (taskArray.length === 0 && typeof api.eachTask === 'function') {
+          const tempTasks: any[] = [];
+          api.eachTask((task: any) => {
+            tempTasks.push(task);
+          });
+          taskArray = tempTasks;
+        }
+      }
+
+      if (taskArray && Array.isArray(taskArray) && taskArray.length > 0) {
+        let changesDetected = 0;
+
+        // Process collapse/expand state changes
+        const changePromises = taskArray.map(async (task: any) => {
+          if (task.data && task.data.length > 0) {
+            // Get current collapse state from wx-react-gantt
+            let currentlyOpen = true; // default
+
+            // wx-react-gantt uses 'open' property to track state
+            if (task.open !== undefined) {
+              currentlyOpen = task.open;
+            } else if (task.$collapsed !== undefined) {
+              currentlyOpen = !task.$collapsed;
+            } else if (task.collapsed !== undefined) {
+              currentlyOpen = !task.collapsed;
+            }
+
+            const previouslyOpen = taskStateRef.current.get(task.id);
+
+            if (previouslyOpen !== undefined && previouslyOpen !== currentlyOpen) {
+              // State change detected
+              taskStateRef.current.set(task.id, currentlyOpen);
+              changesDetected++;
+
+              try {
+                // Sync with Firestore
+                await provider.handleExpandCollapseState({
+                  id: task.id,
+                  isOpen: currentlyOpen
+                });
+
+                console.log(`Estado sincronizado para tarea ${task.id}: ${currentlyOpen ? 'EXPANDIDA' : 'COLAPSADA'}`);
+              } catch (syncError) {
+                console.error(`Error sincronizando estado de tarea ${task.id}:`, syncError);
+              }
+            } else if (previouslyOpen === undefined) {
+              // First time tracking this task
+              taskStateRef.current.set(task.id, currentlyOpen);
+            }
+          }
+        });
+
+        await Promise.all(changePromises);
+
+        if (changesDetected > 0) {
+          console.log(`GanttChart: ${changesDetected} cambios de estado procesados`);
+        }
+      }
+    } catch (error) {
+      console.error('GanttChart: Error en detección de cambios de colapso:', error);
+    }
+  }, []);
 
 
 
@@ -287,15 +481,32 @@ const GanttChart: React.FC<GanttChartProps> = ({
     // Configurar el data provider como el siguiente en la cadena de eventos
     if (dataProvider) {
       console.log('Configurando FirestoreGanttDataProvider como siguiente en la cadena');
-      api.setNext(dataProvider);
+      
+      // Guard defensivo (aunque setNext funciona en nuestro caso)
+      if (typeof api.setNext === 'function') {
+        api.setNext(dataProvider);
+        console.log('setNext configurado exitosamente');
+      } else {
+        console.warn('setNext no disponible, usando configuración alternativa');
+        // Fallback directo sin setNext
+        dataProvider.setGanttApi(api);
+      }
+      
       // Pasar referencia del API al dataProvider para consultas directas (sin crear loop)
       dataProvider.setGanttApi(api);
+      
+      // NOTA: Según documentación oficial, el estado expand/collapse se controla 
+      // mediante la propiedad 'open' en los datos iniciales, no mediante API
+      console.log('Estado de expand/collapse se gestiona mediante propiedad open en datos iniciales');
     }
 
     // Inicializar el cálculo automático de progreso para summary tasks existentes
-    api.getState().tasks.forEach((task: any) => {
-      recalcSummaryProgress(task.id, true);
-    });
+    const currentTasks = api.getState()?.tasks;
+    if (currentTasks && Array.isArray(currentTasks)) {
+      currentTasks.forEach((task: any) => {
+        recalcSummaryProgress(task.id, true);
+      });
+    }
 
     api.on('update-task', ({ id }: any) => {
       recalcSummaryProgress(id);
@@ -312,23 +523,45 @@ const GanttChart: React.FC<GanttChartProps> = ({
     api.on('move-task', ({ id, source, inProgress }: any) => {
       if (inProgress) return;
 
-      if (api.getTask(id).parent !== source) {
+      const movedTask = api.getTask(id);
+      if (movedTask && movedTask.parent !== source) {
         recalcSummaryProgress(source, true);
       }
       recalcSummaryProgress(id);
     });
+
+    // Setup collapse detection using DOM observation + polling
+    setTimeout(() => {
+      setupCollapseDetection(api, dataProvider);
+
+      // Polling para capturar cambios que el MutationObserver pueda perderse
+      pollingIntervalRef.current = setInterval(() => {
+        if (dataProvider && api) {
+          try {
+            detectCollapseChanges(api, dataProvider);
+          } catch (error) {
+            console.error('Error en polling detection:', error);
+          }
+        }
+      }, 1000); // Verificar cada segundo
+    }, 100);
 
     // Configurar listeners estándar para el progreso de summary tasks
 
     console.log('Gantt API inicializado correctamente con FirestoreGanttDataProvider');
   }, [dataProvider, projectId]);
 
-  // Efecto para inicializar el Gantt cuando el dataProvider esté listo
+  // Efecto para inicializar el Gantt cuando el dataProvider y los datos estén listos
   useEffect(() => {
-    if (apiRef.current && dataProvider) {
-      initGantt(apiRef.current);
+    if (apiRef.current && dataProvider && ganttData.tasks.length >= 0) {
+      // Retrasar la inicialización para permitir que el Gantt monte con datos
+      const initTimer = setTimeout(() => {
+        initGantt(apiRef.current);
+      }, 50); // Pequeño delay para asegurar que el Gantt tenga datos
+
+      return () => clearTimeout(initTimer);
     }
-  }, [dataProvider, initGantt]);
+  }, [dataProvider, ganttData, initGantt]);
 
   // Configurar función global para agregar subtareas
   useEffect(() => {

@@ -102,6 +102,7 @@ export class TaskService {
         return {
           id: docSnap.id,
           ...data,
+          open: data.open ?? true, // Default to expanded if not specified
           order: data.order || 0, // Orden por defecto para tareas existetentes sin un campo de orden
           type: data.type || 'task', // Tipo por defecto para tareas existentes sin campo de tipo
           createdAt: data.createdAt?.toDate() || new Date(),
@@ -153,6 +154,7 @@ export class TaskService {
         return {
           id: doc.id,
           ...data,
+          open: data.open ?? true, // Default to expanded if not specified
           order: data.order || 0, // Orden por defecto para tareas existetentes sin un campo de orden
           type: data.type || 'task', // Tipo por defecto para tareas existentes sin campo de tipo
           createdAt: data.createdAt?.toDate() || new Date(),
@@ -241,6 +243,7 @@ export class TaskService {
         return {
           id: doc.id,
           ...data,
+          open: data.open ?? true, // Default to expanded if not specified
           order: data.order || 0, // Orden por defecto para tareas existetentes sin un campo de orden
           type: data.type || 'task', // Tipo por defecto para tareas existentes sin campo de tipo
           createdAt: data.createdAt?.toDate() || new Date(),
@@ -321,6 +324,23 @@ export class TaskService {
     } catch (error) {
       console.error('Error getting tasks by type:', error);
       return [];
+    }
+  }
+
+  /**
+   * Update task expand/collapse state
+   */
+  static async updateTaskExpandState(taskId: string, isOpen: boolean): Promise<void> {
+    try {
+      const docRef = doc(db, COLLECTION_NAME, taskId);
+      await updateDoc(docRef, {
+        open: isOpen,
+        updatedAt: Timestamp.now()
+      });
+      console.log(`Task ${taskId} expand state updated to: ${isOpen}`);
+    } catch (error) {
+      console.error('Error updating task expand state:', error);
+      throw new Error('Failed to update task expand state');
     }
   }
 

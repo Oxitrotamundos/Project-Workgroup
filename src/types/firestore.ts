@@ -96,6 +96,7 @@ export interface Task extends BaseDocument {
   status: TaskStatus;
   type: TaskType; // Tipo de tarea: task, summary, milestone
   order: number; // Orden para posicionamiento de tareas
+  open?: boolean; // Controls expand/collapse state (default: true)
 }
 
 // Datos para crear tarea
@@ -139,6 +140,7 @@ export interface UpdateTaskData {
   status?: TaskStatus;
   type?: TaskType; // Tipo de tarea: task, summary, milestone
   order?: number; //Orden para posicionamiento de tareas
+  open?: boolean; // Allow updating collapse state
 }
 
 // Colección: workload

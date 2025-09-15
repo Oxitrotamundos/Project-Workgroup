@@ -17,6 +17,7 @@ export class FirestoreGanttDataProvider {
   private _ganttApi: any = null; // Referencia directa al API del Gantt
   private idMapping: Map<number, string> = new Map(); // Mapeo de ID numérico a firestoreId
   private tempIdMapping: Map<string, string> = new Map(); // Mapeo de ID temporal a firestoreId
+  private taskCache: Map<string, Task> = new Map(); // Cache de datos completos de Firestore
 
   constructor(projectId: string) {
     this.projectId = projectId;
@@ -27,6 +28,98 @@ export class FirestoreGanttDataProvider {
    */
   getFirestoreIdFromGanttId(ganttId: number): string | undefined {
     return this.idMapping.get(ganttId);
+  }
+
+  /**
+   * Obtener datos completos de tarea desde cache
+   */
+  getFullTaskData(firestoreId: string): Task | undefined {
+    return this.taskCache.get(firestoreId);
+  }
+
+  /**
+   * Obtener datos completos usando ID numérico del Gantt
+   */
+  getFullTaskDataByGanttId(ganttId: number): Task | undefined {
+    const firestoreId = this.getFirestoreIdFromGanttId(ganttId);
+    return firestoreId ? this.getFullTaskData(firestoreId) : undefined;
+  }
+
+  /**
+   * Restaurar estado de expansión usando API de wx-react-gantt
+   */
+  async restoreExpansionStates(): Promise<void> {
+    if (!this._ganttApi) {
+      console.warn('FirestoreGanttDataProvider: API del Gantt no disponible para restaurar estados');
+      return;
+    }
+
+    try {
+      // Verificar que wx-react-gantt esté completamente cargado
+      const state = this._ganttApi.getState();
+      const tasksInGantt = state?._tasks?.length || 0;
+
+      if (tasksInGantt === 0) {
+        console.warn('wx-react-gantt no tiene tareas cargadas aún, abortando restauración');
+        return;
+      }
+
+      console.log('FirestoreGanttDataProvider: Iniciando restauración de estados de expansión');
+      let restoredCount = 0;
+
+      // Obtener todas las tareas con sus estados de expansión
+      for (const [firestoreId, taskData] of this.taskCache.entries()) {
+        const ganttId = this.getGanttIdFromFirestoreId(firestoreId);
+
+        if (!ganttId) continue;
+
+        // Verificar si la tarea tiene hijos usando el API del Gantt
+        const ganttTask = this._ganttApi.getTask(ganttId);
+        const hasChildren = ganttTask && ganttTask.data && ganttTask.data.length > 0;
+
+        if (hasChildren) {
+          // Solo expandir si explícitamente está marcado como open: true en Firestore
+          const shouldBeOpen = taskData.open === true;
+
+          if (shouldBeOpen) {
+            try {
+              // TRUCO: Forzar colapso primero para sincronizar estado visual
+              this._ganttApi.exec('close-task', { id: ganttId, _fromRestore: true });
+
+              // Luego expandir para lograr el estado deseado
+              setTimeout(() => {
+                try {
+                  this._ganttApi.exec('open-task', { id: ganttId, _fromRestore: true });
+                } catch (error) {
+                  console.error(`Error expandiendo tarea ${ganttId}:`, error);
+                }
+              }, 100); // Pequeño delay para que wx-react-gantt procese el colapso
+
+              restoredCount++;
+            } catch (error) {
+              console.error(`Error en sincronización de tarea ${ganttId}:`, error);
+            }
+          }
+          // Si open: false o undefined, dejar colapsado (estado por defecto del Gantt)
+        }
+      }
+
+      console.log(`FirestoreGanttDataProvider: Restauración completada. ${restoredCount} tareas procesadas`);
+    } catch (error) {
+      console.error('FirestoreGanttDataProvider: Error restaurando estados de expansión:', error);
+    }
+  }
+
+  /**
+   * Obtener ID numérico del Gantt a partir del ID de Firestore (mapeo inverso)
+   */
+  private getGanttIdFromFirestoreId(firestoreId: string): number | undefined {
+    for (const [ganttId, storedFirestoreId] of this.idMapping.entries()) {
+      if (storedFirestoreId === firestoreId) {
+        return ganttId;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -67,6 +160,13 @@ export class FirestoreGanttDataProvider {
       
       // Limpiar los mapeos anteriores
       this.idMapping.clear();
+      this.taskCache.clear(); // Limpiar cache anterior
+      
+      // Poblar cache con datos completos
+      tasks.forEach((task: Task) => {
+        this.taskCache.set(task.id, task);
+      });
+      
       // Note: No limpiar tempIdMapping aquí para preservar mapeos de tareas recién creadas
       
       // Crear mapeo de firestoreId a ID numérico para resolver parentId
@@ -85,8 +185,51 @@ export class FirestoreGanttDataProvider {
       
       // Segundo paso: convertir tareas de Firestore al formato del Gantt
       const ganttTasks = tasks.map((task: Task) => {
-        const startDate = task.startDate instanceof Date ? task.startDate : task.startDate.toDate();
-        const endDate = task.endDate instanceof Date ? task.endDate : task.endDate.toDate();
+        // Validar datos obligatorios
+        if (!task.id || !task.name) {
+          console.warn('FirestoreGanttDataProvider: Tarea con datos incompletos ignorada:', task);
+          return null;
+        }
+
+        // Validar y convertir fechas con fallbacks seguros
+        let startDate: Date, endDate: Date;
+        try {
+          // Asegurar que siempre sean objetos Date válidos
+          if (task.startDate instanceof Date) {
+            startDate = task.startDate;
+          } else if (task.startDate?.toDate) {
+            startDate = task.startDate.toDate();
+          } else if (typeof task.startDate === 'string') {
+            startDate = new Date(task.startDate);
+          } else {
+            startDate = new Date();
+          }
+          
+          if (task.endDate instanceof Date) {
+            endDate = task.endDate;
+          } else if (task.endDate?.toDate) {
+            endDate = task.endDate.toDate();
+          } else if (typeof task.endDate === 'string') {
+            endDate = new Date(task.endDate);
+          } else {
+            endDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          }
+          
+          // Validar que las fechas sean válidas
+          if (isNaN(startDate.getTime())) {
+            console.warn('FirestoreGanttDataProvider: startDate inválida, usando fallback');
+            startDate = new Date();
+          }
+          if (isNaN(endDate.getTime())) {
+            console.warn('FirestoreGanttDataProvider: endDate inválida, usando fallback');
+            endDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          }
+          
+        } catch (error) {
+          console.warn('FirestoreGanttDataProvider: Error convirtiendo fechas, usando fallbacks:', error);
+          startDate = new Date();
+          endDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        }
         
         // Calcular duración en días
         const durationInMs = endDate.getTime() - startDate.getTime();
@@ -99,39 +242,60 @@ export class FirestoreGanttDataProvider {
         let parentNumericId: number | undefined = undefined;
         if (task.parentId) {
           parentNumericId = firestoreToNumericMap.get(task.parentId);
-          console.log('FirestoreGanttDataProvider: Resolviendo jerarquía - Tarea:', task.name, 'Parent Firestore ID:', task.parentId, '-> Parent Numeric ID:', parentNumericId);
         }
         
+        // CRÍTICO: Asegurar que las fechas sean objetos Date reales, no strings
+        const ensuredStartDate = startDate instanceof Date ? startDate : new Date(startDate);
+        const ensuredEndDate = endDate instanceof Date ? endDate : new Date(endDate);
+        
+        // Formato para wx-react-gantt con validación de propiedad open
         const ganttTask: any = {
           id: numericId,
           text: task.name,
-          start: startDate,
-          end: endDate,
+          start: ensuredStartDate,
+          end: ensuredEndDate,
           duration: durationInDays,
-          progress: task.progress,
-          type: task.type || 'task', // Usar el tipo de la tarea de Firestore
-          lazy: false,
-          details: task.description || '',
-          // Mantener referencia al ID original de Firestore
-          firestoreId: task.id
+          progress: task.progress || 0,
+          type: task.type || 'task',
+          parent: parentNumericId ?? 0,
+          data: []
         };
-        
-        // Establecer la relación padre-hijo si existe
-        if (parentNumericId !== undefined) {
-          ganttTask.parent = parentNumericId;
+
+        // Determinar si esta tarea puede tener hijos (necesita propiedad 'open')
+        // Verificar si hay otras tareas que tienen esta como parent
+        const hasChildren = tasks.some(otherTask => otherTask.parentId === task.id);
+
+        if (hasChildren) {
+          // Solo tareas que realmente tienen hijos necesitan la propiedad 'open'
+          ganttTask.open = task.open !== false; // Por defecto true para expandir
         }
         
+        // Guardar firestoreId por separado para mapeo interno
+        // (no enviado a wx-react-gantt)
+        ganttTask._internalFirestoreId = task.id;
+        
+        // Validación de compatibilidad con wx-react-gantt
+        this.validateGanttTaskCompatibility(ganttTask);
+        
         return ganttTask;
-      });
+      }).filter(task => task !== null); // Filtrar tareas nulas
       
       console.log('FirestoreGanttDataProvider: Datos cargados:', {
-        tasksCount: ganttTasks.length,
+        totalTasks: tasks.length,
+        validTasks: ganttTasks.length,
         tasks: ganttTasks
+      });
+      
+      // LOG: Resumen de datos procesados
+      console.log('FirestoreGanttDataProvider: Datos procesados:', {
+        totalTasks: tasks.length,
+        validTasks: ganttTasks.length,
+        tasksWithCache: this.taskCache.size
       });
       
       return {
         tasks: ganttTasks,
-        links: [] // Por ahora no manejamos links
+        links: []
       };
     } catch (error) {
       console.error('FirestoreGanttDataProvider: Error cargando datos:', error);
@@ -162,6 +326,11 @@ export class FirestoreGanttDataProvider {
         case 'drag-task':
           return await this.handleDragTask(data);
         
+        case 'render-data':
+          // Acción de UI pura - wx-react-gantt solicita re-renderizado
+          console.log('FirestoreGanttDataProvider: render-data procesado');
+          return { success: true };
+        
         // Acciones de UI que no requieren sincronización con Firestore
         case 'expand-scale':
         case 'show-editor':
@@ -172,8 +341,16 @@ export class FirestoreGanttDataProvider {
         case 'collapse-task':
         case 'open-task':
         case 'close-task':
-          console.log('FirestoreGanttDataProvider: Acción de expansión/colapso procesada localmente:', action);
-          return { success: true, message: 'Acción de expansión procesada localmente' };
+          // Verificar si el evento viene de nuestra restauración
+          if (data._fromRestore) {
+            console.log('FirestoreGanttDataProvider: Evento de restauración procesado:', action, data.id);
+            return { success: true, message: 'Evento de restauración procesado' };
+          } else {
+            console.log('FirestoreGanttDataProvider: Evento expand/collapse IGNORADO (usando detección DOM):', action);
+            // IMPORTANTE: No sincronizar estos eventos ya que son inconsistentes
+            // Usamos detección DOM en su lugar
+            return { success: true, message: 'Evento ignorado - usando detección DOM' };
+          }
         
         default:
           console.warn('FirestoreGanttDataProvider: Acción no soportada:', action);
@@ -600,11 +777,105 @@ export class FirestoreGanttDataProvider {
   }
 
   /**
+   * Handle expand/collapse state changes with enhanced validation and caching
+   */
+  async handleExpandCollapseState(data: any): Promise<void> {
+    const { id, isOpen } = data;
+ 
+    // Get Firestore ID from mapping
+    const firestoreId = this.getFirestoreIdFromGanttId(id);
+    if (!firestoreId) {
+      console.warn('FirestoreGanttDataProvider: No se encontró Firestore ID para evento expand/collapse:', id);
+      return;
+    }
+
+    try {
+      // Update local cache first for immediate consistency
+      const cachedTask = this.taskCache.get(firestoreId);
+      if (cachedTask) {
+        cachedTask.open = isOpen;
+        console.log(`FirestoreGanttDataProvider: Cache actualizado para tarea ${firestoreId}: open=${isOpen}`);
+      }
+ 
+      // Import TaskService dynamically to avoid circular imports
+      const { TaskService } = await import('./taskService');
+ 
+      // Update in Firestore with retry logic
+      const maxRetries = 3;
+      let attempt = 0;
+      
+      while (attempt < maxRetries) {
+        try {
+          await TaskService.updateTaskExpandState(firestoreId, isOpen);
+          console.log(`Estado de expansión actualizado en Firestore para tarea ${firestoreId}: ${isOpen ? 'expandida' : 'colapsada'}`);
+          break;
+        } catch (error) {
+          attempt++;
+          console.warn(`Intento ${attempt} falló para actualizar estado de tarea ${firestoreId}:`, error);
+          
+          if (attempt === maxRetries) {
+            throw new Error(`Failed to update expand state after ${maxRetries} attempts`);
+          }
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+        }
+      }
+      
+    } catch (error) {
+      console.error('✗ Error actualizando estado de expansión:', error);
+      
+      // Revert local cache on error
+      const cachedTask = this.taskCache.get(firestoreId);
+      if (cachedTask) {
+        cachedTask.open = !isOpen; // Revert to previous state
+        console.log(`FirestoreGanttDataProvider: Cache revertido para tarea ${firestoreId} debido a error`);
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Validar compatibilidad de tarea con wx-react-gantt
+   */
+  private validateGanttTaskCompatibility(task: any): void {
+    const requiredProps = ['id', 'text', 'start', 'end', 'duration', 'progress', 'type', 'parent', 'data'];
+    const allowedCustomProps = ['_internalFirestoreId']; // Props internas permitidas
+    
+    // Verificar propiedades requeridas
+    for (const prop of requiredProps) {
+      if (!(prop in task)) {
+        console.warn(`FirestoreGanttDataProvider: Propiedad requerida faltante: ${prop}`, task);
+      }
+    }
+    
+    // Verificar tipos de fecha
+    if (!(task.start instanceof Date)) {
+      console.warn('FirestoreGanttDataProvider: start no es Date object:', typeof task.start);
+    }
+    if (!(task.end instanceof Date)) {
+      console.warn('FirestoreGanttDataProvider: end no es Date object:', typeof task.end);
+    }
+    
+    // Verificar propiedades extra que pueden causar crashes
+    const taskProps = Object.keys(task);
+    const extraProps = taskProps.filter(prop => 
+      !requiredProps.includes(prop) && !allowedCustomProps.includes(prop)
+    );
+    
+    if (extraProps.length > 0) {
+      console.warn('FirestoreGanttDataProvider: Propiedades extra detectadas (pueden causar crashes):', extraProps);
+    }
+  }
+
+  /**
    * Limpiar listeners y mapeos
    */
   destroy(): void {
     this.listeners.clear();
     this.idMapping.clear();
     this.tempIdMapping.clear();
+    this.taskCache.clear();
   }
 }
