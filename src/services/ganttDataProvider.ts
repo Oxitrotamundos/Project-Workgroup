@@ -55,15 +55,10 @@ export class FirestoreGanttDataProvider {
     }
 
     try {
-      console.log('FirestoreGanttDataProvider: Verificando que wx-react-gantt esté completamente listo...');
-      
       // Verificar que wx-react-gantt esté completamente cargado
       const state = this._ganttApi.getState();
       const tasksInGantt = state?._tasks?.length || 0;
-      const tasksInCache = this.taskCache.size;
-      
-      console.log(`DEBUG: Tasks en Gantt: ${tasksInGantt}, Tasks en Cache: ${tasksInCache}`);
-      
+
       if (tasksInGantt === 0) {
         console.warn('wx-react-gantt no tiene tareas cargadas aún, abortando restauración');
         return;
@@ -71,50 +66,44 @@ export class FirestoreGanttDataProvider {
 
       console.log('FirestoreGanttDataProvider: Iniciando restauración de estados de expansión');
       let restoredCount = 0;
-      
+
       // Obtener todas las tareas con sus estados de expansión
       for (const [firestoreId, taskData] of this.taskCache.entries()) {
         const ganttId = this.getGanttIdFromFirestoreId(firestoreId);
-        
+
         if (!ganttId) continue;
-        
+
         // Verificar si la tarea tiene hijos usando el API del Gantt
         const ganttTask = this._ganttApi.getTask(ganttId);
         const hasChildren = ganttTask && ganttTask.data && ganttTask.data.length > 0;
-        
-        console.log(`DEBUG: Tarea ${ganttId} - hasChildren: ${hasChildren}, open en Firestore: ${taskData.open}`);
-        
+
         if (hasChildren) {
           // Solo expandir si explícitamente está marcado como open: true en Firestore
           const shouldBeOpen = taskData.open === true;
-          
+
           if (shouldBeOpen) {
-            console.log(`FirestoreGanttDataProvider: Forzando sincronización de tarea ${ganttId} (${taskData.name})`);
-            
             try {
               // TRUCO: Forzar colapso primero para sincronizar estado visual
               this._ganttApi.exec('close-task', { id: ganttId, _fromRestore: true });
-              console.log(`Tarea ${ganttId} colapsada forzadamente`);
-              
+
               // Luego expandir para lograr el estado deseado
               setTimeout(() => {
                 try {
                   this._ganttApi.exec('open-task', { id: ganttId, _fromRestore: true });
-                  console.log(`Tarea ${ganttId} expandida exitosamente`);
                 } catch (error) {
                   console.error(`Error expandiendo tarea ${ganttId}:`, error);
                 }
               }, 100); // Pequeño delay para que wx-react-gantt procese el colapso
-              
+
               restoredCount++;
             } catch (error) {
-              console.error(`✗ Error en sincronización de tarea ${ganttId}:`, error);
+              console.error(`Error en sincronización de tarea ${ganttId}:`, error);
             }
           }
           // Si open: false o undefined, dejar colapsado (estado por defecto del Gantt)
         }
       }
-      
+
       console.log(`FirestoreGanttDataProvider: Restauración completada. ${restoredCount} tareas procesadas`);
     } catch (error) {
       console.error('FirestoreGanttDataProvider: Error restaurando estados de expansión:', error);
@@ -253,7 +242,6 @@ export class FirestoreGanttDataProvider {
         let parentNumericId: number | undefined = undefined;
         if (task.parentId) {
           parentNumericId = firestoreToNumericMap.get(task.parentId);
-          console.log('FirestoreGanttDataProvider: Resolviendo jerarquía - Tarea:', task.name, 'Parent Firestore ID:', task.parentId, '-> Parent Numeric ID:', parentNumericId);
         }
         
         // CRÍTICO: Asegurar que las fechas sean objetos Date reales, no strings
@@ -280,7 +268,6 @@ export class FirestoreGanttDataProvider {
         if (hasChildren) {
           // Solo tareas que realmente tienen hijos necesitan la propiedad 'open'
           ganttTask.open = task.open !== false; // Por defecto true para expandir
-          console.log(`Tarea con hijos detectada: ${task.name} (open: ${ganttTask.open})`);
         }
         
         // Guardar firestoreId por separado para mapeo interno

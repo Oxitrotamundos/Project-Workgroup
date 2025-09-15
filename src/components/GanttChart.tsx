@@ -293,22 +293,17 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const setupCollapseDetection = useCallback((api: any, provider: FirestoreGanttDataProvider | null) => {
     if (!provider || mutationObserverRef.current) return;
 
-    console.log('GanttChart: Configurando detección optimizada de colapso/expansión');
-
-    // Initialize task state tracking with enhanced detection
+    // Initialize task state tracking
     const initializeTaskStates = () => {
       const tasks = api.getState()?.tasks;
       if (tasks && Array.isArray(tasks)) {
-        let trackedTasks = 0;
         tasks.forEach((task: any) => {
           if (task.data && task.data.length > 0) {
             // Task has children, track its open state
             const isOpen = !task.$collapsed; // wx-react-gantt uses $collapsed property
             taskStateRef.current.set(task.id, isOpen);
-            trackedTasks++;
           }
         });
-        console.log(`GanttChart: ${trackedTasks} tareas padre rastreadas para cambios de estado`);
       }
     };
 
@@ -366,205 +361,94 @@ const GanttChart: React.FC<GanttChartProps> = ({
         attributeFilter: ['class', 'style']
       });
       mutationObserverRef.current = observer;
-      console.log('DOM observation started for collapse detection');
-    } else {
-      console.warn('Gantt container not found for collapse detection');
     }
   }, []);
 
-  // Enhanced collapse detection with detailed logging and validation
+  // Optimized collapse detection
   const detectCollapseChanges = useCallback(async (api: any, provider: FirestoreGanttDataProvider | null) => {
-    console.log('🔧 DEBUG: detectCollapseChanges iniciada', { api: !!api, provider: !!provider });
-    
     if (!api || !provider) {
-      console.log('❌ DEBUG: api o provider no disponible');
       return;
     }
 
     try {
-      console.log('🔧 DEBUG: Explorando API de wx-react-gantt...');
-      
-      // Probar diferentes métodos para obtener las tareas
+      // Get tasks using the most reliable method (_tasks from state)
       let taskArray: any[] = [];
-      
-      // Método 1: Intentar obtener todas las tareas directamente del API
-      if (typeof api.getTaskIds === 'function') {
-        console.log('🔧 DEBUG: Probando api.getTaskIds()');
-        const taskIds = api.getTaskIds();
-        console.log('🔧 DEBUG: taskIds encontrados:', taskIds);
-        
-        if (Array.isArray(taskIds)) {
-          taskArray = taskIds.map(id => api.getTask(id)).filter(task => task);
-          console.log('🔧 DEBUG: Tasks obtenidas vía getTask():', taskArray.length);
-        }
+
+      // Primary method: Get tasks from state._tasks (most reliable)
+      const state = api.getState();
+      if (state?._tasks && Array.isArray(state._tasks)) {
+        taskArray = state._tasks;
       }
-      
-      // Método 2: Si el anterior no funciona, probar eachTask
-      if (taskArray.length === 0 && typeof api.eachTask === 'function') {
-        console.log('🔧 DEBUG: Probando api.eachTask()');
-        const tempTasks: any[] = [];
-        api.eachTask((task: any) => {
-          tempTasks.push(task);
-        });
-        taskArray = tempTasks;
-        console.log('🔧 DEBUG: Tasks obtenidas vía eachTask():', taskArray.length);
-      }
-      
-      // Método 3: Probar api.serialize()
-      if (taskArray.length === 0 && typeof api.serialize === 'function') {
-        console.log('🔧 DEBUG: Probando api.serialize()');
-        const serializedData = api.serialize();
-        if (serializedData && Array.isArray(serializedData.data)) {
-          taskArray = serializedData.data;
-          console.log('🔧 DEBUG: Tasks obtenidas vía serialize():', taskArray.length);
-        }
-      }
-      
-      // Método 4: Fallback - explorar el estado
+
+      // Fallback methods if primary fails
       if (taskArray.length === 0) {
-        console.log('🔧 DEBUG: Fallback - explorando estado...');
-        const state = api.getState();
-        console.log('🔧 DEBUG: Explorando propiedades del estado:', Object.keys(state || {}));
-        
-        // Probar diferentes ubicaciones de las tareas
-        const possibleTaskLocations = [
-          { path: 'tasks._pool', value: state?.tasks?._pool },
-          { path: '_tasks', value: state?._tasks },
-          { path: 'tasks', value: state?.tasks },
-        ];
-        
-        for (const location of possibleTaskLocations) {
-          console.log('🔧 DEBUG: Explorando', location.path, ':', {
-            exists: !!location.value,
-            isArray: Array.isArray(location.value),
-            length: location.value?.length,
-            type: typeof location.value,
-            keys: location.value && typeof location.value === 'object' ? Object.keys(location.value) : null
-          });
-          
-          if (Array.isArray(location.value) && location.value.length > 0) {
-            taskArray = location.value;
-            console.log('✅ DEBUG: Tasks encontradas en', location.path, ':', taskArray.length);
-            break;
+        if (typeof api.getTaskIds === 'function') {
+          const taskIds = api.getTaskIds();
+          if (Array.isArray(taskIds)) {
+            taskArray = taskIds.map(id => api.getTask(id)).filter(task => task);
           }
         }
-        
-        // Si aún no encontramos tareas, probar acceder directamente usando el API
-        if (taskArray.length === 0) {
-          console.log('🔧 DEBUG: Probando acceso directo por cada tarea visible...');
-          // Intentar obtener tareas por ID conocidos o usar un rango
-          for (let i = 1; i <= 10; i++) {
-            try {
-              const task = api.getTask(i);
-              if (task) {
-                taskArray.push(task);
-                console.log('🔧 DEBUG: Tarea', i, 'encontrada:', task.id || task.text);
-              }
-            } catch (e) {
-              // ID no existe, continuar
-            }
-          }
-          console.log('🔧 DEBUG: Tasks encontradas por ID directo:', taskArray.length);
+
+        if (taskArray.length === 0 && typeof api.eachTask === 'function') {
+          const tempTasks: any[] = [];
+          api.eachTask((task: any) => {
+            tempTasks.push(task);
+          });
+          taskArray = tempTasks;
         }
       }
-      
-      console.log('🔍 GanttChart: Array de tareas obtenido:', { length: taskArray.length, isArray: Array.isArray(taskArray) });
-      
+
       if (taskArray && Array.isArray(taskArray) && taskArray.length > 0) {
         let changesDetected = 0;
-        let tasksWithChildren = 0;
-        
-        console.log(`🔍 GanttChart: Detectando cambios en ${taskArray.length} tareas`);
-        
-        // Use Promise.all for better performance with multiple async operations
+
+        // Process collapse/expand state changes
         const changePromises = taskArray.map(async (task: any) => {
           if (task.data && task.data.length > 0) {
-            tasksWithChildren++;
-            
-            // Investigar todas las propiedades de la tarea para encontrar el estado de colapso
-            console.log('🔍 DEBUG: Propiedades completas de la tarea', task.id, ':', {
-              allProps: Object.keys(task),
-              $collapsed: task.$collapsed,
-              collapsed: task.collapsed,
-              open: task.open,
-              expanded: task.expanded,
-              _collapsed: task._collapsed,
-              _open: task._open,
-              _expanded: task._expanded,
-              render: task.render,
-              $render: task.$render,
-              type: task.type,
-              hasData: !!task.data,
-              dataLength: task.data?.length
-            });
-            
-            // Probar diferentes propiedades que podrían indicar el estado
+            // Get current collapse state from wx-react-gantt
             let currentlyOpen = true; // default
-            let collapseProperty = 'unknown';
-            
-            if (task.$collapsed !== undefined) {
+
+            // wx-react-gantt uses 'open' property to track state
+            if (task.open !== undefined) {
+              currentlyOpen = task.open;
+            } else if (task.$collapsed !== undefined) {
               currentlyOpen = !task.$collapsed;
-              collapseProperty = '$collapsed';
             } else if (task.collapsed !== undefined) {
               currentlyOpen = !task.collapsed;
-              collapseProperty = 'collapsed';  
-            } else if (task.open !== undefined) {
-              currentlyOpen = task.open;
-              collapseProperty = 'open';
-            } else if (task.expanded !== undefined) {
-              currentlyOpen = task.expanded;
-              collapseProperty = 'expanded';
-            } else if (task._collapsed !== undefined) {
-              currentlyOpen = !task._collapsed;
-              collapseProperty = '_collapsed';
-            } else if (task._open !== undefined) {
-              currentlyOpen = task._open;
-              collapseProperty = '_open';
-            } else if (task._expanded !== undefined) {
-              currentlyOpen = task._expanded;
-              collapseProperty = '_expanded';
             }
-            
+
             const previouslyOpen = taskStateRef.current.get(task.id);
-            
-            // Detailed logging for debugging
-            console.log(`🔍 Tarea ${task.id}: actual=${currentlyOpen}, previa=${previouslyOpen}, propiedad=${collapseProperty}`);
-            
+
             if (previouslyOpen !== undefined && previouslyOpen !== currentlyOpen) {
-              console.log(`🔄 GanttChart: Tarea ${task.id} cambió estado: ${previouslyOpen} -> ${currentlyOpen}`);
-              
-              // Update our tracking immediately
+              // State change detected
               taskStateRef.current.set(task.id, currentlyOpen);
               changesDetected++;
-              
+
               try {
-                // Sync with Firestore (both expand and collapse)
+                // Sync with Firestore
                 await provider.handleExpandCollapseState({
                   id: task.id,
                   isOpen: currentlyOpen
                 });
-                
-                console.log(`✅ Estado sincronizado para tarea ${task.id}: ${currentlyOpen ? 'EXPANDIDA' : 'COLAPSADA'}`);
+
+                console.log(`Estado sincronizado para tarea ${task.id}: ${currentlyOpen ? 'EXPANDIDA' : 'COLAPSADA'}`);
               } catch (syncError) {
-                console.error(`❌ Error sincronizando estado de tarea ${task.id}:`, syncError);
+                console.error(`Error sincronizando estado de tarea ${task.id}:`, syncError);
               }
             } else if (previouslyOpen === undefined) {
-              // First time seeing this task, just track it
+              // First time tracking this task
               taskStateRef.current.set(task.id, currentlyOpen);
-              console.log(`📝 Iniciando tracking para tarea ${task.id}: ${currentlyOpen ? 'expandida' : 'colapsada'} (${collapseProperty})`);
             }
           }
         });
-        
-        console.log(`🔧 DEBUG: ${tasksWithChildren} tareas con hijos encontradas de ${taskArray.length} totales`);
+
         await Promise.all(changePromises);
-        
+
         if (changesDetected > 0) {
-          console.log(`🎯 GanttChart: ${changesDetected} cambios de estado procesados exitosamente`);
+          console.log(`GanttChart: ${changesDetected} cambios de estado procesados`);
         }
       }
     } catch (error) {
-      console.error('❌ GanttChart: Error en detección de cambios de colapso:', error);
+      console.error('GanttChart: Error en detección de cambios de colapso:', error);
     }
   }, []);
 
@@ -665,45 +549,18 @@ const GanttChart: React.FC<GanttChartProps> = ({
       recalcSummaryProgress(id);
     });
 
-    // DESHABILITADO TEMPORALMENTE: Eventos nativos causan conflictos
-    // Usaremos solo detección DOM hasta identificar el problema
-    
-    // DEBUG: Monitorear todos los eventos para entender qué dispara wx-react-gantt
-    const originalOn = api.on;
-    api.on = function(event: string, handler: any) {
-      console.log(`GanttChart: Registrando listener para evento: ${event}`);
-      
-      if (event === 'open-task' || event === 'close-task') {
-        const wrappedHandler = (ev: any) => {
-          console.log(`🔍 DEBUG: Evento ${event} disparado para tarea ${ev.id}`);
-          console.log('🔍 DEBUG: Datos del evento:', ev);
-          
-          // No procesar automáticamente - solo loggear
-          // handler(ev);
-        };
-        return originalOn.call(this, event, wrappedHandler);
-      }
-      
-      return originalOn.call(this, event, handler);
-    };
-
     // Setup collapse detection using DOM observation + polling
     setTimeout(() => {
       setupCollapseDetection(api, dataProvider);
-      
-      // Agregar polling adicional para capturar cambios que el MutationObserver pueda perderse
+
+      // Polling para capturar cambios que el MutationObserver pueda perderse
       pollingIntervalRef.current = setInterval(() => {
         if (dataProvider && api) {
-          console.log('🔄 Polling: Verificando cambios de estado...');
-          console.log('🔧 DEBUG: Llamando detectCollapseChanges...');
           try {
             detectCollapseChanges(api, dataProvider);
-            console.log('🔧 DEBUG: detectCollapseChanges terminó');
           } catch (error) {
-            console.error('❌ Error en polling detection:', error);
+            console.error('Error en polling detection:', error);
           }
-        } else {
-          console.log('⚠️ Polling: dataProvider o api no disponible', { dataProvider: !!dataProvider, api: !!api });
         }
       }, 1000); // Verificar cada segundo
     }, 100);
