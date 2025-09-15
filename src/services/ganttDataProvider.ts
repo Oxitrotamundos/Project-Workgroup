@@ -55,6 +55,20 @@ export class FirestoreGanttDataProvider {
     }
 
     try {
+      console.log('FirestoreGanttDataProvider: Verificando que wx-react-gantt esté completamente listo...');
+      
+      // Verificar que wx-react-gantt esté completamente cargado
+      const state = this._ganttApi.getState();
+      const tasksInGantt = state?._tasks?.length || 0;
+      const tasksInCache = this.taskCache.size;
+      
+      console.log(`DEBUG: Tasks en Gantt: ${tasksInGantt}, Tasks en Cache: ${tasksInCache}`);
+      
+      if (tasksInGantt === 0) {
+        console.warn('wx-react-gantt no tiene tareas cargadas aún, abortando restauración');
+        return;
+      }
+
       console.log('FirestoreGanttDataProvider: Iniciando restauración de estados de expansión');
       let restoredCount = 0;
       
@@ -68,32 +82,36 @@ export class FirestoreGanttDataProvider {
         const ganttTask = this._ganttApi.getTask(ganttId);
         const hasChildren = ganttTask && ganttTask.data && ganttTask.data.length > 0;
         
+        console.log(`DEBUG: Tarea ${ganttId} - hasChildren: ${hasChildren}, open en Firestore: ${taskData.open}`);
+        
         if (hasChildren) {
-          // Restaurar estado según el valor stored (por defecto true si no está definido)
-          const shouldBeOpen = taskData.open !== false; // default true
+          // Solo expandir si explícitamente está marcado como open: true en Firestore
+          const shouldBeOpen = taskData.open === true;
           
-          if (!shouldBeOpen) {
-            console.log(`FirestoreGanttDataProvider: Colapsando tarea ${ganttId} (${taskData.name})`);
-            // Usar setTimeout escalonado para asegurar procesamiento secuencial
-            setTimeout(() => {
-              try {
-                this._ganttApi.exec('close-task', { id: ganttId });
-                console.log(`✓ Tarea ${ganttId} colapsada exitosamente`);
-              } catch (error) {
-                console.error(`✗ Error colapsando tarea ${ganttId}:`, error);
-              }
-            }, 150 + (restoredCount * 50)); // Delay escalonado
-            restoredCount++;
-          } else {
-            // Asegurar que esté expandida (por defecto debería estar)
-            setTimeout(() => {
-              try {
-                this._ganttApi.exec('open-task', { id: ganttId });
-              } catch (error) {
-                // Ignorar errores de open-task ya que es el estado por defecto
-              }
-            }, 100 + (restoredCount * 50));
+          if (shouldBeOpen) {
+            console.log(`FirestoreGanttDataProvider: Forzando sincronización de tarea ${ganttId} (${taskData.name})`);
+            
+            try {
+              // TRUCO: Forzar colapso primero para sincronizar estado visual
+              this._ganttApi.exec('close-task', { id: ganttId, _fromRestore: true });
+              console.log(`Tarea ${ganttId} colapsada forzadamente`);
+              
+              // Luego expandir para lograr el estado deseado
+              setTimeout(() => {
+                try {
+                  this._ganttApi.exec('open-task', { id: ganttId, _fromRestore: true });
+                  console.log(`Tarea ${ganttId} expandida exitosamente`);
+                } catch (error) {
+                  console.error(`Error expandiendo tarea ${ganttId}:`, error);
+                }
+              }, 100); // Pequeño delay para que wx-react-gantt procese el colapso
+              
+              restoredCount++;
+            } catch (error) {
+              console.error(`✗ Error en sincronización de tarea ${ganttId}:`, error);
+            }
           }
+          // Si open: false o undefined, dejar colapsado (estado por defecto del Gantt)
         }
       }
       
@@ -242,7 +260,7 @@ export class FirestoreGanttDataProvider {
         const ensuredStartDate = startDate instanceof Date ? startDate : new Date(startDate);
         const ensuredEndDate = endDate instanceof Date ? endDate : new Date(endDate);
         
-        // TEST ELIMINATIVO: Formato IDÉNTICO al hardcoded que funcionó
+        // Formato para wx-react-gantt con validación de propiedad open
         const ganttTask: any = {
           id: numericId,
           text: task.name,
@@ -253,11 +271,17 @@ export class FirestoreGanttDataProvider {
           type: task.type || 'task',
           parent: parentNumericId ?? 0,
           data: []
-          // REMOVIENDO TODAS LAS PROPIEDADES EXTRA:
-          // - details (causa posible)
-          // - open (causa posible) 
-          // - firestoreId (causa posible)
         };
+
+        // Determinar si esta tarea puede tener hijos (necesita propiedad 'open')
+        // Verificar si hay otras tareas que tienen esta como parent
+        const hasChildren = tasks.some(otherTask => otherTask.parentId === task.id);
+
+        if (hasChildren) {
+          // Solo tareas que realmente tienen hijos necesitan la propiedad 'open'
+          ganttTask.open = task.open !== false; // Por defecto true para expandir
+          console.log(`Tarea con hijos detectada: ${task.name} (open: ${ganttTask.open})`);
+        }
         
         // Guardar firestoreId por separado para mapeo interno
         // (no enviado a wx-react-gantt)
@@ -330,10 +354,16 @@ export class FirestoreGanttDataProvider {
         case 'collapse-task':
         case 'open-task':
         case 'close-task':
-          console.log('🚫 FirestoreGanttDataProvider: Evento expand/collapse IGNORADO (usando detección DOM):', action);
-          // IMPORTANTE: No sincronizar estos eventos ya que son inconsistentes
-          // Usamos detección DOM en su lugar
-          return { success: true, message: 'Evento ignorado - usando detección DOM' };
+          // Verificar si el evento viene de nuestra restauración
+          if (data._fromRestore) {
+            console.log('FirestoreGanttDataProvider: Evento de restauración procesado:', action, data.id);
+            return { success: true, message: 'Evento de restauración procesado' };
+          } else {
+            console.log('FirestoreGanttDataProvider: Evento expand/collapse IGNORADO (usando detección DOM):', action);
+            // IMPORTANTE: No sincronizar estos eventos ya que son inconsistentes
+            // Usamos detección DOM en su lugar
+            return { success: true, message: 'Evento ignorado - usando detección DOM' };
+          }
         
         default:
           console.warn('FirestoreGanttDataProvider: Acción no soportada:', action);
@@ -790,11 +820,11 @@ export class FirestoreGanttDataProvider {
       while (attempt < maxRetries) {
         try {
           await TaskService.updateTaskExpandState(firestoreId, isOpen);
-          console.log(`✓ Estado de expansión actualizado en Firestore para tarea ${firestoreId}: ${isOpen ? 'expandida' : 'colapsada'}`);
+          console.log(`Estado de expansión actualizado en Firestore para tarea ${firestoreId}: ${isOpen ? 'expandida' : 'colapsada'}`);
           break;
         } catch (error) {
           attempt++;
-          console.warn(`⚠ Intento ${attempt} falló para actualizar estado de tarea ${firestoreId}:`, error);
+          console.warn(`Intento ${attempt} falló para actualizar estado de tarea ${firestoreId}:`, error);
           
           if (attempt === maxRetries) {
             throw new Error(`Failed to update expand state after ${maxRetries} attempts`);

@@ -358,3 +358,31 @@
     height: 14px !important;
   }
 }
+
+/* CSS para forzar que todas las tareas aparezcan expandidas por defecto */
+.wx-willow-theme .wx-gantt-tree-expand {
+  /* Ocultar iconos de colapso para forzar expansión visual */
+  display: none !important;
+}
+
+.wx-willow-theme .wx-gantt-tree-collapse {
+  /* Mostrar solo iconos de expansión */
+  display: block !important;
+}
+
+/* Alternativa: Forzar que todos los summary tasks muestren sus hijos */
+.wx-willow-theme .wx-gantt-row[data-task-type="summary"] {
+  /* Forzar visualización de summary tasks como expandidos */
+}
+
+.wx-willow-theme .wx-gantt-row[data-has-children="true"] {
+  /* Asegurar que las tareas con hijos se muestren expandidas */
+  --wx-gantt-tree-icon: '▼'; /* Icono de expandido */
+}
+
+/* Forzar que las sub-tareas siempre sean visibles */
+.wx-willow-theme .wx-gantt-row[data-parent-id]:not([data-parent-id="0"]) {
+  display: table-row !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}

@@ -630,10 +630,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
       // Pasar referencia del API al dataProvider para consultas directas (sin crear loop)
       dataProvider.setGanttApi(api);
       
-      // Restaurar estados de expansión después de configurar API
-      setTimeout(() => {
-        dataProvider.restoreExpansionStates();
-      }, 200); // Delay para asegurar que el Gantt esté completamente inicializado
+      // NOTA: Según documentación oficial, el estado expand/collapse se controla 
+      // mediante la propiedad 'open' en los datos iniciales, no mediante API
+      console.log('Estado de expand/collapse se gestiona mediante propiedad open en datos iniciales');
     }
 
     // Inicializar el cálculo automático de progreso para summary tasks existentes
