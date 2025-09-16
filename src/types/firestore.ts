@@ -283,6 +283,80 @@ export interface UserPreferences {
   };
 }
 
+// ========================================
+// TASK LINKS - Dependency Management
+// ========================================
+
+// Tipos de enlaces compatibles con SVAR Gantt
+export type TaskLinkType = 'e2s' | 's2s' | 'e2e' | 's2e';
+
+// Mapeo para compatibilidad con tipos legacy
+export const LINK_TYPE_MAPPING: Record<TaskLinkType, string> = {
+  'e2s': 'finish-to-start',
+  's2s': 'start-to-start',
+  'e2e': 'finish-to-finish',
+  's2e': 'start-to-finish'
+};
+
+// Interfaz principal para enlaces de tareas
+export interface TaskLink extends BaseDocument {
+  projectId: string;             // ID del proyecto (para consultas eficientes)
+  sourceTaskId: string;          // ID de la tarea origen (Firestore)
+  targetTaskId: string;          // ID de la tarea destino (Firestore)
+  type: TaskLinkType;            // Tipo compatible con SVAR Gantt
+
+  // Campos de cache para optimización (opcionales)
+  ganttId?: number;              // ID numérico usado por SVAR Gantt
+  sourceGanttId?: number;        // Cache del ID numérico de origen
+  targetGanttId?: number;        // Cache del ID numérico de destino
+}
+
+// Datos para crear un enlace
+export interface CreateTaskLinkData {
+  projectId: string;
+  sourceTaskId: string;
+  targetTaskId: string;
+  type: TaskLinkType;
+}
+
+// Datos para actualizar un enlace
+export interface UpdateTaskLinkData {
+  type?: TaskLinkType;
+}
+
+// Filtros para consultas de enlaces
+export interface TaskLinkFilters {
+  projectId?: string;
+  sourceTaskId?: string;
+  targetTaskId?: string;
+  type?: TaskLinkType;
+}
+
+// Formato de enlace para SVAR Gantt
+export interface GanttLinkData {
+  id: number;                    // ID numérico para SVAR Gantt
+  source: number;                // ID numérico de tarea origen
+  target: number;                // ID numérico de tarea destino
+  type: TaskLinkType;            // Tipo de enlace
+}
+
+// Evento de enlace desde SVAR Gantt
+export interface GanttLinkEvent {
+  id?: number;
+  source: number;
+  target: number;
+  type: TaskLinkType;
+  mode?: string;
+}
+
+// Respuesta de operación de enlace
+export interface GanttLinkResponse {
+  success: boolean;
+  id?: string | number;
+  error?: string;
+  message?: string;
+}
+
 // Tipos para exportación
 export interface ExportOptions {
   format: 'pdf' | 'excel' | 'csv';
