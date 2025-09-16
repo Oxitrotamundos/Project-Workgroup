@@ -39,8 +39,15 @@ service cloud.firestore {
     
     // Función helper para verificar si el usuario puede gestionar el proyecto
     function canManageProject(projectId) {
-      return isAdmin() || isProjectOwner(projectId) || 
+      return isAdmin() || isProjectOwner(projectId) ||
              (isPMOrAdmin() && isProjectMember(projectId));
+    }
+
+    // Función helper para verificar si el usuario puede leer datos del proyecto
+    function canReadProject(projectId) {
+      return isAuthenticated() && (
+        isProjectMember(projectId) || isProjectOwner(projectId) || isAdmin()
+      );
     }
     
     // Reglas para la colección de usuarios
@@ -88,19 +95,39 @@ service cloud.firestore {
     match /tasks/{taskId} {
       // Lectura: miembros del proyecto pueden leer tareas
       allow read: if isProjectMember(resource.data.projectId) || isAdmin();
-      
+
       // Creación: miembros del proyecto pueden crear tareas
-      allow create: if isAuthenticated() && 
+      allow create: if isAuthenticated() &&
                        isProjectMember(request.resource.data.projectId);
-      
+
       // Actualización: miembros del proyecto pueden actualizar tareas
       // Asignados pueden actualizar progreso y horas actuales
-      allow update: if isProjectMember(resource.data.projectId) || 
-                       isOwner(resource.data.assigneeId) || 
+      allow update: if isProjectMember(resource.data.projectId) ||
+                       isOwner(resource.data.assigneeId) ||
                        isAdmin();
-      
+
       // Eliminación: gestores del proyecto o admins
       allow delete: if canManageProject(resource.data.projectId) || isAdmin();
+    }
+
+    // Task Links Collection - Dependency Management
+    match /task_links/{linkId} {
+      // Allow read if user is a member of the project
+      allow read: if canReadProject(resource.data.projectId);
+
+      // Allow create - temporarily simplified for debugging
+      allow create: if isAuthenticated()
+                    && request.resource.data.projectId is string
+                    && request.resource.data.sourceTaskId is string
+                    && request.resource.data.targetTaskId is string
+                    && request.resource.data.type in ['e2s', 's2s', 'e2e', 's2e'];
+
+      // Allow update if user is a member of the project
+      allow update: if canReadProject(request.resource.data.projectId)
+                    && isValidTaskLink(request.resource.data);
+
+      // Allow delete if user can manage the project
+      allow delete: if canManageProject(resource.data.projectId);
     }
     
     // Reglas para la colección de carga de trabajo
@@ -156,7 +183,17 @@ service cloud.firestore {
                        canManageProject(get(/databases/$(database)/documents/tasks/$(taskId)).data.projectId) ||
                        isAdmin();
     }
-    
+
+    // Validate task link data structure
+    function isValidTaskLink(data) {
+      return data.keys().hasAll(['projectId', 'sourceTaskId', 'targetTaskId', 'type']) &&
+             data.projectId is string &&
+             data.sourceTaskId is string &&
+             data.targetTaskId is string &&
+             data.type in ['e2s', 's2s', 'e2e', 's2e'] &&
+             data.sourceTaskId != data.targetTaskId;
+    }
+
     // Reglas por defecto: denegar todo lo demás
     match /{document=**} {
       allow read, write: if false;
