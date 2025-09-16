@@ -1,5 +1,7 @@
 import { TaskService } from './taskService';
-import type { CreateTaskData, Task } from '../types/firestore';
+import { TaskLinkService } from './taskLinkService';
+import type { CreateTaskData, Task, CreateTaskLinkData } from '../types/firestore';
+// TaskLink será usado cuando implementemos métodos que retornen objetos TaskLink
 
 export interface TaskCreationOptions {
   projectId: string;
@@ -17,10 +19,15 @@ export interface TaskCreationOptions {
 }
 
 export interface TaskManagerEventData {
-  action: 'task-created' | 'task-updated' | 'task-deleted';
-  taskId: string;
+  action: 'task-created' | 'task-updated' | 'task-deleted' | 'link-created' | 'link-deleted';
+  taskId?: string;
   task?: Task;
   projectId: string;
+  // Link-specific fields
+  linkId?: string;
+  sourceTaskId?: string;
+  targetTaskId?: string;
+  timestamp: Date;
 }
 
 export type TaskManagerEventHandler = (data: TaskManagerEventData) => void;
@@ -126,7 +133,8 @@ export class TaskManager {
           action: 'task-created',
           taskId,
           task: createdTask || undefined,
-          projectId: options.projectId
+          projectId: options.projectId,
+          timestamp: new Date()
         });
       } else {
         console.log('TaskManager: Omitiendo evento de creación por skipEvent=true para tarea:', taskId);
@@ -219,7 +227,8 @@ export class TaskManager {
         action: 'task-updated',
         taskId,
         task: updatedTask || undefined,
-        projectId: updatedTask?.projectId || ''
+        projectId: updatedTask?.projectId || '',
+        timestamp: new Date()
       });
 
       console.log('TaskManager: Tarea actualizada exitosamente');
@@ -246,7 +255,8 @@ export class TaskManager {
       this.emit({
         action: 'task-deleted',
         taskId,
-        projectId
+        projectId,
+        timestamp: new Date()
       });
 
       console.log('TaskManager: Tarea eliminada exitosamente');
@@ -267,6 +277,98 @@ export class TaskManager {
       milestone: '#F59E0B' // Amarillo/Naranja para milestones
     };
     return colors[type];
+  }
+
+  /**
+   * ========================================
+   * MÉTODOS DE ENLACES - OPCIONAL
+   * ========================================
+   */
+
+  /**
+   * Crear enlace entre tareas con validación
+   */
+  async createTaskLink(data: CreateTaskLinkData): Promise<string> {
+    try {
+      console.log('TaskManager: Creando enlace de tarea:', data);
+
+      // Validar que ambas tareas existen
+      const sourceTask = await TaskService.getTask(data.sourceTaskId);
+      const targetTask = await TaskService.getTask(data.targetTaskId);
+
+      if (!sourceTask || !targetTask) {
+        throw new Error('Una o ambas tareas no existen');
+      }
+
+      // Validar que ambas tareas pertenecen al mismo proyecto
+      if (sourceTask.projectId !== targetTask.projectId || sourceTask.projectId !== data.projectId) {
+        throw new Error('Las tareas deben pertenecer al mismo proyecto');
+      }
+
+      // Crear enlace usando TaskLinkService
+      const linkId = await TaskLinkService.createLink(data);
+
+      // Emitir evento
+      this.emit({
+        action: 'link-created',
+        projectId: data.projectId,
+        linkId,
+        sourceTaskId: data.sourceTaskId,
+        targetTaskId: data.targetTaskId,
+        timestamp: new Date()
+      });
+
+      return linkId;
+    } catch (error) {
+      console.error('TaskManager: Error creando enlace:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Eliminar enlace de tarea
+   */
+  async deleteTaskLink(linkId: string): Promise<void> {
+    try {
+      console.log('TaskManager: Eliminando enlace de tarea:', linkId);
+
+      // Obtener datos del enlace antes de eliminarlo
+      const link = await TaskLinkService.getLink(linkId);
+      if (!link) {
+        throw new Error('Enlace no encontrado');
+      }
+
+      // Eliminar enlace
+      await TaskLinkService.deleteLink(linkId);
+
+      // Emitir evento
+      this.emit({
+        action: 'link-deleted',
+        projectId: link.projectId,
+        linkId,
+        sourceTaskId: link.sourceTaskId,
+        targetTaskId: link.targetTaskId,
+        timestamp: new Date()
+      });
+    } catch (error) {
+      console.error('TaskManager: Error eliminando enlace:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Validar creación de enlace
+   */
+  async validateLinkCreation(sourceTaskId: string, targetTaskId: string, projectId: string): Promise<{
+    valid: boolean;
+    error?: string;
+  }> {
+    try {
+      return await TaskLinkService.validateLinkCreation(sourceTaskId, targetTaskId, projectId);
+    } catch (error) {
+      console.error('TaskManager: Error validando enlace:', error);
+      return { valid: false, error: 'Error al validar la creación del enlace' };
+    }
   }
 
   /**
