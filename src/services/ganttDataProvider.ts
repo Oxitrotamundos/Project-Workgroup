@@ -1085,7 +1085,6 @@ export class FirestoreGanttDataProvider {
    */
   private async handleUpdateLink(data: GanttLinkEvent): Promise<GanttLinkResponse> {
     console.log('FirestoreGanttDataProvider: Actualizando enlace:', data);
-    console.log('FirestoreGanttDataProvider: data.type =', data.type, typeof data.type);
 
     try {
       // Obtener ID de Firestore del enlace
@@ -1099,7 +1098,6 @@ export class FirestoreGanttDataProvider {
 
       // Los datos del enlace pueden estar en data.link o directamente en data
       const linkData = (data as any).link || data;
-      console.log('FirestoreGanttDataProvider: linkData =', linkData);
 
       // Preparar datos de actualización, filtrando campos undefined
       const updateData: UpdateTaskLinkData = {};
