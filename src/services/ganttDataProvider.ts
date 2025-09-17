@@ -1,11 +1,6 @@
-/**
- * Adaptador personalizado que implementa la interfaz de RestDataProvider
- * pero se conecta con Firestore en lugar de un servidor REST
- */
-
 import { TaskService } from './taskService';
 import { TaskLinkService } from './taskLinkService';
-import type { Task, UpdateTaskData, TaskLink, GanttLinkData, GanttLinkEvent, GanttLinkResponse } from '../types/firestore';
+import type { Task, UpdateTaskData, TaskLink, GanttLinkData, GanttLinkEvent, GanttLinkResponse, UpdateTaskLinkData } from '../types/firestore';
 
 export interface GanttDataProviderData {
   tasks: any[];
@@ -1090,6 +1085,7 @@ export class FirestoreGanttDataProvider {
    */
   private async handleUpdateLink(data: GanttLinkEvent): Promise<GanttLinkResponse> {
     console.log('FirestoreGanttDataProvider: Actualizando enlace:', data);
+    console.log('FirestoreGanttDataProvider: data.type =', data.type, typeof data.type);
 
     try {
       // Obtener ID de Firestore del enlace
@@ -1101,10 +1097,24 @@ export class FirestoreGanttDataProvider {
         return { success: false, error };
       }
 
+      // Los datos del enlace pueden estar en data.link o directamente en data
+      const linkData = (data as any).link || data;
+      console.log('FirestoreGanttDataProvider: linkData =', linkData);
+
+      // Preparar datos de actualización, filtrando campos undefined
+      const updateData: UpdateTaskLinkData = {};
+      if (linkData.type !== undefined) {
+        updateData.type = linkData.type;
+      }
+
+      // Solo actualizar si hay campos válidos
+      if (Object.keys(updateData).length === 0) {
+        console.log('FirestoreGanttDataProvider: No hay datos válidos para actualizar');
+        return { success: true, id: linkFirestoreId };
+      }
+
       // Actualizar enlace en Firestore
-      await TaskLinkService.updateLink(linkFirestoreId, {
-        type: data.type
-      });
+      await TaskLinkService.updateLink(linkFirestoreId, updateData);
 
       console.log('FirestoreGanttDataProvider: Enlace actualizado exitosamente:', linkFirestoreId);
 
