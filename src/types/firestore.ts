@@ -342,10 +342,10 @@ export interface GanttLinkData {
 
 // Evento de enlace desde SVAR Gantt
 export interface GanttLinkEvent {
-  id?: number;
-  source: number;
-  target: number;
-  type: TaskLinkType;
+  id?: number | string;  // Puede ser numérico o temporal (temp://...)
+  source?: number;       // Opcional porque no siempre está disponible en delete
+  target?: number;       // Opcional porque no siempre está disponible en delete
+  type?: TaskLinkType;   // Opcional porque no siempre está disponible en delete
   mode?: string;
 }
 
