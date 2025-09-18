@@ -6,7 +6,7 @@ import { useTasks } from '../hooks/usetasks';
 import { useProject } from '../hooks/useProject';
 import { useGanttActions } from '../hooks/useGanttActions';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigation } from '../components/Layout/AppLayout';
+import { useNavigation } from '../contexts/NavigationContext';
 import { ProjectActions, ProjectInfo } from '../components/Layout';
 import GanttChart from '../components/GanttChart';
 import { ProjectStateManager } from '../components/ProjectLoadingStates';

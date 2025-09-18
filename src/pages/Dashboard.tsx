@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { UserService } from '../services/userService';
-import { useNavigation } from '../components/Layout/AppLayout';
+import { useNavigation } from '../contexts/NavigationContext';
 import ProjectList from '../components/ProjectList';
 import ProjectModal from '../components/ProjectModal';
 import type { Project, CreateProjectData, UpdateProjectData } from '../types/firestore';
