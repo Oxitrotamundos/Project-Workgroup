@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { TopNavigationProps } from '../../types/navigation';
 import { DEFAULT_TITLES, ROUTES, LOGO_CONFIG } from '../../constants/navigation';
@@ -18,6 +18,39 @@ const TopNavigation: React.FC<TopNavigationProps> = memo(({
   logoSrc = LOGO_CONFIG.DEFAULT_SRC,
   logoAlt = LOGO_CONFIG.DEFAULT_ALT
 }) => {
+  // Agregar estilos CSS para animaciones suaves
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes fadeInSlide {
+        0% {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .title-transition-enter {
+        animation: fadeInSlide 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+      }
+    `;
+
+    if (!document.querySelector('#navigation-animations')) {
+      style.id = 'navigation-animations';
+      document.head.appendChild(style);
+    }
+
+    return () => {
+      const existingStyle = document.querySelector('#navigation-animations');
+      if (existingStyle) {
+        document.head.removeChild(existingStyle);
+      }
+    };
+  }, []);
+
   return (
     <nav
       className="bg-white/95 backdrop-blur-sm border-b border-gray-200/60 sticky top-0 z-50"
@@ -75,22 +108,30 @@ const TopNavigation: React.FC<TopNavigationProps> = memo(({
               }`}
             />
 
-            {/* Título - Animado */}
-            <div className="min-w-0 flex-1 transition-all duration-300 ease-in-out">
-              <h1
-                className="text-xl font-bold text-gray-900 truncate transform transition-all duration-300"
-                id="page-title"
-              >
-                {title}
-              </h1>
+            {/* Título - Animado con transición suave */}
+            <div className="min-w-0 flex-1 relative overflow-hidden">
+              <div className="transition-all duration-400 ease-out">
+                <h1
+                  className="text-xl font-bold text-gray-900 truncate title-transition-enter"
+                  id="page-title"
+                  key={title}
+                >
+                  {title}
+                </h1>
+              </div>
               <div
-                className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                  subtitle ? 'max-h-6 opacity-100' : 'max-h-0 opacity-0'
+                className={`transition-all duration-400 ease-out overflow-hidden ${
+                  subtitle ? 'max-h-6 opacity-100 mt-1' : 'max-h-0 opacity-0 mt-0'
                 }`}
               >
-                <p className="text-sm text-gray-600 truncate">
-                  {subtitle}
-                </p>
+                {subtitle && (
+                  <p
+                    className="text-sm text-gray-600 truncate title-transition-enter"
+                    key={subtitle}
+                  >
+                    {subtitle}
+                  </p>
+                )}
               </div>
             </div>
           </div>
