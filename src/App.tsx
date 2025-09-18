@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import AppLayout from './components/Layout/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
@@ -53,13 +54,15 @@ function App() {
             {/* Rutas públicas */}
             <Route path="/login" element={<LoginWrapper />} />
             <Route path="/signup" element={<SignUpWrapper />} />
-            
-            {/* Rutas protegidas */}
+
+            {/* Rutas protegidas con layout persistente */}
             <Route
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <AppLayout>
+                    <Dashboard />
+                  </AppLayout>
                 </ProtectedRoute>
               }
             />
@@ -67,14 +70,16 @@ function App() {
               path="/project/:projectId"
               element={
                 <ProtectedRoute>
-                  <ProjectView />
+                  <AppLayout>
+                    <ProjectView />
+                  </AppLayout>
                 </ProtectedRoute>
               }
             />
-            
+
             {/* Redirección por defecto */}
             <Route path="/" element={<Navigate to="/login" replace />} />
-            
+
             {/* Ruta general */}
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
