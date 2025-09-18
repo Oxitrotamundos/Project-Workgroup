@@ -25,6 +25,7 @@
     "firebase:deploy": "firebase deploy"
   },
   "dependencies": {
+    "@rive-app/react-canvas": "^4.23.3",
     "@types/react-router-dom": "^5.3.3",
     "firebase": "^12.2.1",
     "firebase-admin": "^13.5.0",
