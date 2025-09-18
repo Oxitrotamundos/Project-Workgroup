@@ -7,15 +7,13 @@ interface ProjectHeaderProps {
   tasksCount: number;
   onViewTeam?: () => void;
   onChangeView?: () => void;
-  onAddTask?: () => void;
 }
 
 const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   project,
   tasksCount,
   onViewTeam,
-  onChangeView,
-  onAddTask
+  onChangeView
 }) => {
   return (
     <>

@@ -8,6 +8,9 @@ interface TopNavigationProps {
   showBackButton?: boolean;
   backTo?: string;
   actions?: React.ReactNode;
+  showLogo?: boolean;
+  logoSrc?: string;
+  logoAlt?: string;
 }
 
 const TopNavigation: React.FC<TopNavigationProps> = ({
@@ -15,7 +18,10 @@ const TopNavigation: React.FC<TopNavigationProps> = ({
   subtitle,
   showBackButton = false,
   backTo = '/dashboard',
-  actions
+  actions,
+  showLogo = false,
+  logoSrc = '/vite.svg',
+  logoAlt = 'Logo'
 }) => {
   return (
     <nav className="bg-white/95 backdrop-blur-sm border-b border-gray-200/60 sticky top-0 z-50">
@@ -23,6 +29,21 @@ const TopNavigation: React.FC<TopNavigationProps> = ({
         <div className="flex justify-between items-center h-16">
           {/* Sección izquierda */}
           <div className="flex items-center space-x-4 min-w-0 flex-1">
+            {/* Logo - Solo en Dashboard */}
+            {showLogo && (
+              <>
+                <div className="flex items-center shrink-0">
+                  <img
+                    src={logoSrc}
+                    alt={logoAlt}
+                    className="w-8 h-8 sm:w-10 sm:h-10 object-contain"
+                  />
+                </div>
+                <div className="h-6 w-px bg-gray-200 hidden sm:block" />
+              </>
+            )}
+
+            {/* Botón volver */}
             {showBackButton && (
               <Link
                 to={backTo}
@@ -37,6 +58,7 @@ const TopNavigation: React.FC<TopNavigationProps> = ({
 
             {showBackButton && <div className="h-6 w-px bg-gray-200 hidden sm:block" />}
 
+            {/* Título */}
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-bold text-gray-900 truncate">
                 {title}

@@ -86,7 +86,6 @@ const ProjectView: React.FC = () => {
           tasksCount={tasks.length}
           onViewTeam={handleViewTeam}
           onChangeView={handleChangeView}
-          onAddTask={handleAddTask}
         />
 
         {/* Gantt Chart */}

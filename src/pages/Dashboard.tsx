@@ -82,6 +82,9 @@ const Dashboard: React.FC = () => {
       <TopNavigation
         title="Project Workgroup"
         subtitle={`${projects.length} proyectos`}
+        showLogo={true}
+        logoSrc="/vite.svg"
+        logoAlt="Project Workgroup Logo"
       />
 
       {/* Main Content */}
