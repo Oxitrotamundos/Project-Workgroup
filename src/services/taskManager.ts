@@ -1,4 +1,4 @@
-import { TaskService } from './taskservice';
+import { TaskService } from './taskService';
 import { TaskLinkService } from './taskLinkService';
 import type { CreateTaskData, Task, CreateTaskLinkData } from '../types/firestore';
 // TaskLink será usado cuando implementemos métodos que retornen objetos TaskLink
