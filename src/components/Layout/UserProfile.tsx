@@ -1,38 +1,50 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useClickOutside } from '../../hooks/useClickOutside';
 import { ChevronDown, LogOut, User, Settings } from 'lucide-react';
+import type { UserProfileProps } from '../../types/navigation';
+import { safeAsync } from '../../utils/errorHandling';
 
-const UserProfile: React.FC = () => {
+/**
+ * Componente de perfil de usuario con dropdown
+ * Optimizado para performance con React.memo
+ */
+const UserProfile: React.FC<UserProfileProps> = memo(({ className = '' }) => {
   const { user, logout } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch (error) {
-      console.error('Error al cerrar sesión:', error);
-    }
-  };
-
-  // Cerrar dropdown cuando haces click fuera
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+  const closeDropdown = useCallback(() => {
+    setIsDropdownOpen(false);
   }, []);
+
+  const dropdownRef = useClickOutside<HTMLDivElement>(closeDropdown);
+
+  const handleLogout = useCallback(async () => {
+    closeDropdown();
+
+    const { error } = await safeAsync(
+      () => logout(),
+      'UserProfile.handleLogout'
+    );
+
+    if (error) {
+      // TODO: Integrar con sistema de notificaciones
+      alert(`Error al cerrar sesión: ${error.message}`);
+    }
+  }, [logout, closeDropdown]);
+
+  const handleMenuAction = useCallback((action: string) => {
+    closeDropdown();
+    // TODO: Implementar navegación basada en la acción
+    console.log(`${action} clicked`);
+  }, [closeDropdown]);
 
   const userInitial = user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U';
   const userName = user?.displayName || user?.email?.split('@')[0] || 'Usuario';
   const userEmail = user?.email || '';
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className={`relative ${className}`} ref={dropdownRef}>
       {/* Boton usuario  */}
       <button
         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -88,24 +100,18 @@ const UserProfile: React.FC = () => {
           {/* Sección items menu */}
           <div className="py-2">
             <button
-              onClick={() => {
-                setIsDropdownOpen(false);
-                // TODO: Implementar perfil de usuario
-                console.log('Profile settings clicked');
-              }}
+              onClick={() => handleMenuAction('Profile settings')}
               className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+              aria-label="Ver perfil de usuario"
             >
               <User className="w-4 h-4 mr-3 text-gray-400" />
               Perfil
             </button>
 
             <button
-              onClick={() => {
-                setIsDropdownOpen(false);
-                // TODO: Implementar configuración
-                console.log('Settings clicked');
-              }}
+              onClick={() => handleMenuAction('Settings')}
               className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+              aria-label="Abrir configuración"
             >
               <Settings className="w-4 h-4 mr-3 text-gray-400" />
               Configuración
@@ -114,11 +120,9 @@ const UserProfile: React.FC = () => {
             <div className="border-t border-gray-100 my-2"></div>
 
             <button
-              onClick={() => {
-                setIsDropdownOpen(false);
-                handleLogout();
-              }}
+              onClick={handleLogout}
               className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-150"
+              aria-label="Cerrar sesión"
             >
               <LogOut className="w-4 h-4 mr-3" />
               Cerrar Sesión
@@ -128,6 +132,8 @@ const UserProfile: React.FC = () => {
       )}
     </div>
   );
-};
+});
+
+UserProfile.displayName = 'UserProfile';
 
 export default UserProfile;

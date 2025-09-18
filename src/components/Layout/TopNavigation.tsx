@@ -1,30 +1,29 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Link } from 'react-router-dom';
+import type { TopNavigationProps } from '../../types/navigation';
+import { DEFAULT_TITLES, ROUTES, LOGO_CONFIG } from '../../constants/navigation';
 import UserProfile from './UserProfile';
 
-interface TopNavigationProps {
-  title?: string;
-  subtitle?: string;
-  showBackButton?: boolean;
-  backTo?: string;
-  actions?: React.ReactNode;
-  showLogo?: boolean;
-  logoSrc?: string;
-  logoAlt?: string;
-}
-
-const TopNavigation: React.FC<TopNavigationProps> = ({
-  title = 'Project Workgroup',
+/**
+ * Componente de navegación superior con transiciones animadas
+ * Optimizado para performance con React.memo
+ */
+const TopNavigation: React.FC<TopNavigationProps> = memo(({
+  title = DEFAULT_TITLES.APP_NAME,
   subtitle,
   showBackButton = false,
-  backTo = '/dashboard',
+  backTo = ROUTES.DASHBOARD,
   actions,
   showLogo = false,
-  logoSrc = '/vite.svg',
-  logoAlt = 'Logo'
+  logoSrc = LOGO_CONFIG.DEFAULT_SRC,
+  logoAlt = LOGO_CONFIG.DEFAULT_ALT
 }) => {
   return (
-    <nav className="bg-white/95 backdrop-blur-sm border-b border-gray-200/60 sticky top-0 z-50">
+    <nav
+      className="bg-white/95 backdrop-blur-sm border-b border-gray-200/60 sticky top-0 z-50"
+      role="navigation"
+      aria-label="Navegación principal"
+    >
       <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Sección izquierda */}
@@ -60,6 +59,7 @@ const TopNavigation: React.FC<TopNavigationProps> = ({
               <Link
                 to={backTo}
                 className="flex items-center text-gray-500 hover:text-gray-700 transition-colors duration-200 shrink-0 whitespace-nowrap"
+                aria-label="Volver a la página anterior"
               >
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -77,7 +77,10 @@ const TopNavigation: React.FC<TopNavigationProps> = ({
 
             {/* Título - Animado */}
             <div className="min-w-0 flex-1 transition-all duration-300 ease-in-out">
-              <h1 className="text-xl font-bold text-gray-900 truncate transform transition-all duration-300">
+              <h1
+                className="text-xl font-bold text-gray-900 truncate transform transition-all duration-300"
+                id="page-title"
+              >
                 {title}
               </h1>
               <div
@@ -111,6 +114,8 @@ const TopNavigation: React.FC<TopNavigationProps> = ({
       </div>
     </nav>
   );
-};
+});
+
+TopNavigation.displayName = 'TopNavigation';
 
 export default TopNavigation;
