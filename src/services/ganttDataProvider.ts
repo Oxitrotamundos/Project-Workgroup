@@ -1,4 +1,4 @@
-import { TaskService } from './taskService';
+import { TaskService } from './taskservice';
 import { TaskLinkService } from './taskLinkService';
 import type { Task, UpdateTaskData, TaskLink, GanttLinkData, GanttLinkEvent, GanttLinkResponse, UpdateTaskLinkData } from '../types/firestore';
 
@@ -703,7 +703,7 @@ export class FirestoreGanttDataProvider {
       console.log('FirestoreGanttDataProvider: Actualizando orden - Moved:', movedTaskFirestoreId, 'Target:', targetTaskFirestoreId, 'Mode:', data.mode);
       
       // Importar TaskService dinámicamente para evitar circular imports
-      const { TaskService } = await import('./taskService');
+      const { TaskService } = await import('./taskservice');
       
       // Procesar cambios de jerarquía después del movimiento
       console.log('FirestoreGanttDataProvider: Movimiento completado, procesando jerarquía');
@@ -797,7 +797,7 @@ export class FirestoreGanttDataProvider {
     if (newParentId !== undefined) {
       console.log('FirestoreGanttDataProvider: Actualizando parentId de', movedTaskFirestoreId, 'a', newParentId);
       try {
-        const { TaskService } = await import('./taskService');
+        const { TaskService } = await import('./taskservice');
         
         // TaskService maneja correctamente null (usa deleteField()) y string (parentId válido)  
         await TaskService.updateTask(movedTaskFirestoreId, { parentId: newParentId });
@@ -895,7 +895,7 @@ export class FirestoreGanttDataProvider {
       }
  
       // Import TaskService dynamically to avoid circular imports
-      const { TaskService } = await import('./taskService');
+      const { TaskService } = await import('./taskservice');
  
       // Update in Firestore with retry logic
       const maxRetries = 3;
