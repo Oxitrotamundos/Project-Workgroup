@@ -205,12 +205,20 @@ export class TaskService {
   }
 
   /**
-   * Eliminar una tarea
+   * Eliminar una tarea y sus enlaces asociados
    */
   static async deleteTask(id: string): Promise<void> {
     try {
+      // ✅ NUEVO: Eliminar enlaces asociados antes de eliminar la tarea
+      // Importar dinámicamente para evitar dependencias circulares
+      const { TaskLinkService } = await import('./taskLinkService');
+      await TaskLinkService.deleteTaskLinks(id);
+
+      // Eliminar la tarea
       const docRef = doc(db, COLLECTION_NAME, id);
       await deleteDoc(docRef);
+
+      console.log('Tarea y sus enlaces eliminados exitosamente:', id);
     } catch (error) {
       console.error('Error deleting task:', error);
       throw new Error('Error al eliminar la tarea');

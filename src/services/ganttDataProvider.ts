@@ -1,10 +1,6 @@
-/**
- * Adaptador personalizado que implementa la interfaz de RestDataProvider
- * pero se conecta con Firestore en lugar de un servidor REST
- */
-
 import { TaskService } from './taskService';
-import type { Task, UpdateTaskData } from '../types/firestore';
+import { TaskLinkService } from './taskLinkService';
+import type { Task, UpdateTaskData, TaskLink, GanttLinkData, GanttLinkEvent, GanttLinkResponse, UpdateTaskLinkData } from '../types/firestore';
 
 export interface GanttDataProviderData {
   tasks: any[];
@@ -18,6 +14,8 @@ export class FirestoreGanttDataProvider {
   private idMapping: Map<number, string> = new Map(); // Mapeo de ID numérico a firestoreId
   private tempIdMapping: Map<string, string> = new Map(); // Mapeo de ID temporal a firestoreId
   private taskCache: Map<string, Task> = new Map(); // Cache de datos completos de Firestore
+  private linkCache: Map<string, TaskLink> = new Map(); // Cache de enlaces completos de Firestore
+  private linkIdMapping: Map<number | string, string> = new Map(); // Mapeo de ID numérico/temporal a firestoreId para enlaces
 
   constructor(projectId: string) {
     this.projectId = projectId;
@@ -43,6 +41,42 @@ export class FirestoreGanttDataProvider {
   getFullTaskDataByGanttId(ganttId: number): Task | undefined {
     const firestoreId = this.getFirestoreIdFromGanttId(ganttId);
     return firestoreId ? this.getFullTaskData(firestoreId) : undefined;
+  }
+
+  /**
+   * Obtener el ID de Firestore de un enlace a partir del ID del Gantt (numérico o temporal)
+   */
+  getLinkFirestoreIdFromGanttId(ganttId: number | string): string | undefined {
+    return this.linkIdMapping.get(ganttId);
+  }
+
+  /**
+   * Obtener datos completos de enlace desde cache
+   */
+  getFullLinkData(firestoreId: string): TaskLink | undefined {
+    return this.linkCache.get(firestoreId);
+  }
+
+  /**
+   * Obtener datos completos de enlace usando ID del Gantt (numérico o temporal)
+   */
+  getFullLinkDataByGanttId(ganttId: number | string): TaskLink | undefined {
+    const firestoreId = this.getLinkFirestoreIdFromGanttId(ganttId);
+    return firestoreId ? this.getFullLinkData(firestoreId) : undefined;
+  }
+
+  /**
+   * Obtener ID numérico del Gantt para un enlace a partir del ID de Firestore (mapeo inverso)
+   * NOTA: Función reservada para futuras funcionalidades (update/delete enlaces, real-time sync)
+   */
+  // @ts-ignore: Función reservada para uso futuro
+  private getLinkGanttIdFromFirestoreId(firestoreId: string): number | string | undefined {
+    for (const [ganttId, storedFirestoreId] of this.linkIdMapping.entries()) {
+      if (storedFirestoreId === firestoreId) {
+        return ganttId;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -150,39 +184,49 @@ export class FirestoreGanttDataProvider {
   }
 
   /**
-   * Cargar datos del proyecto desde Firestore
+   * Cargar datos del proyecto desde Firestore (incluyendo enlaces)
    */
   async getData(): Promise<GanttDataProviderData> {
     try {
       console.log('FirestoreGanttDataProvider: Cargando datos del proyecto:', this.projectId);
-      
-      const tasks = await TaskService.getProjectTasks(this.projectId);
-      
+
+      // Cargar tareas y enlaces en paralelo
+      const [tasks, links] = await Promise.all([
+        TaskService.getProjectTasks(this.projectId),
+        TaskLinkService.getProjectLinks(this.projectId)
+      ]);
+
       // Limpiar los mapeos anteriores
       this.idMapping.clear();
-      this.taskCache.clear(); // Limpiar cache anterior
-      
+      this.linkIdMapping.clear();
+      this.taskCache.clear();
+      this.linkCache.clear();
+
       // Poblar cache con datos completos
       tasks.forEach((task: Task) => {
         this.taskCache.set(task.id, task);
       });
-      
+
+      links.forEach((link: TaskLink) => {
+        this.linkCache.set(link.id, link);
+      });
+
       // Note: No limpiar tempIdMapping aquí para preservar mapeos de tareas recién creadas
-      
+
       // Crear mapeo de firestoreId a ID numérico para resolver parentId
       const firestoreToNumericMap = new Map<string, number>();
-      
-      // Primer paso: generar IDs numéricos y crear mapeo
+
+      // Primer paso: generar IDs numéricos y crear mapeo para tareas
       tasks.forEach((task: Task, index: number) => {
         const numericId = task.id.split('').reduce((acc: number, char: string) => {
           return acc + char.charCodeAt(0);
         }, 0) + index;
-        
+
         // Guardar ambos mapeos
         this.idMapping.set(numericId, task.id);
         firestoreToNumericMap.set(task.id, numericId);
       });
-      
+
       // Segundo paso: convertir tareas de Firestore al formato del Gantt
       const ganttTasks = tasks.map((task: Task) => {
         // Validar datos obligatorios
@@ -204,7 +248,7 @@ export class FirestoreGanttDataProvider {
           } else {
             startDate = new Date();
           }
-          
+
           if (task.endDate instanceof Date) {
             endDate = task.endDate;
           } else if (task.endDate?.toDate) {
@@ -214,7 +258,7 @@ export class FirestoreGanttDataProvider {
           } else {
             endDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
           }
-          
+
           // Validar que las fechas sean válidas
           if (isNaN(startDate.getTime())) {
             console.warn('FirestoreGanttDataProvider: startDate inválida, usando fallback');
@@ -224,30 +268,30 @@ export class FirestoreGanttDataProvider {
             console.warn('FirestoreGanttDataProvider: endDate inválida, usando fallback');
             endDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
           }
-          
+
         } catch (error) {
           console.warn('FirestoreGanttDataProvider: Error convirtiendo fechas, usando fallbacks:', error);
           startDate = new Date();
           endDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
         }
-        
+
         // Calcular duración en días
         const durationInMs = endDate.getTime() - startDate.getTime();
         const durationInDays = Math.ceil(durationInMs / (1000 * 60 * 60 * 24));
-        
+
         // Obtener el ID numérico de esta tarea
         const numericId = firestoreToNumericMap.get(task.id)!;
-        
+
         // Resolver el parentId si existe
         let parentNumericId: number | undefined = undefined;
         if (task.parentId) {
           parentNumericId = firestoreToNumericMap.get(task.parentId);
         }
-        
+
         // CRÍTICO: Asegurar que las fechas sean objetos Date reales, no strings
         const ensuredStartDate = startDate instanceof Date ? startDate : new Date(startDate);
         const ensuredEndDate = endDate instanceof Date ? endDate : new Date(endDate);
-        
+
         // Formato para wx-react-gantt con validación de propiedad open
         const ganttTask: any = {
           id: numericId,
@@ -269,33 +313,77 @@ export class FirestoreGanttDataProvider {
           // Solo tareas que realmente tienen hijos necesitan la propiedad 'open'
           ganttTask.open = task.open !== false; // Por defecto true para expandir
         }
-        
+
         // Guardar firestoreId por separado para mapeo interno
         // (no enviado a wx-react-gantt)
         ganttTask._internalFirestoreId = task.id;
-        
+
         // Validación de compatibilidad con wx-react-gantt
         this.validateGanttTaskCompatibility(ganttTask);
-        
+
         return ganttTask;
       }).filter(task => task !== null); // Filtrar tareas nulas
-      
+
+      // ✅ NUEVO: Procesar enlaces de Firestore al formato SVAR Gantt
+      const ganttLinks: GanttLinkData[] = [];
+
+      links.forEach((link: TaskLink, index: number) => {
+        // Validar que las tareas origen y destino existen en el mapeo
+        const sourceNumericId = firestoreToNumericMap.get(link.sourceTaskId);
+        const targetNumericId = firestoreToNumericMap.get(link.targetTaskId);
+
+        if (!sourceNumericId || !targetNumericId) {
+          console.warn('FirestoreGanttDataProvider: Enlace ignorado, tareas no encontradas:', {
+            linkId: link.id,
+            sourceTaskId: link.sourceTaskId,
+            targetTaskId: link.targetTaskId,
+            sourceNumericId,
+            targetNumericId
+          });
+          return;
+        }
+
+        // Generar ID numérico para el enlace
+        const linkNumericId = link.id.split('').reduce((acc: number, char: string) => {
+          return acc + char.charCodeAt(0);
+        }, 1000000) + index; // Offset para evitar colisiones con IDs de tareas
+
+        // Guardar mapeo del enlace
+        this.linkIdMapping.set(linkNumericId, link.id);
+
+        // Crear enlace en formato SVAR Gantt
+        const ganttLink: GanttLinkData = {
+          id: linkNumericId,
+          source: sourceNumericId,
+          target: targetNumericId,
+          type: link.type
+        };
+
+        ganttLinks.push(ganttLink);
+      });
+
       console.log('FirestoreGanttDataProvider: Datos cargados:', {
         totalTasks: tasks.length,
         validTasks: ganttTasks.length,
-        tasks: ganttTasks
+        totalLinks: links.length,
+        validLinks: ganttLinks.length,
+        tasks: ganttTasks,
+        links: ganttLinks
       });
-      
+
       // LOG: Resumen de datos procesados
       console.log('FirestoreGanttDataProvider: Datos procesados:', {
         totalTasks: tasks.length,
         validTasks: ganttTasks.length,
-        tasksWithCache: this.taskCache.size
+        totalLinks: links.length,
+        validLinks: ganttLinks.length,
+        tasksWithCache: this.taskCache.size,
+        linksWithCache: this.linkCache.size
       });
-      
+
       return {
         tasks: ganttTasks,
-        links: []
+        links: ganttLinks // ✅ Ya no está vacío
       };
     } catch (error) {
       console.error('FirestoreGanttDataProvider: Error cargando datos:', error);
@@ -330,6 +418,15 @@ export class FirestoreGanttDataProvider {
           // Acción de UI pura - wx-react-gantt solicita re-renderizado
           console.log('FirestoreGanttDataProvider: render-data procesado');
           return { success: true };
+
+        case 'add-link':
+          return await this.handleAddLink(data);
+
+        case 'update-link':
+          return await this.handleUpdateLink(data);
+
+        case 'delete-link':
+          return await this.handleDeleteLink(data);
         
         // Acciones de UI que no requieren sincronización con Firestore
         case 'expand-scale':
@@ -870,6 +967,297 @@ export class FirestoreGanttDataProvider {
   }
 
   /**
+   * ========================================
+   * HANDLERS DE ENLACES - NUEVOS MÉTODOS
+   * ========================================
+   */
+
+  /**
+   * Manejar creación de enlace desde SVAR Gantt
+   */
+  private async handleAddLink(data: any): Promise<GanttLinkResponse> {
+    console.log('FirestoreGanttDataProvider: Creando enlace:', data);
+
+    try {
+      // SVAR Gantt puede enviar los datos en diferentes formatos
+      // Extraer datos del enlace según la estructura que llega
+      let linkData, sourceId, targetId, linkType, tempId;
+
+      if (data.link) {
+        // Formato: { link: { source, target, type }, id: "temp://..." }
+        linkData = data.link;
+        sourceId = linkData.source;
+        targetId = linkData.target;
+        linkType = linkData.type;
+        tempId = data.id;
+      } else {
+        // Formato directo: { source, target, type, id }
+        sourceId = data.source;
+        targetId = data.target;
+        linkType = data.type;
+        tempId = data.id;
+      }
+
+      console.log('FirestoreGanttDataProvider: Datos extraídos del enlace:', {
+        sourceId,
+        targetId,
+        linkType,
+        tempId
+      });
+
+      // Obtener IDs de Firestore de las tareas origen y destino
+      const sourceFirestoreId = this.getFirestoreIdFromGanttId(sourceId);
+      const targetFirestoreId = this.getFirestoreIdFromGanttId(targetId);
+
+      console.log('FirestoreGanttDataProvider: Mapeo de IDs:', {
+        sourceId,
+        targetId,
+        sourceFirestoreId,
+        targetFirestoreId
+      });
+
+      if (!sourceFirestoreId || !targetFirestoreId) {
+        const error = 'No se encontraron IDs de Firestore para las tareas del enlace';
+        console.error('FirestoreGanttDataProvider:', error, {
+          data,
+          sourceId,
+          targetId,
+          sourceFirestoreId,
+          targetFirestoreId,
+          idMapping: Array.from(this.idMapping.entries())
+        });
+        return { success: false, error };
+      }
+
+      // Validar creación del enlace
+      const validation = await TaskLinkService.validateLinkCreation(
+        sourceFirestoreId,
+        targetFirestoreId,
+        this.projectId
+      );
+
+      if (!validation.valid) {
+        console.warn('FirestoreGanttDataProvider: Validación de enlace falló:', validation.error);
+        return { success: false, error: validation.error };
+      }
+
+      // Crear enlace en Firestore
+      const linkId = await TaskLinkService.createLink({
+        projectId: this.projectId,
+        sourceTaskId: sourceFirestoreId,
+        targetTaskId: targetFirestoreId,
+        type: linkType
+      });
+
+      console.log('FirestoreGanttDataProvider: Enlace creado exitosamente:', linkId);
+
+      // Actualizar cache local
+      const newLink = await TaskLinkService.getLink(linkId);
+      if (newLink) {
+        this.linkCache.set(linkId, newLink);
+
+        // Generar ID numérico único para el nuevo enlace
+        let newNumericId = tempId;
+        if (!newNumericId) {
+          newNumericId = linkId.split('').reduce((acc: number, char: string) => {
+            return acc + char.charCodeAt(0);
+          }, 1000000);
+        }
+
+        // Crear mapeo bidireccional
+        this.linkIdMapping.set(newNumericId, linkId);
+        console.log('FirestoreGanttDataProvider: Mapeo creado:', { numericId: newNumericId, firestoreId: linkId });
+      }
+
+      return { success: true, id: linkId };
+
+    } catch (error) {
+      console.error('FirestoreGanttDataProvider: Error creando enlace:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error desconocido al crear enlace'
+      };
+    }
+  }
+
+  /**
+   * Manejar actualización de enlace desde SVAR Gantt
+   */
+  private async handleUpdateLink(data: GanttLinkEvent): Promise<GanttLinkResponse> {
+    console.log('FirestoreGanttDataProvider: Actualizando enlace:', data);
+
+    try {
+      // Obtener ID de Firestore del enlace
+      let linkFirestoreId = this.getLinkFirestoreIdFromGanttId(data.id!);
+
+      if (!linkFirestoreId) {
+        const error = 'No se encontró el ID de Firestore para el enlace';
+        console.error('FirestoreGanttDataProvider:', error, data);
+        return { success: false, error };
+      }
+
+      // Los datos del enlace pueden estar en data.link o directamente en data
+      const linkData = (data as any).link || data;
+
+      // Preparar datos de actualización, filtrando campos undefined
+      const updateData: UpdateTaskLinkData = {};
+      if (linkData.type !== undefined) {
+        updateData.type = linkData.type;
+      }
+
+      // Solo actualizar si hay campos válidos
+      if (Object.keys(updateData).length === 0) {
+        console.log('FirestoreGanttDataProvider: No hay datos válidos para actualizar');
+        return { success: true, id: linkFirestoreId };
+      }
+
+      // Actualizar enlace en Firestore
+      await TaskLinkService.updateLink(linkFirestoreId, updateData);
+
+      console.log('FirestoreGanttDataProvider: Enlace actualizado exitosamente:', linkFirestoreId);
+
+      // Actualizar cache local
+      const updatedLink = await TaskLinkService.getLink(linkFirestoreId);
+      if (updatedLink) {
+        this.linkCache.set(linkFirestoreId, updatedLink);
+      }
+
+      return { success: true, id: linkFirestoreId };
+
+    } catch (error) {
+      console.error('FirestoreGanttDataProvider: Error actualizando enlace:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error desconocido al actualizar enlace'
+      };
+    }
+  }
+
+  /**
+   * Manejar eliminación de enlace desde SVAR Gantt
+   */
+  private async handleDeleteLink(data: GanttLinkEvent): Promise<GanttLinkResponse> {
+    console.log('FirestoreGanttDataProvider: Eliminando enlace:', data);
+
+    // Mostrar mapeo detalladamente
+    const mappingEntries = Array.from(this.linkIdMapping.entries());
+    console.log('FirestoreGanttDataProvider: Mapeo de enlaces detallado:');
+    mappingEntries.forEach(([ganttId, firestoreId]) => {
+      console.log(`  - Gantt ID: ${ganttId} -> Firestore ID: ${firestoreId}`);
+    });
+
+    // Mostrar cache detalladamente
+    const cacheEntries = Array.from(this.linkCache.entries());
+    console.log('FirestoreGanttDataProvider: Cache de enlaces detallado:');
+    cacheEntries.forEach(([firestoreId, link]) => {
+      console.log(`  - Firestore ID: ${firestoreId} -> Source: ${link.sourceTaskId}, Target: ${link.targetTaskId}, Type: ${link.type}`);
+    });
+
+    try {
+      // Verificar tipos y manejar IDs temporales
+      console.log('FirestoreGanttDataProvider: Tipo de data.id:', typeof data.id, 'Valor:', data.id);
+
+      let ganttId: string | number;
+
+      if (typeof data.id === 'string') {
+        if (data.id.startsWith('temp://')) {
+          // Es un ID temporal, usarlo como string
+          ganttId = data.id;
+          console.log('FirestoreGanttDataProvider: ID temporal detectado:', ganttId);
+        } else {
+          // Es un número como string, convertir a número
+          ganttId = parseInt(data.id, 10);
+          console.log('FirestoreGanttDataProvider: ID convertido a número:', ganttId);
+        }
+      } else if (data.id !== undefined) {
+        ganttId = data.id;
+        console.log('FirestoreGanttDataProvider: ID numérico:', ganttId);
+      } else {
+        console.error('FirestoreGanttDataProvider: ID no definido');
+        return { success: false, error: 'ID no definido' };
+      }
+
+      // Obtener ID de Firestore del enlace
+      let linkFirestoreId = this.getLinkFirestoreIdFromGanttId(ganttId!);
+      console.log('FirestoreGanttDataProvider: Búsqueda directa por ID:', { ganttId: ganttId, firestoreId: linkFirestoreId });
+
+      if (!linkFirestoreId) {
+        console.log('FirestoreGanttDataProvider: Mapeo directo falló, intentando métodos alternativos');
+
+        // Método 1: Buscar por source/target si están disponibles
+        if (data.source && data.target) {
+          const sourceFirestoreId = this.getFirestoreIdFromGanttId(data.source);
+          const targetFirestoreId = this.getFirestoreIdFromGanttId(data.target);
+
+          console.log('FirestoreGanttDataProvider: IDs de tareas:', { sourceFirestoreId, targetFirestoreId });
+
+          if (sourceFirestoreId && targetFirestoreId) {
+            // Buscar en el cache por coincidencia de source/target
+            for (const [firestoreId, link] of this.linkCache.entries()) {
+              if (link.sourceTaskId === sourceFirestoreId && link.targetTaskId === targetFirestoreId) {
+                linkFirestoreId = firestoreId;
+                console.log('FirestoreGanttDataProvider: Enlace encontrado en cache por source/target:', linkFirestoreId);
+                break;
+              }
+            }
+          }
+        }
+
+        // Método 2: Si no tiene source/target, obtener el enlace del API de Gantt
+        if (!linkFirestoreId && this._ganttApi && this._ganttApi.getLink) {
+          console.log('FirestoreGanttDataProvider: Intentando obtener enlace del API de Gantt');
+          const ganttLink = this._ganttApi.getLink(ganttId);
+          console.log('FirestoreGanttDataProvider: Enlace obtenido del API:', ganttLink);
+
+          if (ganttLink && ganttLink.source && ganttLink.target) {
+            const sourceFirestoreId = this.getFirestoreIdFromGanttId(ganttLink.source);
+            const targetFirestoreId = this.getFirestoreIdFromGanttId(ganttLink.target);
+
+            console.log('FirestoreGanttDataProvider: IDs de tareas del API:', { sourceFirestoreId, targetFirestoreId });
+
+            if (sourceFirestoreId && targetFirestoreId) {
+              // Buscar en el cache por coincidencia de source/target
+              for (const [firestoreId, link] of this.linkCache.entries()) {
+                if (link.sourceTaskId === sourceFirestoreId && link.targetTaskId === targetFirestoreId) {
+                  linkFirestoreId = firestoreId;
+                  console.log('FirestoreGanttDataProvider: Enlace encontrado en cache usando API:', linkFirestoreId);
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        if (!linkFirestoreId) {
+          const error = 'No se encontró el ID de Firestore para el enlace';
+          console.error('FirestoreGanttDataProvider:', error, data);
+          return { success: false, error };
+        }
+      }
+
+      // Eliminar enlace de Firestore
+      await TaskLinkService.deleteLink(linkFirestoreId);
+
+      console.log('FirestoreGanttDataProvider: Enlace eliminado exitosamente:', linkFirestoreId);
+
+      // Limpiar cache local
+      this.linkCache.delete(linkFirestoreId);
+      if (ganttId) {
+        this.linkIdMapping.delete(ganttId);
+      }
+
+      return { success: true, id: linkFirestoreId };
+
+    } catch (error) {
+      console.error('FirestoreGanttDataProvider: Error eliminando enlace:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error desconocido al eliminar enlace'
+      };
+    }
+  }
+
+  /**
    * Limpiar listeners y mapeos
    */
   destroy(): void {
@@ -877,5 +1265,8 @@ export class FirestoreGanttDataProvider {
     this.idMapping.clear();
     this.tempIdMapping.clear();
     this.taskCache.clear();
+    // ✅ NUEVO: Limpiar cache y mapeos de enlaces
+    this.linkCache.clear();
+    this.linkIdMapping.clear();
   }
 }
