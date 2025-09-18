@@ -86,11 +86,12 @@ const ProjectView: React.FC = () => {
           tasksCount={tasks.length}
           onViewTeam={handleViewTeam}
           onChangeView={handleChangeView}
+          onAddTask={handleAddTask}
         />
 
         {/* Gantt Chart */}
-        <div className="flex-1 p-6">
-          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-gray-100 h-[calc(100vh-200px)] overflow-hidden">
+        <div className="flex-1 p-4 sm:p-6">
+          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-gray-100 h-[calc(100vh-180px)] overflow-hidden">
             <GanttChart
               tasks={tasks}
               projectId={projectId || ''}
