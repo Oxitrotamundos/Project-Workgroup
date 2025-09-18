@@ -181,6 +181,21 @@ const GanttChart: React.FC<GanttChartProps> = ({
     { unit: 'day', step: 1, format: 'd' }
   ], []);
 
+  // Configuración de markers - marker para el día actual
+  const markers = React.useMemo(() => {
+    // Normalizar la fecha a las 00:00:00 del día actual para posicionamiento preciso
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return [
+      {
+        start: today,
+        text: "Hoy",
+        css: "current-day-marker"
+      }
+    ];
+  }, []);
+
   // Configuración de columnas
   const columns: GanttColumn[] = React.useMemo(() => [
     { id: 'text', header: 'Tarea', flexGrow: 2 },
@@ -680,6 +695,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
           links={ganttData.links}
           scales={scales}
           columns={columns}
+          markers={markers}
           cellWidth={30}
         />
       </Willow>
