@@ -22,18 +22,13 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
       {/* Main Navigation */}
       <TopNavigation
         title={project.name}
-        subtitle={`${tasksCount} tareas • ${project.members?.length || 0} miembros`}
         showBackButton={true}
         backTo="/dashboard"
         actions={
           <ProjectActions
             onViewTeam={onViewTeam}
             onChangeView={onChangeView}
-            onAddTask={onAddTask}
-            showAddTask={true}
             showFilter={true}
-            tasksCount={tasksCount}
-            membersCount={project.members?.length || 0}
           />
         }
       />

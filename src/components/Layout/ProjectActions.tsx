@@ -9,8 +9,6 @@ interface ProjectActionsProps {
   onMore?: () => void;
   showAddTask?: boolean;
   showFilter?: boolean;
-  tasksCount?: number;
-  membersCount?: number;
 }
 
 const ProjectActions: React.FC<ProjectActionsProps> = ({
@@ -20,30 +18,10 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
   onFilter,
   onMore,
   showAddTask = false,
-  showFilter = false,
-  tasksCount,
-  membersCount
+  showFilter = false
 }) => {
   return (
     <div className="flex items-center space-x-2">
-      {/* Estadísticas proyecto - Oculto en pantallas muy pequeñas */}
-      {(tasksCount !== undefined || membersCount !== undefined) && (
-        <div className="hidden lg:flex items-center space-x-4 text-xs text-gray-500 mr-4">
-          {tasksCount !== undefined && (
-            <span className="flex items-center">
-              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2"></div>
-              {tasksCount} tareas
-            </span>
-          )}
-          {membersCount !== undefined && (
-            <span className="flex items-center">
-              <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></div>
-              {membersCount} miembros
-            </span>
-          )}
-        </div>
-      )}
-
       {/* Acciones proyecto */}
       <div className="flex items-center space-x-1">
         {showAddTask && onAddTask && (
