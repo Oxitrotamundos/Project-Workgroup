@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -11,6 +11,7 @@ import {
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import type { User, AuthContextType } from '../types';
+import PageLoader from '../components/common/PageLoader';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -29,6 +30,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showLoader, setShowLoader] = useState(true);
 
   // Convertir el usuario de Firebase a nuestro tipo User
   const createUserDocument = async (firebaseUser: FirebaseUser): Promise<User> => {
@@ -120,18 +122,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
+      try {
+        if (firebaseUser) {
           const userData = await createUserDocument(firebaseUser);
           setUser(userData);
-        } catch (error) {
-          console.error('Error creating user document:', error);
+        } else {
           setUser(null);
         }
-      } else {
+      } catch (error) {
+        console.error('Error in auth state change:', error);
         setUser(null);
+      } finally {
+        // Asegurar que loading se ponga false
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return unsubscribe;
@@ -149,6 +153,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     resetPassword
   };
+
+  // Callback para cuando termine la animación del loader
+  const handleLoaderComplete = useCallback(() => {
+    setShowLoader(false);
+  }, []);
+
+  // Mostrar loader mientras se verifica el estado de autenticación o durante la animación
+  if (loading || showLoader) {
+    return (
+      <PageLoader
+        message="Verificando autenticación..."
+        onAnimationComplete={!loading ? handleLoaderComplete : undefined}
+      />
+    );
+  }
 
   return (
     <AuthContext.Provider value={value}>

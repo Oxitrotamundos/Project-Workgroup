@@ -27,11 +27,18 @@ declare module 'wx-react-gantt' {
     css?: string;
   }
 
+  export interface GanttMarker {
+    start: Date;
+    text: string;
+    css?: string;
+  }
+
   export interface GanttProps {
     tasks?: GanttTask[];
     links?: GanttLink[];
     scales?: GanttScale[];
     columns?: any[];
+    markers?: GanttMarker[];
     start?: Date;
     end?: Date;
     cellWidth?: number;

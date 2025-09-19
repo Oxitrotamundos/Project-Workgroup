@@ -6,7 +6,8 @@ import { useTasks } from '../hooks/usetasks';
 import { useProject } from '../hooks/useProject';
 import { useGanttActions } from '../hooks/useGanttActions';
 import { useAuth } from '../contexts/AuthContext';
-import ProjectHeader from '../components/ProjectHeader';
+import { useNavigation } from '../contexts/NavigationContext';
+import { ProjectActions, ProjectInfo } from '../components/Layout';
 import GanttChart from '../components/GanttChart';
 import { ProjectStateManager } from '../components/ProjectLoadingStates';
 import { taskManager } from '../services/taskManager';
@@ -18,7 +19,8 @@ const ProjectView: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const ganttApiRef = useRef<any>(null);
   const { user } = useAuth();
-  
+  const { updateNavigation } = useNavigation();
+
   // Hooks personalizados para manejar el estado y lógica
   const { project, loading, error, refetch } = useProject(projectId);
   const { tasks, loading: tasksLoading, error: tasksError, refetch: refetchTasks } = useTasks(projectId);
@@ -28,6 +30,39 @@ const ProjectView: React.FC = () => {
     projectId: projectId || '',
     onTasksChange: refetchTasks
   });
+
+  // Handlers para las acciones del header
+  const handleViewTeam = React.useCallback(() => {
+    console.log('View team clicked');
+    // Aquí se podría abrir un modal para ver el equipo
+  }, []);
+
+  const handleChangeView = React.useCallback(() => {
+    console.log('Change view clicked');
+    // Aquí se podría cambiar entre diferentes vistas del Gantt
+  }, []);
+
+  // Memoriza las acciones del proyecto para prevenir recreación innecesaria
+  const projectActions = React.useMemo(() => (
+    <ProjectActions
+      onViewTeam={handleViewTeam}
+      onChangeView={handleChangeView}
+      showFilter={true}
+    />
+  ), [handleViewTeam, handleChangeView]);
+
+  // Actualiza la navegación cuando se carga el proyecto
+  const prevProjectName = React.useRef<string>();
+  React.useEffect(() => {
+    if (project && prevProjectName.current !== project.name) {
+      updateNavigation({
+        title: project.name,
+        subtitle: undefined, // Limpia el subtítulo de la navegación cuando se cambia de proyecto
+        actions: projectActions
+      });
+      prevProjectName.current = project.name;
+    }
+  }, [project?.name, updateNavigation, projectActions]);
 
   // Handlers para las acciones del header
   const handleAddTask = async () => {
@@ -60,16 +95,6 @@ const ProjectView: React.FC = () => {
     }
   };
 
-  const handleViewTeam = () => {
-    console.log('View team clicked');
-    // Aquí se podría abrir un modal para ver el equipo
-  };
-
-  const handleChangeView = () => {
-    console.log('Change view clicked');
-    // Aquí se podría cambiar entre diferentes vistas del Gantt
-  };
-
   // Funcionalidades de Firestore implementadas para creación de tareas
 
   return (
@@ -79,18 +104,19 @@ const ProjectView: React.FC = () => {
       project={project}
       onRetry={refetch}
     >
-      <div className="min-h-screen bg-gray-50">
-        {/* Header del proyecto */}
-        <ProjectHeader
-          project={project!}
-          tasksCount={tasks.length}
-          onViewTeam={handleViewTeam}
-          onChangeView={handleChangeView}
-        />
+      <>
+        {/* Project Info */}
+        {project && (
+          <ProjectInfo
+            project={project}
+            tasksCount={tasks.length}
+            showStats={true}
+          />
+        )}
 
         {/* Gantt Chart */}
-        <div className="flex-1 p-6">
-          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-gray-100 h-[calc(100vh-200px)] overflow-hidden">
+        <div className="flex-1 p-4 sm:p-6">
+          <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm border border-gray-100 h-[calc(100vh-180px)] overflow-hidden">
             <GanttChart
               tasks={tasks}
               projectId={projectId || ''}
@@ -101,7 +127,7 @@ const ProjectView: React.FC = () => {
             />
           </div>
         </div>
-      </div>
+      </>
     </ProjectStateManager>
   );
 };
