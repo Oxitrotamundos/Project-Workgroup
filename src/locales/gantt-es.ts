@@ -1,0 +1,86 @@
+// Localización en español para wx-gantt
+// Basado en la estructura de wx-gantt-locales/locales/en.js
+
+export default {
+  gantt: {
+    // Header / sidebar
+    "Task name": "Nombre de la tarea",
+    "Start date": "Fecha de inicio",
+    "Add task": "Agregar tarea",
+    Duration: "Duración",
+    Task: "Tarea",
+    Milestone: "Hito",
+    "Summary task": "Tarea resumen",
+
+    // Sidebar
+    Save: "Guardar",
+    Delete: "Eliminar",
+    Name: "Nombre",
+    Description: "Descripción",
+    "Select type": "Seleccionar tipo",
+    Type: "Tipo",
+    "End date": "Fecha de fin",
+    Progress: "Progreso",
+    Predecessors: "Predecesores",
+    Successors: "Sucesores",
+    "Add task name": "Agregar nombre de tarea",
+    "Add description": "Agregar descripción",
+    "Select link type": "Seleccionar tipo de vínculo",
+    "End-to-start": "Fin a inicio",
+    "Start-to-start": "Inicio a inicio",
+    "End-to-end": "Fin a fin",
+    "Start-to-end": "Inicio a fin",
+
+    // Context menu / toolbar
+    Add: "Agregar",
+    "Child task": "Subtarea",
+    "Task above": "Tarea arriba",
+    "Task below": "Tarea abajo",
+    "Convert to": "Convertir a",
+    Edit: "Editar",
+    Cut: "Cortar",
+    Copy: "Copiar",
+    Paste: "Pegar",
+    Move: "Mover",
+    Up: "Arriba",
+    Down: "Abajo",
+    Indent: "Sangrar",
+    Outdent: "Quitar sangría",
+    "Split task": "Dividir tarea",
+
+    // Toolbar
+    "New task": "Nueva tarea",
+    "Move up": "Mover arriba",
+    "Move down": "Mover abajo",
+
+    // Elementos adicionales que pueden aparecer en el editor
+    "Today": "Hoy",
+    "Tomorrow": "Mañana",
+    "Yesterday": "Ayer",
+    "This week": "Esta semana",
+    "Next week": "Próxima semana",
+    "This month": "Este mes",
+    "Next month": "Próximo mes",
+    "Calendar": "Calendario",
+    "Time": "Hora",
+    "Hours": "Horas",
+    "Minutes": "Minutos",
+    "Seconds": "Segundos",
+    "AM": "AM",
+    "PM": "PM",
+    "OK": "Aceptar",
+    "Cancel": "Cancelar",
+    "Close": "Cerrar",
+    "Apply": "Aplicar",
+    "Clear": "Limpiar",
+    "Now": "Ahora",
+    "Done": "Hecho",
+    "Loading": "Cargando",
+    "Error": "Error",
+    "Warning": "Advertencia",
+    "Information": "Información",
+    "Confirm": "Confirmar",
+    "Yes": "Sí",
+    "No": "No"
+  },
+};

@@ -3,6 +3,55 @@ import { Gantt, Willow, Toolbar, defaultToolbarButtons } from 'wx-react-gantt';
 import type { Task } from '../types/firestore';
 import { FirestoreGanttDataProvider } from '../services/ganttDataProvider';
 import { taskManager } from '../services/taskManager';
+import { LocaleProvider } from './LocaleProvider';
+import { setupAutoLocalization } from '../utils/ganttLocalizer';
+
+// Importar localizaciones
+import coreLocaleEs from 'wx-core-locales/locales/es';
+import ganttLocaleEs from '../locales/gantt-es';
+
+// Configuración global de localización
+// Intentamos configurar la localización globalmente si existe el objeto global wx
+declare global {
+  interface Window {
+    wx?: any;
+    wxLocale?: string;
+    wxLocales?: any;
+  }
+}
+
+// Configurar localización globalmente al cargar el componente
+const setupGlobalLocalization = () => {
+  if (typeof window !== 'undefined') {
+    // Configurar localización global para SVAR
+    window.wx = window.wx || {};
+    window.wx.locales = window.wx.locales || {};
+
+    // Configurar el locale español
+    window.wx.locales['es'] = {
+      ...coreLocaleEs,
+      ...ganttLocaleEs
+    };
+
+    // Establecer español como locale por defecto
+    window.wx.locale = 'es';
+
+    // También intentar configurar directamente en el objeto global de i18n si existe
+    if (window.wx.i18n) {
+      window.wx.i18n.setLocale('es');
+    }
+
+    // Configurar variables globales de localización que SVAR podría usar
+    window.wxLocale = 'es';
+    window.wxLocales = window.wx.locales;
+
+    console.log('Localización global configurada:', {
+      locale: window.wx.locale,
+      hasLocales: !!window.wx.locales,
+      esLocale: !!window.wx.locales['es']
+    });
+  }
+};
 
 // Tipos para el componente Gantt (eliminados los no utilizados)
 
@@ -44,6 +93,26 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const mutationObserverRef = useRef<MutationObserver | null>(null);
   const taskStateRef = useRef<Map<number, boolean>>(new Map());
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const localizationCleanupRef = useRef<(() => void) | null>(null);
+
+  // Configurar localización al montar el componente
+  useEffect(() => {
+    setupGlobalLocalization();
+
+    // Configurar auto-localización del DOM después de un pequeño delay
+    const timeoutId = setTimeout(() => {
+      const cleanup = setupAutoLocalization();
+      localizationCleanupRef.current = cleanup;
+    }, 500); // Delay para asegurar que el Gantt esté montado
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (localizationCleanupRef.current) {
+        localizationCleanupRef.current();
+        localizationCleanupRef.current = null;
+      }
+    };
+  }, []);
 
   // Inicializar el data provider y suscribirse a eventos del TaskManager
   useEffect(() => {
@@ -101,17 +170,23 @@ const GanttChart: React.FC<GanttChartProps> = ({
       // Cleanup
       return () => {
         taskManager.off(handleTaskManagerEvent);
-        
+
         // Cleanup mutation observer
         if (mutationObserverRef.current) {
           mutationObserverRef.current.disconnect();
           mutationObserverRef.current = null;
         }
-        
+
         // Cleanup polling
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
+        }
+
+        // Cleanup auto-localization
+        if (localizationCleanupRef.current) {
+          localizationCleanupRef.current();
+          localizationCleanupRef.current = null;
         }
       };
     }
@@ -120,17 +195,23 @@ const GanttChart: React.FC<GanttChartProps> = ({
       if (dataProvider) {
         dataProvider.destroy();
       }
-      
+
       // Cleanup mutation observer
       if (mutationObserverRef.current) {
         mutationObserverRef.current.disconnect();
         mutationObserverRef.current = null;
       }
-      
+
       // Cleanup polling
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
+      }
+
+      // Cleanup auto-localization
+      if (localizationCleanupRef.current) {
+        localizationCleanupRef.current();
+        localizationCleanupRef.current = null;
       }
     };
   }, [projectId]);
@@ -181,6 +262,14 @@ const GanttChart: React.FC<GanttChartProps> = ({
     { unit: 'day', step: 1, format: 'd' }
   ], []);
 
+  // Configuración de localización en español (para uso en la función de inicialización)
+  const locale = React.useMemo(() => {
+    return {
+      ...coreLocaleEs,
+      ...ganttLocaleEs
+    };
+  }, []);
+
   // Configuración de markers - marker para el día actual
   const markers = React.useMemo(() => {
     // Normalizar la fecha a las 00:00:00 del día actual para posicionamiento preciso
@@ -198,8 +287,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
   // Configuración de columnas
   const columns: GanttColumn[] = React.useMemo(() => [
-    { id: 'text', header: 'Tarea', flexGrow: 2 },
-    { id: 'start', header: 'Inicio', align: 'center', flexGrow: 1 },
+    { id: 'text', header: 'Nombre de la tarea', flexGrow: 2 },
+    { id: 'start', header: 'Fecha de inicio', align: 'center', flexGrow: 1 },
     { id: 'duration', header: 'Duración', align: 'center', flexGrow: 1 },
     { id: 'progress', header: 'Progreso', align: 'center', flexGrow: 1 },
     {
@@ -493,6 +582,19 @@ const GanttChart: React.FC<GanttChartProps> = ({
       });
     }
 
+    // Configurar localización directamente en el API del Gantt
+    try {
+      if (api && typeof api.setLocale === 'function') {
+        console.log('Configurando localización via API');
+        api.setLocale(locale);
+      } else if (api && api.config) {
+        console.log('Configurando localización via config');
+        api.config.locale = locale;
+      }
+    } catch (error) {
+      console.warn('No se pudo configurar la localización via API:', error);
+    }
+
     // Configurar el data provider como el siguiente en la cadena de eventos
     if (dataProvider) {
       console.log('Configurando FirestoreGanttDataProvider como siguiente en la cadena');
@@ -564,7 +666,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
     // Configurar listeners estándar para el progreso de summary tasks
 
     console.log('Gantt API inicializado correctamente con FirestoreGanttDataProvider');
-  }, [dataProvider, projectId]);
+  }, [dataProvider, projectId, locale]);
 
   // Efecto para inicializar el Gantt cuando el dataProvider y los datos estén listos
   useEffect(() => {
@@ -683,23 +785,25 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
 
   return (
-    <div className="h-full gantt-container relative">
-      {/* Barra de herramientas */}
-      <Toolbar api={apiRef.current} items={toolbarItems} />
+    <LocaleProvider>
+      <div className="h-full gantt-container relative">
+        {/* Barra de herramientas */}
+        <Toolbar api={apiRef.current} items={toolbarItems} />
 
-      {/* Gantt Chart */}
-      <Willow>
-        <Gantt
-          init={initGantt}
-          tasks={ganttData.tasks}
-          links={ganttData.links}
-          scales={scales}
-          columns={columns}
-          markers={markers}
-          cellWidth={30}
-        />
-      </Willow>
-    </div>
+        {/* Gantt Chart */}
+        <Willow>
+          <Gantt
+            init={initGantt}
+            tasks={ganttData.tasks}
+            links={ganttData.links}
+            scales={scales}
+            columns={columns}
+            markers={markers}
+            cellWidth={30}
+          />
+        </Willow>
+      </div>
+    </LocaleProvider>
   );
 };
 
