@@ -1,7 +1,6 @@
 # Project Workgroup
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/Oxitrotamundos/Gannt-Workgroup)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/Oxitrotamundos/Gannt-Workgroup?style=flat&label=version)](https://github.com/Oxitrotamundos/Gannt-Workgroup/releases/latest)[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Aplicación web de gestión de proyectos con visualización tipo Gantt, desarrollada con **React**, **TypeScript** y **Firebase**.
 
