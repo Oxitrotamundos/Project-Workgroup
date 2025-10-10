@@ -11,7 +11,17 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 - Sistema de versionado semántico
 - Guía de contribución (CONTRIBUTING.md) con reglas de versionado
 - CHANGELOG.md para seguimiento de cambios
-- Template de Pull Request
+- Template de Pull Request en `.github/pull_request_template.md`
+- Hook `useAppVersion()` para acceder a la versión de la aplicación
+- Componentes de versión:
+  - `AppVersion` - Componente inline para mostrar versión
+  - `VersionBadge` - Badge de versión en posición fija
+- Variables globales de Vite para versión (`__APP_VERSION__`, `__APP_NAME__`)
+- Badge de versión en el Dashboard
+
+### Changed
+- Actualizado README.md con documentación básica
+- Configuración de Vite para inyectar versión en tiempo de compilación
 
 ## [0.1.0] - 2025-01-15
 
