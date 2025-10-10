@@ -1,69 +1,84 @@
-# React + TypeScript + Vite
+# Project Workgroup
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/Oxitrotamundos/Gannt-Workgroup)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Currently, two official plugins are available:
+Aplicación web de gestión de proyectos con visualización tipo Gantt, desarrollada con **React**, **TypeScript** y **Firebase**.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Características principales
 
-## Expanding the ESLint configuration
+* Gráfico Gantt interactivo (wx-react-gantt)
+* Gestión de tareas y dependencias
+* Colaboración en tiempo real con Firestore
+* Autenticación y roles de usuario
+* Diseño adaptable y soporte en español
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Requisitos
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+* Node.js >= 18.19.0
+* npm >= 9.0.0
+* Proyecto Firebase con Firestore habilitado
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+## Instalación
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+git clone https://github.com/Oxitrotamundos/Gannt-Workgroup.git
+cd Gannt-Workgroup
+npm install
+cp .env.example .env  # Agrega tu configuración de Firebase
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Inicializa Firestore (opcional):
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run setup:firestore
 ```
+
+## Uso
+
+Modo desarrollo:
+
+```bash
+npm run dev
+```
+
+Compilación para producción:
+
+```bash
+npm run build
+npm run preview
+```
+
+## Despliegue en Firebase
+
+```bash
+npm run firebase:deploy
+```
+
+## Stack tecnológico
+
+* **Frontend:** React + TypeScript
+* **Estilos:** Tailwind CSS
+* **Backend:** Firebase / Firestore
+* **Gráfico Gantt:** wx-react-gantt
+* **Build:** Vite
+
+## Estructura básica
+
+```
+src/
+├── components/     # Componentes React
+├── contexts/       # Contextos globales
+├── services/       # Capa de servicios Firestore
+├── types/          # Tipos TypeScript
+└── hooks/          # Hooks personalizados
+```
+
+## Contribución
+
+1. Haz un fork del repositorio
+2. Crea una rama: `git checkout -b feature/nueva-funcion`
+3. Envía un Pull Request
+
+Más información en [CONTRIBUTING.md](CONTRIBUTING.md).
+
