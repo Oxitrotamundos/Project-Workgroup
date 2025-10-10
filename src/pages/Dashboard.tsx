@@ -5,6 +5,7 @@ import { UserService } from '../services/userService';
 import { useNavigation } from '../contexts/NavigationContext';
 import ProjectList from '../components/ProjectList';
 import ProjectModal from '../components/ProjectModal';
+import { VersionBadge } from '../components/Version';
 import type { Project, CreateProjectData, UpdateProjectData } from '../types/firestore';
 import { useProjects } from '../hooks/useProjects';
 
@@ -113,6 +114,9 @@ const Dashboard: React.FC = () => {
         project={editingProject}
         mode={modalMode}
       />
+
+      {/* Version Badge */}
+      <VersionBadge position="bottom-right" />
     </>
   );
 };
