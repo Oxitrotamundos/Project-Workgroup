@@ -1,21 +1,65 @@
-import '@testing-library/jest-dom'
-import { beforeAll, afterEach, afterAll } from 'vitest'
+import '@testing-library/jest-dom/vitest'
+import { vi, beforeAll, afterEach, afterAll } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { server } from '../__mocks__/server'
 
-// Establecer MSW server
+vi.mock('../config/firebase', () => ({
+  auth: {
+    currentUser: null,
+    onAuthStateChanged: vi.fn(() => vi.fn()),
+    signInWithPopup: vi.fn(),
+    signOut: vi.fn(),
+  },
+  db: {},
+  storage: {},
+  default: {},
+}))
+
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(() => ({})),
+  onAuthStateChanged: vi.fn(() => vi.fn()),
+  signInWithPopup: vi.fn(),
+  signOut: vi.fn(),
+  GoogleAuthProvider: vi.fn(() => ({})),
+  initializeApp: vi.fn(),
+}))
+
+vi.mock('firebase/firestore', () => ({
+  getFirestore: vi.fn(() => ({})),
+  collection: vi.fn(),
+  doc: vi.fn(),
+  getDoc: vi.fn(),
+  setDoc: vi.fn(),
+  updateDoc: vi.fn(),
+  deleteDoc: vi.fn(),
+  addDoc: vi.fn(),
+  query: vi.fn(),
+  where: vi.fn(),
+  orderBy: vi.fn(),
+  limit: vi.fn(),
+  getDocs: vi.fn(),
+  onSnapshot: vi.fn(),
+}))
+
+vi.mock('firebase/storage', () => ({
+  getStorage: vi.fn(() => ({})),
+}))
+
+vi.mock('firebase/app', () => ({
+  initializeApp: vi.fn(() => ({})),
+  getApps: vi.fn(() => []),
+  getApp: vi.fn(() => ({})),
+}))
+
 beforeAll(() => server.listen())
 
-// Limpiar después de cada test
 afterEach(() => {
   cleanup()
   server.resetHandlers()
 })
 
-// Cerrar server después de todos los tests
 afterAll(() => server.close())
 
-// Mock de Firebase Auth
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: string) => ({
@@ -30,7 +74,6 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 })
 
-// Suprimir warnings de console en tests
 const originalError = console.error
 beforeAll(() => {
   console.error = (...args: any[]) => {

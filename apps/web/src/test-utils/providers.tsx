@@ -1,11 +1,11 @@
+import '@testing-library/jest-dom/vitest'
 import React, { createContext } from 'react'
-import { render, RenderOptions } from '@testing-library/react'
+import { render, type RenderOptions } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import type { User as FirebaseUser } from 'firebase/auth'
 import { vi } from 'vitest'
 import type { AuthContextType, User } from '../types'
 
-// Mock user para testing
 const mockUser: User = {
   id: 'test-uid',
   uid: 'test-uid',
@@ -15,13 +15,11 @@ const mockUser: User = {
   createdAt: new Date('2024-01-01')
 }
 
-// Contexto de Auth para testing
 interface MockAuthContextProps {
   user?: User | null
   loading?: boolean
 }
 
-// Crear contexto mock para tests
 const MockAuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const createMockAuthContext = (props: MockAuthContextProps = {}): AuthContextType => ({
@@ -34,7 +32,6 @@ const createMockAuthContext = (props: MockAuthContextProps = {}): AuthContextTyp
   resetPassword: vi.fn()
 })
 
-// Proveedor wrapper para tests
 interface AllTheProvidersProps {
   children: React.ReactNode
   authProps?: MockAuthContextProps
@@ -55,7 +52,6 @@ const AllTheProviders: React.FC<AllTheProvidersProps> = ({
   )
 }
 
-// Función render personalizada
 interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
   authProps?: MockAuthContextProps
 }
@@ -76,7 +72,6 @@ const customRender = (
   })
 }
 
-// Re-exportar todo lo necesario para tests
 export * from '@testing-library/react'
 export { customRender as render, mockUser }
 export type { MockAuthContextProps }

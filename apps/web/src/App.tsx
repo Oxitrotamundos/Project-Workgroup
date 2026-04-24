@@ -3,11 +3,10 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AppLayout from './components/Layout/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
-import SignUp from './pages/SignUp';
 import Dashboard from './pages/Dashboard';
 import ProjectView from './pages/ProjectView';
+import AccountApiKeys from './pages/AccountApiKeys';
 
-// Componente para manejar la redirección automática desde login
 const LoginWrapper = () => {
   const { user, loading } = useAuth();
   
@@ -26,24 +25,6 @@ const LoginWrapper = () => {
   return <Login />;
 };
 
-// Componente para manejar la redirección automática desde signup
-const SignUpWrapper = () => {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-500"></div>
-      </div>
-    );
-  }
-  
-  if (user) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  
-  return <SignUp />;
-};
 
 function App() {
   return (
@@ -53,7 +34,7 @@ function App() {
           <Routes>
             {/* Rutas públicas */}
             <Route path="/login" element={<LoginWrapper />} />
-            <Route path="/signup" element={<SignUpWrapper />} />
+            <Route path="/signup" element={<LoginWrapper />} />
 
             {/* Rutas protegidas con layout persistente */}
             <Route
@@ -72,6 +53,17 @@ function App() {
                 <ProtectedRoute>
                   <AppLayout>
                     <ProjectView />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/account/api-keys"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <AccountApiKeys />
                   </AppLayout>
                 </ProtectedRoute>
               }
