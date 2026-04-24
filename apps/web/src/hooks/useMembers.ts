@@ -6,7 +6,7 @@ import type {
   UserSearchResult,
   MemberSearchFilters,
   MemberManagementPermissions
-} from '../types/firestore';
+} from '../types/domain';
 
 interface UseMembersState {
   members: ProjectMember[];

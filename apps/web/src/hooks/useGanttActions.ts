@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Task } from '../types/firestore';
+import type { Task } from '../types/domain';
 
 interface UseGanttActionsProps {
   projectId: string;
@@ -51,8 +51,8 @@ export const useGanttActions = ({
         assigneeId: task.assigneeId || '',
         priority: task.priority || 'medium',
         estimatedHours: task.estimatedHours || 8,
-        startDate: task.startDate instanceof Date ? task.startDate : task.startDate?.toDate(),
-        endDate: task.endDate instanceof Date ? task.endDate : task.endDate?.toDate(),
+        startDate: task.startDate ? new Date(task.startDate) : undefined,
+        endDate: task.endDate ? new Date(task.endDate) : undefined,
         duration: task.duration
       });
       

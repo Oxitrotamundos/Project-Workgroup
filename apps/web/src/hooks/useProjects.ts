@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DocumentSnapshot } from 'firebase/firestore';
+
 import { ProjectService } from '../services/projectService';
 import { UserService } from '../services/userService';
 import type {
@@ -8,7 +8,7 @@ import type {
   UpdateProjectData,
   ProjectFilters,
   User
-} from '../types/firestore';
+} from '../types/domain';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserRole } from './useUserRole';
 
@@ -43,7 +43,7 @@ export function useProjects(filters?: ProjectFilters, pageSize: number = 10): Us
     error: null,
     hasMore: false
   });
-  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | undefined>();
+  const [lastDoc, setLastDoc] = useState<any>(undefined);
 
   // Cargar proyectos
   const loadProjects = useCallback(async (reset: boolean = false) => {

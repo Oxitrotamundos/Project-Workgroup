@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ProjectService } from '../services/projectService';
-import type { Project, UpdateProjectData } from '../types/firestore';
+import type { Project, UpdateProjectData } from '../types/domain';
 
 interface UseProjectReturn {
   project: Project | null;

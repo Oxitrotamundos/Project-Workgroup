@@ -5,7 +5,7 @@ import type {
   CreateTaskData,
   UpdateTaskData,
   TaskFilters
-} from '../types/firestore';
+} from '../types/domain';
 import { useAuth } from '../contexts/AuthContext';
 
 interface UseTasksReturn {
@@ -87,8 +87,8 @@ export const useTasks = (projectId?: string, filters?: TaskFilters): UseTasksRet
         parentId: data.parentId,
         priority: data.priority,
         estimatedHours: data.estimatedHours,
-        startDate: data.startDate,
-        endDate: data.endDate,
+        startDate: data.startDate ? new Date(data.startDate) : undefined,
+        endDate: data.endDate ? new Date(data.endDate) : undefined,
         duration: data.duration
       });
       
