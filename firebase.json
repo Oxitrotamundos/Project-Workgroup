@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "dist",
+    "public": "apps/web/dist",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -12,9 +12,5 @@
         "destination": "/index.html"
       }
     ]
-  },
-  "firestore": {
-    "rules": "firestore/firestore.rules",
-    "indexes": "firestore/firestore.indexes.json"
   }
 }

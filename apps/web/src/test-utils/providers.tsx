@@ -2,7 +2,6 @@ import '@testing-library/jest-dom/vitest'
 import React, { createContext } from 'react'
 import { render, type RenderOptions } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import type { User as FirebaseUser } from 'firebase/auth'
 import { vi } from 'vitest'
 import type { AuthContextType, User } from '../types'
 

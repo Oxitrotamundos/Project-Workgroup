@@ -16,19 +16,12 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest --watch",
-    "setup:firestore": "node scripts/setup-firestore.js",
-    "setup:firestore:sample": "node scripts/setup-firestore.js --sample-data",
-    "setup:cli": "node scripts/firestore-cli.js",
-    "firebase:rules": "firebase deploy --only firestore:rules",
-    "firebase:indexes": "firebase deploy --only firestore:indexes",
-    "firebase:deploy": "firebase deploy"
+    "test:watch": "vitest --watch"
   },
   "dependencies": {
     "@rive-app/react-canvas": "^4.23.3",
     "@types/react-router-dom": "^5.3.3",
     "firebase": "^12.2.1",
-    "firebase-admin": "^13.5.0",
     "lucide-react": "^0.539.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -17,8 +17,7 @@ Cada Pull Request **DEBE** incluir una actualización de versión en `package.js
 - Mejoras de rendimiento pequeñas
 - Refactoring menor sin cambios de funcionalidad
 - Correcciones de typos
-- Correcciones en reglas de Firestore
-- Ajustes menores en componentes
+- Ajustes menores en componentes, DTOs o controladores
 
 **Ejemplo:** `0.1.5` → `0.1.6`
 
@@ -45,7 +44,7 @@ Cada Pull Request **DEBE** incluir una actualización de versión en `package.js
 - Migraciones de arquitectura (ej: cambio de biblioteca Gantt)
 - Épicas completas (múltiples features relacionadas)
 - Cambios fundamentales en el core de la aplicación
-- Cambios en la estructura de datos de Firestore que requieren migración
+- Cambios en el esquema Prisma que requieren migración destructiva
 - Cambios en el sistema de autenticación/permisos
 
 **Ejemplo:** `0.9.5` → `1.0.0`
@@ -140,7 +139,8 @@ Al crear un Pull Request, usa el template proporcionado (`.github/pull_request_t
 - [ ] Sin errores de lint/build
 - [ ] Tests ejecutados (npm run test)
 - [ ] Documentación actualizada (si aplica)
-- [ ] Reglas de Firestore actualizadas (si aplica)
+- [ ] Migración Prisma generada (si cambiaste el esquema)
+- [ ] OpenAPI spec regenerado: `npm run api:openapi:dump` (si cambiaste endpoints)
 
 ## Screenshots (opcional)
 <!-- Si hay cambios visuales en el Gantt o la UI -->
@@ -178,7 +178,9 @@ Usamos [Conventional Commits](https://www.conventionalcommits.org/):
 - `gantt`: Componente Gantt y visualización
 - `tasks`: Gestión de tareas
 - `projects`: Gestión de proyectos
-- `firestore`: Servicios y reglas de Firestore
+- `api`: Backend NestJS (controllers, services, DTOs)
+- `db`: Esquema Prisma o migraciones
+- `shared`: `packages/shared`
 - `ui`: Componentes de interfaz
 - `layout`: Layout y navegación
 - `locales`: Internacionalización
@@ -188,8 +190,8 @@ Usamos [Conventional Commits](https://www.conventionalcommits.org/):
 ```
 feat(gantt): add task filtering by status
 fix(tasks): validate parent-child hierarchy correctly
-docs(readme): update Firebase setup instructions
-refactor(firestore): migrate to new data provider pattern
+docs(readme): update local setup instructions
+refactor(api): extract cycle-detection helper
 test(tasks): add unit tests for TaskService
 perf(gantt): optimize render performance for large datasets
 ```
@@ -255,19 +257,19 @@ El CHANGELOG sigue el formato [Keep a Changelog](https://keepachangelog.com/):
 
 ---
 
-## Estructura del Proyecto
+## Repository layout
 
-Familiarízate con la arquitectura antes de contribuir:
+- `apps/web` — Frontend React + Vite
+- `apps/api` — Backend NestJS + Prisma 7
+- `packages/shared` — DTOs y tipos compartidos
 
-- **Dual-layer architecture**: Firestore (source of truth) + wx-react-gantt (UI)
-- **Data flow**: Todos los cambios DEBEN persistirse en Firestore
-- **ID mapping**: `FirestoreGanttDataProvider` maneja la conversión entre IDs de Firestore (string) y Gantt (numeric)
-- **Key files**:
-  - [src/services/ganttDataProvider.ts](src/services/ganttDataProvider.ts) - Bridge entre Firestore y Gantt
-  - [src/types/firestore.ts](src/types/firestore.ts) - Tipos de datos
-  - [firestore/firestore.rules](firestore/firestore.rules) - Reglas de seguridad
+**Key files:**
+- [apps/web/src/lib/apiClient.ts](apps/web/src/lib/apiClient.ts) — fetch wrapper con Firebase ID token
+- [apps/web/src/services/ganttDataProvider.ts](apps/web/src/services/ganttDataProvider.ts) — puente con `wx-react-gantt`
+- [apps/api/prisma/schema.prisma](apps/api/prisma/schema.prisma) — esquema de datos canónico
+- [apps/api/src/auth/auth.guard.ts](apps/api/src/auth/auth.guard.ts) — validación dual Firebase + API keys
 
-Consulta [README.md](README.md) para más detalles sobre la arquitectura.
+Consulta [README.md](README.md) y [CLAUDE.md](CLAUDE.md) para más detalles.
 
 ---
 
@@ -280,11 +282,11 @@ Consulta [README.md](README.md) para más detalles sobre la arquitectura.
 3. **Manejo de fechas**: wx-react-gantt requiere objetos `Date`, no strings o Timestamps
 4. **Estado de expansión**: Manejado vía campo `open` en Firestore
 
-### Firebase/Firestore
+### Backend y base de datos
 
-1. **Nunca commitees** archivos `.env` o `service-account-key.json`
-2. **Actualiza reglas**: Si cambias la estructura de datos, actualiza `firestore.rules`
-3. **Indexes**: Si agregas queries complejas, actualiza `firestore.indexes.json`
+1. **Nunca commitees** archivos `.env` o `service-account-key.json`.
+2. **Esquema Prisma**: si lo cambias, genera migración con `npm run migrate` y commitea los archivos en `apps/api/prisma/migrations/`.
+3. **OpenAPI**: tras modificar controladores o DTOs, regenera con `npm run api:openapi:dump` y commitea el `apps/api/openapi.json` actualizado.
 
 ### Tests
 
@@ -365,7 +367,9 @@ Si no estás seguro de algo:
 - [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/)
 - [Conventional Commits](https://www.conventionalcommits.org/es/v1.0.0/)
 - [wx-react-gantt Documentation](https://docs.svar.dev/svelte/gantt/overview)
-- [Firebase Documentation](https://firebase.google.com/docs)
+- [NestJS Documentation](https://docs.nestjs.com/)
+- [Prisma Documentation](https://www.prisma.io/docs)
+- [Firebase Auth Documentation](https://firebase.google.com/docs/auth)
 
 ---
 
