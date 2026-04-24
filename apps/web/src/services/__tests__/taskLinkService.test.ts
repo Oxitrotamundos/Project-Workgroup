@@ -1,30 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TaskLinkService } from '../taskLinkService';
-import type { CreateTaskLinkData } from '../../types/firestore';
+import type { CreateTaskLinkData } from '../../types/domain';
 
-// Mock Firebase
-vi.mock('../../config/firebase', () => ({
-  db: {}
+vi.mock('../../lib/apiClient', () => ({
+  apiClient: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
-// Mock Firestore functions
-vi.mock('firebase/firestore', () => ({
-  collection: vi.fn(),
-  doc: vi.fn(),
-  getDocs: vi.fn(),
-  getDoc: vi.fn(),
-  addDoc: vi.fn(),
-  updateDoc: vi.fn(),
-  deleteDoc: vi.fn(),
-  query: vi.fn(),
-  where: vi.fn(),
-  orderBy: vi.fn(),
-  Timestamp: {
-    now: vi.fn(() => ({ toDate: () => new Date() }))
-  },
-  writeBatch: vi.fn(),
-  limit: vi.fn()
-}));
+import { apiClient } from '../../lib/apiClient';
+const mockApiClient = vi.mocked(apiClient);
 
 describe('TaskLinkService', () => {
   const mockProjectId = 'test-project-123';
@@ -48,11 +31,6 @@ describe('TaskLinkService', () => {
     });
 
     it('should return valid for different tasks', async () => {
-      // Mock empty query result (no existing links)
-      const mockSnapshot = { empty: true, docs: [] };
-      const { getDocs } = await import('firebase/firestore');
-      vi.mocked(getDocs).mockResolvedValue(mockSnapshot as any);
-
       const result = await TaskLinkService.validateLinkCreation(
         mockSourceTaskId,
         mockTargetTaskId,
@@ -76,10 +54,10 @@ describe('TaskLinkService', () => {
         .rejects
         .toThrow('enlace de una tarea a sí misma');
     });
-  });
 
-  describe('error handling', () => {
-    it('should handle firebase errors gracefully', async () => {
+    it('should create a valid link via API', async () => {
+      mockApiClient.post.mockResolvedValue({ id: 'link-123', projectId: mockProjectId, sourceTaskId: mockSourceTaskId, targetTaskId: mockTargetTaskId, type: 'e2s', createdAt: '', updatedAt: '' });
+
       const validData: CreateTaskLinkData = {
         projectId: mockProjectId,
         sourceTaskId: mockSourceTaskId,
@@ -87,9 +65,21 @@ describe('TaskLinkService', () => {
         type: 'e2s'
       };
 
-      // Mock Firebase error
-      const { addDoc } = await import('firebase/firestore');
-      vi.mocked(addDoc).mockRejectedValue(new Error('Firebase connection error'));
+      const result = await TaskLinkService.createLink(validData);
+      expect(result).toBe('link-123');
+    });
+  });
+
+  describe('error handling', () => {
+    it('should handle API errors gracefully', async () => {
+      const validData: CreateTaskLinkData = {
+        projectId: mockProjectId,
+        sourceTaskId: mockSourceTaskId,
+        targetTaskId: mockTargetTaskId,
+        type: 'e2s'
+      };
+
+      mockApiClient.post.mockRejectedValue(new Error('API connection error'));
 
       await expect(TaskLinkService.createLink(validData))
         .rejects
@@ -97,27 +87,15 @@ describe('TaskLinkService', () => {
     });
   });
 
-  describe('circular dependency detection', () => {
-    it('should detect basic circular dependency', async () => {
-      // Mock snapshot with docs to simulate existing links
-      const mockSnapshot = {
-        empty: false,
-        docs: [
-          { data: () => ({ sourceTaskId: mockTargetTaskId, targetTaskId: mockSourceTaskId }) }
-        ]
-      };
-      const { getDocs } = await import('firebase/firestore');
-      vi.mocked(getDocs).mockResolvedValue(mockSnapshot as any);
-
-      const result = await TaskLinkService.validateLinkCreation(
+  describe('detectCircularDependency', () => {
+    it('should always return false (server-side enforcement)', async () => {
+      const result = await TaskLinkService.detectCircularDependency(
+        mockProjectId,
         mockSourceTaskId,
-        mockTargetTaskId,
-        mockProjectId
+        mockTargetTaskId
       );
 
-      // Note: This is a simplified test. In a real scenario, we would mock
-      // the Firestore responses to simulate circular dependencies
-      expect(typeof result.valid).toBe('boolean');
+      expect(result).toBe(false);
     });
   });
 });

@@ -1,7 +1,6 @@
 import { TaskService } from './taskService';
 import { TaskLinkService } from './taskLinkService';
-import type { CreateTaskData, Task, CreateTaskLinkData } from '../types/firestore';
-// TaskLink será usado cuando implementemos métodos que retornen objetos TaskLink
+import type { CreateTaskData, Task, CreateTaskLinkData } from '../types/domain';
 
 export interface TaskCreationOptions {
   projectId: string;
@@ -23,7 +22,6 @@ export interface TaskManagerEventData {
   taskId?: string;
   task?: Task;
   projectId: string;
-  // Link-specific fields
   linkId?: string;
   sourceTaskId?: string;
   targetTaskId?: string;
@@ -32,11 +30,6 @@ export interface TaskManagerEventData {
 
 export type TaskManagerEventHandler = (data: TaskManagerEventData) => void;
 
-/**
- * TaskManager centraliza todas las operaciones de tareas
- * Proporciona un punto único de entrada para crear, actualizar y eliminar tareas
- * Maneja la sincronización entre el sistema de Gantt y Firestore
- */
 export class TaskManager {
   private static instance: TaskManager | null = null;
   private eventHandlers: Set<TaskManagerEventHandler> = new Set();
@@ -50,23 +43,14 @@ export class TaskManager {
     return TaskManager.instance;
   }
 
-  /**
-   * Suscribirse a eventos del TaskManager
-   */
   on(handler: TaskManagerEventHandler): void {
     this.eventHandlers.add(handler);
   }
 
-  /**
-   * Desuscribirse de eventos del TaskManager
-   */
   off(handler: TaskManagerEventHandler): void {
     this.eventHandlers.delete(handler);
   }
 
-  /**
-   * Emitir evento a todos los suscriptores
-   */
   private emit(data: TaskManagerEventData): void {
     this.eventHandlers.forEach(handler => {
       try {
@@ -77,13 +61,9 @@ export class TaskManager {
     });
   }
 
-  /**
-   * Crear una nueva tarea con validación y sincronización completa
-   */
   async createTask(options: TaskCreationOptions): Promise<string> {
     console.log('TaskManager: Creando tarea con opciones:', options);
 
-    // Validar datos obligatorios
     if (!options.projectId) {
       throw new Error('ID del proyecto es obligatorio');
     }
@@ -92,17 +72,19 @@ export class TaskManager {
       throw new Error('El nombre de la tarea es obligatorio');
     }
 
-    // Establecer valores por defecto
     const now = new Date();
     const defaultEndDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 días por defecto
     
+    const startDateObj = options.startDate || now;
+    const endDateObj = options.endDate || defaultEndDate;
+
     const taskData: CreateTaskData = {
       projectId: options.projectId,
       name: options.name.trim(),
       description: options.description || '',
-      startDate: options.startDate || now,
-      endDate: options.endDate || defaultEndDate,
-      duration: options.duration || this.calculateDuration(options.startDate || now, options.endDate || defaultEndDate),
+      startDate: startDateObj.toISOString(),
+      endDate: endDateObj.toISOString(),
+      duration: options.duration || this.calculateDuration(startDateObj, endDateObj),
       progress: 0,
       assigneeId: options.assigneeId || '',
       parentId: options.parentId || '',
@@ -111,22 +93,19 @@ export class TaskManager {
       priority: options.priority || 'medium',
       type: options.type || 'task',
       color: this.getColorForTaskType(options.type || 'task'),
-      estimatedHours: options.estimatedHours || (options.duration || 7) * 8, // 8 horas por día por defecto
+      estimatedHours: options.estimatedHours || (options.duration || 7) * 8,
       status: 'not-started'
     };
 
     try {
       console.log('TaskManager: Datos de tarea validados:', taskData);
 
-      // Crear tarea en Firestore
       const taskId = await TaskService.createTask(taskData);
       
       console.log('TaskManager: Tarea creada exitosamente con ID:', taskId);
 
-      // Obtener la tarea creada para el evento
       const createdTask = await TaskService.getTask(taskId);
 
-      // Emitir evento de creación solo si no se especifica skipEvent
       if (!options.skipEvent) {
         console.log('TaskManager: Emitiendo evento task-created para:', taskId);
         this.emit({
@@ -147,30 +126,21 @@ export class TaskManager {
     }
   }
 
-  /**
-   * Crear una subtarea (tarea con padre)
-   */
   async createSubtask(parentTaskId: string, options: Omit<TaskCreationOptions, 'parentId'>): Promise<string> {
     console.log('TaskManager: Creando subtarea para padre:', parentTaskId);
 
-    // Obtener información de la tarea padre
     const parentTask = await TaskService.getTask(parentTaskId);
     if (!parentTask) {
       throw new Error('Tarea padre no encontrada');
     }
 
-    // Crear subtarea con referencia al padre, preservando el flag skipEvent
     return this.createTask({
       ...options,
       parentId: parentTaskId,
-      projectId: parentTask.projectId // Heredar el proyecto del padre
+      projectId: parentTask.projectId
     });
   }
 
-  /**
-   * Crear tarea desde el sistema de Gantt
-   * Esta función maneja las tareas creadas directamente desde el chart de Gantt
-   */
   async createTaskFromGantt(ganttTaskData: any, projectId: string, parentId?: string): Promise<string> {
     console.log('TaskManager: Creando tarea desde Gantt:', ganttTaskData);
 
@@ -191,14 +161,10 @@ export class TaskManager {
     return this.createTask(options);
   }
 
-  /**
-   * Actualizar una tarea existente
-   */
   async updateTask(taskId: string, updates: Partial<TaskCreationOptions>): Promise<void> {
     console.log('TaskManager: Actualizando tarea:', taskId, updates);
 
     try {
-      // Convertir opciones a formato de actualización
       const updateData: any = {};
       
       if (updates.name !== undefined) updateData.name = updates.name.trim();
@@ -219,10 +185,8 @@ export class TaskManager {
 
       await TaskService.updateTask(taskId, updateData);
 
-      // Obtener tarea actualizada
       const updatedTask = await TaskService.getTask(taskId);
 
-      // Emitir evento de actualización
       this.emit({
         action: 'task-updated',
         taskId,
@@ -238,20 +202,15 @@ export class TaskManager {
     }
   }
 
-  /**
-   * Eliminar una tarea
-   */
   async deleteTask(taskId: string): Promise<void> {
     console.log('TaskManager: Eliminando tarea:', taskId);
 
     try {
-      // Obtener tarea antes de eliminar para el evento
       const task = await TaskService.getTask(taskId);
       const projectId = task?.projectId || '';
 
       await TaskService.deleteTask(taskId);
 
-      // Emitir evento de eliminación
       this.emit({
         action: 'task-deleted',
         taskId,
