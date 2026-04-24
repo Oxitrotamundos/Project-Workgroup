@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Project } from '../../types/firestore';
+import type { Project } from '../../types/domain';
 
 interface ProjectInfoProps {
   project: Project;
@@ -71,19 +71,11 @@ const ProjectInfo: React.FC<ProjectInfoProps> = ({
               {/* Fecha creación - Oculta en pantallas pequeñas */}
               {project.createdAt && (
                 <span className="hidden md:inline">
-                  Creado {
-                    project.createdAt instanceof Date
-                      ? project.createdAt.toLocaleDateString('es-ES', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric'
-                        })
-                      : new Date(project.createdAt.seconds * 1000).toLocaleDateString('es-ES', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric'
-                        })
-                  }
+                  Creado {new Date(project.createdAt).toLocaleDateString('es-ES', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric'
+                  })}
                 </span>
               )}
             </div>

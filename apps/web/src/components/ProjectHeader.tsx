@@ -1,6 +1,6 @@
 import React from 'react';
 import { TopNavigation, ProjectActions, ProjectInfo } from './Layout';
-import type { Project } from '../types/firestore';
+import type { Project } from '../types/domain';
 
 interface ProjectHeaderProps {
   project: Project;

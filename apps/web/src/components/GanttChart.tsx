@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Gantt, Willow, Toolbar, defaultToolbarButtons } from 'wx-react-gantt';
-import type { Task } from '../types/firestore';
+import type { Task } from '../types/domain';
 import { FirestoreGanttDataProvider } from '../services/ganttDataProvider';
 import { taskManager } from '../services/taskManager';
 import { LocaleProvider } from './LocaleProvider';
@@ -92,7 +92,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const [ganttData, setGanttData] = useState<{ tasks: any[], links: any[] }>({ tasks: [], links: [] });
   const mutationObserverRef = useRef<MutationObserver | null>(null);
   const taskStateRef = useRef<Map<number, boolean>>(new Map());
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const localizationCleanupRef = useRef<(() => void) | null>(null);
 
   // Configurar localización al montar el componente

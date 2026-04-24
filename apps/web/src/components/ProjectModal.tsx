@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Project, CreateProjectData, UpdateProjectData, ProjectStatus } from '../types/firestore';
+import type { Project, CreateProjectData, UpdateProjectData, ProjectStatus } from '../types/domain';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProjectModalProps {
@@ -49,12 +49,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
       setFormData({
         name: project.name,
         description: project.description,
-        startDate: project.startDate instanceof Date 
-          ? project.startDate.toISOString().split('T')[0]
-          : project.startDate.toDate().toISOString().split('T')[0],
-        endDate: project.endDate instanceof Date 
-          ? project.endDate.toISOString().split('T')[0]
-          : project.endDate.toDate().toISOString().split('T')[0],
+        startDate: new Date(project.startDate).toISOString().split('T')[0],
+        endDate: new Date(project.endDate).toISOString().split('T')[0],
         status: project.status,
         color: project.color
       });
@@ -119,8 +115,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
       const projectData = {
         name: formData.name.trim(),
         description: formData.description.trim(),
-        startDate: new Date(formData.startDate),
-        endDate: new Date(formData.endDate),
+        startDate: formData.startDate,
+        endDate: formData.endDate,
         status: formData.status,
         color: formData.color,
         ...(mode === 'create' && {

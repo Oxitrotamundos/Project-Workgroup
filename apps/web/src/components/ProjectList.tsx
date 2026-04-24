@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import type { Project, ProjectStatus } from '../types/firestore';
+import type { Project, ProjectStatus } from '../types/domain';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserRole } from '../hooks/useUserRole';
-import { Timestamp } from 'firebase/firestore';
 import MemberModal from './MemberModal';
 import { 
   Eye, 
@@ -66,8 +65,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDelete, on
     }
   };
 
-  const formatDate = (date: Date | Timestamp) => {
-    const dateObj = date instanceof Date ? date : date.toDate();
+  const formatDate = (date: string) => {
+    const dateObj = new Date(date);
     return new Intl.DateTimeFormat('es-ES', {
       year: 'numeric',
       month: 'short',
