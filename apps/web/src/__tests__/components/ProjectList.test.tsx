@@ -6,9 +6,8 @@ import ProjectList from '../../components/ProjectList'
 import { useProjects } from '../../hooks/useProjects'
 import { useUserRole } from '../../hooks/useUserRole'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Project } from '../../types/firestore'
+import type { Project } from '../../types/domain'
 
-// Mock hooks
 vi.mock('../../hooks/useProjects')
 vi.mock('../../hooks/useUserRole')
 vi.mock('../../contexts/AuthContext')
@@ -17,33 +16,32 @@ const mockUseProjects = vi.mocked(useProjects)
 const mockUseUserRole = vi.mocked(useUserRole)
 const mockUseAuth = vi.mocked(useAuth)
 
-// Mock data
 const mockProjects: Project[] = [
   {
     id: 'project-1',
     name: 'Proyecto Test 1',
     description: 'Descripción del proyecto 1',
-    startDate: new Date('2024-01-01'),
-    endDate: new Date('2024-12-31'),
+    startDate: '2024-01-01',
+    endDate: '2024-12-31',
     status: 'active',
     color: '#3B82F6',
     ownerId: 'user-1',
     members: ['user-1', 'user-2', 'test-uid'],
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01')
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z'
   },
   {
     id: 'project-2',
     name: 'Proyecto Test 2',
     description: 'Descripción del proyecto 2',
-    startDate: new Date('2024-02-01'),
-    endDate: new Date('2024-11-30'),
+    startDate: '2024-02-01',
+    endDate: '2024-11-30',
     status: 'completed',
     color: '#10B981',
     ownerId: 'user-2',
     members: ['user-1', 'user-2', 'user-3', 'test-uid'],
-    createdAt: new Date('2024-02-01'),
-    updatedAt: new Date('2024-02-01')
+    createdAt: '2024-02-01T00:00:00.000Z',
+    updatedAt: '2024-02-01T00:00:00.000Z'
   }
 ]
 
@@ -71,7 +69,6 @@ const defaultUseUserRoleReturn = {
   isMember: true
 }
 
-// Helper para renderizar ProjectList con props por defecto
 const renderProjectList = (props: Partial<React.ComponentProps<typeof ProjectList>> = {}) => {
   const defaultProps = {
     projects: mockProjects,
@@ -147,7 +144,6 @@ describe('ProjectList Component', () => {
     it('debe mostrar skeleton loader cuando está cargando', () => {
       renderProjectList({ loading: true, projects: [] })
       
-      // Verificar que se muestran los skeletons
       const skeletons = screen.getAllByTestId('project-skeleton')
       expect(skeletons).toHaveLength(8) // Según la configuración del componente
     })
