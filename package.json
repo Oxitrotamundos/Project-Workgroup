@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.0",
   "engines": {
-    "node": ">=18.19.0",
+    "node": ">=20.0.0",
     "npm": ">=9.0.0"
   },
   "workspaces": [
@@ -11,12 +11,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n web,api -c auto \"npm:dev:web\" \"npm:dev:api\"",
+    "build:shared": "npm -w packages/shared run build",
+    "dev": "npm run build:shared && concurrently -n web,api -c auto \"npm:dev:web\" \"npm:dev:api\"",
     "dev:web": "npm -w apps/web run dev",
     "dev:api": "npm -w apps/api run start:dev",
-    "build": "npm -w apps/web run build && npm -w apps/api run build",
+    "build": "npm run build:shared && npm -w apps/web run build && npm -w apps/api run build",
     "lint": "npm -w apps/web run lint && npm -w apps/api run lint",
-    "test": "npm -w apps/web run test:run && npm -w apps/api run test",
+    "test": "npm run build:shared && npm -w apps/web run test:run && npm -w apps/api run test",
     "db:up": "docker compose -f apps/api/docker-compose.dev.yml up -d",
     "db:down": "docker compose -f apps/api/docker-compose.dev.yml down",
     "migrate": "npm -w apps/api exec prisma migrate dev",

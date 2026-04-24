@@ -1,0 +1,45 @@
+# Dependencies and build output
+**/node_modules
+**/dist
+**/coverage
+**/.next
+**/.turbo
+**/.cache
+
+# Local env files (never leak secrets into the image)
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS and editor
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+
+# Docs / scratch
+*.log
+*.md
+docs/
+CHANGELOG.md
+CONTRIBUTING.md
+README.md
+CLAUDE.md
+
+# Tests and CI config (not needed at runtime)
+**/test
+**/__tests__
+**/*.spec.ts
+**/*.test.ts
+.github/
+
+# Prisma local artifacts (regenerated in the builder stage)
+apps/api/src/generated/
+apps/api/openapi.json
+
+# Frontend is not deployed by this Dockerfile
+apps/web
