@@ -7,8 +7,6 @@ import type {
   PaginatedResponse
 } from '../types/domain';
 
-type ApiPagedResponse<T> = { items: T[]; nextCursor: string | null };
-
 const toDomain = (r: any): Project => ({
   id: r.id,
   name: r.name,
@@ -54,8 +52,8 @@ export class ProjectService {
     pageSize: number = 10
   ): Promise<PaginatedResponse<Project>> {
     try {
-      const res = await apiClient.get<ApiPagedResponse<any>>('/v1/projects');
-      const items = res.items.map(toDomain);
+      const res = await apiClient.get<any[]>('/v1/projects');
+      const items = res.map(toDomain);
       return {
         items: items.slice(0, pageSize),
         total: items.length,
@@ -100,8 +98,8 @@ export class ProjectService {
     _lastDoc?: any
   ): Promise<PaginatedResponse<Project>> {
     try {
-      const res = await apiClient.get<ApiPagedResponse<any>>('/v1/projects');
-      const items = res.items.map(toDomain);
+      const res = await apiClient.get<any[]>('/v1/projects');
+      const items = res.map(toDomain);
       return {
         items: items.slice(0, pageSize),
         total: items.length,
