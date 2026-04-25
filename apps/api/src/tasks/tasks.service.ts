@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateTaskDto,
@@ -152,6 +152,35 @@ export class TasksService {
       Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
     );
 
+    let parentIdUpdate: { parentId: bigint | null } | undefined;
+    if (dto.parentId !== undefined) {
+      if (dto.parentId === null) {
+        parentIdUpdate = { parentId: null };
+      } else {
+        const newParentId = BigInt(dto.parentId);
+        if (newParentId === id) {
+          throw new BadRequestException('parentId cannot be the task itself');
+        }
+        const newParent = await this.prisma.task.findUnique({ where: { id: newParentId } });
+        if (!newParent || newParent.projectId !== existing.projectId) {
+          throw new BadRequestException('parentId must be a task in the same project');
+        }
+        // Walk ancestors to detect cycles
+        let cursor: bigint | null = newParent.parentId;
+        while (cursor !== null) {
+          if (cursor === id) {
+            throw new BadRequestException('parentId would create a cycle');
+          }
+          const ancestor = await this.prisma.task.findUnique({
+            where: { id: cursor },
+            select: { parentId: true },
+          });
+          cursor = ancestor?.parentId ?? null;
+        }
+        parentIdUpdate = { parentId: newParentId };
+      }
+    }
+
     const task = await this.prisma.task.update({
       where: { id },
       data: {
@@ -165,6 +194,7 @@ export class TasksService {
         ...(dto.color !== undefined && { color: dto.color }),
         ...(dto.assigneeId !== undefined && { assigneeId: dto.assigneeId ? BigInt(dto.assigneeId) : null }),
         ...(dto.open !== undefined && { open: dto.open }),
+        ...(parentIdUpdate ?? {}),
       },
     });
     return this.toResponse(task);
