@@ -115,27 +115,8 @@ export interface CreateTaskData {
   order?: number;
 }
 
-// Datos para actualizar tarea
-export interface UpdateTaskData {
-  name?: string;
-  description?: string;
-  startDate?: string;
-  endDate?: string;
-  duration?: number;
-  progress?: number;
-  assigneeId?: string;
-  parentId?: string | null;
-  dependencies?: string[];
-  tags?: string[];
-  priority?: TaskPriority;
-  color?: string;
-  estimatedHours?: number;
-  actualHours?: number;
-  status?: TaskStatus;
-  type?: TaskType;
-  order?: number;
-  open?: boolean;
-}
+// El payload de actualización de tarea vive en `@project-workgroup/shared`
+// como `UpdateTaskDto` (fuente de verdad compartida con el backend).
 
 // Colección: workload
 export interface WorkloadEntry {

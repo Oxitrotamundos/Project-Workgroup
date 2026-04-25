@@ -1,6 +1,19 @@
 import { TaskService } from './taskService';
 import { TaskLinkService } from './taskLinkService';
-import type { Task, UpdateTaskData, TaskLink, GanttLinkData, GanttLinkEvent, GanttLinkResponse, UpdateTaskLinkData } from '../types/domain';
+import type { Task, TaskLink, GanttLinkData, GanttLinkEvent, GanttLinkResponse, UpdateTaskLinkData } from '../types/domain';
+import type { UpdateTaskDto } from '@project-workgroup/shared';
+
+const toIsoDate = (value: Date | string | undefined | null): string | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return undefined;
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === 'string') {
+    return value.length >= 10 ? value.slice(0, 10) : value;
+  }
+  return undefined;
+};
 
 export interface GanttDataProviderData {
   tasks: any[];
@@ -11,6 +24,7 @@ export class FirestoreGanttDataProvider {
   private projectId: string;
   private listeners: Map<string, Function[]> = new Map();
   private _ganttApi: any = null;
+  private _next: any = null;
   private tempIdMapping: Map<string, string> = new Map(); // temp://... -> real ID
   private taskCache: Map<string, Task> = new Map();
   private linkCache: Map<string, TaskLink> = new Map();
@@ -101,6 +115,10 @@ export class FirestoreGanttDataProvider {
 
   setGanttApi(api: any): void {
     this._ganttApi = api;
+  }
+
+  setNext(next: any): void {
+    this._next = next;
   }
 
   async exec(action: string, data: any): Promise<any> {
@@ -257,10 +275,9 @@ export class FirestoreGanttDataProvider {
           if (data._fromRestore) {
             return { success: true, message: 'Evento de restauración procesado' };
           }
-          return { success: true, message: 'Evento ignorado - usando detección DOM' };
+          return this._next ? this._next.send(action, data) : { success: true };
         default:
-          console.warn('FirestoreGanttDataProvider: Acción no soportada:', action);
-          return { success: false, error: 'Acción no soportada' };
+          return this._next ? this._next.send(action, data) : { success: false, error: 'Acción no soportada' };
       }
     } catch (error) {
       console.error('FirestoreGanttDataProvider: Error procesando acción:', error);
@@ -357,24 +374,38 @@ export class FirestoreGanttDataProvider {
       }
     }
 
-    const updateData: UpdateTaskData = {
-      name: taskData.text || taskData.name,
-      description: taskData.details || taskData.description,
-      startDate: taskData.start || taskData.startDate,
-      endDate: taskData.end || taskData.endDate,
-      duration: taskData.duration,
-      progress: taskData.progress,
-      type: taskData.type
-    };
+    const updateData: UpdateTaskDto = {};
 
-    Object.keys(updateData).forEach(key => {
-      if (updateData[key as keyof UpdateTaskData] === undefined) {
-        delete updateData[key as keyof UpdateTaskData];
-      }
-    });
+    const nextName = taskData.text ?? taskData.name;
+    if (nextName !== undefined) updateData.name = nextName;
+
+    const nextDescription = taskData.details ?? taskData.description;
+    if (nextDescription !== undefined) updateData.description = nextDescription;
+
+    const nextStart = toIsoDate(taskData.start ?? taskData.startDate);
+    if (nextStart !== undefined) updateData.startDate = nextStart;
+
+    const nextEnd = toIsoDate(taskData.end ?? taskData.endDate);
+    if (nextEnd !== undefined) updateData.endDate = nextEnd;
+
+    if (taskData.type !== undefined) updateData.type = taskData.type;
+
+    const calls: Promise<unknown>[] = [];
 
     if (Object.keys(updateData).length > 0) {
-      await TaskService.updateTask(taskId, updateData);
+      calls.push(TaskService.updateTask(taskId, updateData));
+    }
+
+    if (taskData.progress !== undefined && Number.isFinite(taskData.progress)) {
+      const cached = this.taskCache.get(taskId);
+      const nextProgress = Math.max(0, Math.min(100, Math.round(taskData.progress)));
+      if (!cached || cached.progress !== nextProgress) {
+        calls.push(TaskService.updateTaskProgress(taskId, nextProgress));
+      }
+    }
+
+    if (calls.length > 0) {
+      await Promise.all(calls);
     }
 
     return { success: true };

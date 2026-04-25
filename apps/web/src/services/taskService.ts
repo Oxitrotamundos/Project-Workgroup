@@ -2,10 +2,10 @@ import { apiClient } from '../lib/apiClient';
 import type {
   Task,
   CreateTaskData,
-  UpdateTaskData,
   TaskFilters,
   TaskType
 } from '../types/domain';
+import type { UpdateTaskDto } from '@project-workgroup/shared';
 
 const toDomain = (r: any): Task => ({
   id: r.id,
@@ -60,19 +60,12 @@ export class TaskService {
       description: data.description,
       startDate: data.startDate,
       endDate: data.endDate,
-      duration: data.duration,
-      progress: data.progress,
-      assigneeId: data.assigneeId,
-      parentId: data.parentId,
-      dependencies: data.dependencies,
-      tags: data.tags,
       priority: data.priority,
-      color: data.color,
-      estimatedHours: data.estimatedHours,
-      actualHours: data.actualHours,
       status: data.status,
       type: data.type,
-      order: data.order,
+      color: data.color,
+      ...(data.parentId ? { parentId: data.parentId } : {}),
+      ...(data.assigneeId ? { assigneeId: data.assigneeId } : {}),
     });
     return result.id;
   }
@@ -107,7 +100,7 @@ export class TaskService {
   /**
    * Actualizar una tarea
    */
-  static async updateTask(id: string, data: UpdateTaskData): Promise<void> {
+  static async updateTask(id: string, data: UpdateTaskDto): Promise<void> {
     await apiClient.patch(`/v1/tasks/${id}`, data);
   }
 
@@ -134,23 +127,15 @@ export class TaskService {
   }
 
   /**
-   * Agregar dependencia a una tarea
+   * TODO: las dependencias viven en `task_links`, no en la tarea.
+   * Estos métodos están desactivados hasta migrar el flujo a TaskLinkService.
    */
-  static async addTaskDependency(taskId: string, dependencyId: string): Promise<void> {
-    const task = await this.getTask(taskId);
-    if (!task) throw new Error('Tarea no encontrada');
-    if (!task.dependencies.includes(dependencyId)) {
-      await this.updateTask(taskId, { dependencies: [...task.dependencies, dependencyId] });
-    }
+  static async addTaskDependency(_taskId: string, _dependencyId: string): Promise<void> {
+    throw new Error('addTaskDependency: pendiente de migración a TaskLinkService');
   }
 
-  /**
-   * Remover dependencia de una tarea
-   */
-  static async removeTaskDependency(taskId: string, dependencyId: string): Promise<void> {
-    const task = await this.getTask(taskId);
-    if (!task) throw new Error('Tarea no encontrada');
-    await this.updateTask(taskId, { dependencies: task.dependencies.filter(id => id !== dependencyId) });
+  static async removeTaskDependency(_taskId: string, _dependencyId: string): Promise<void> {
+    throw new Error('removeTaskDependency: pendiente de migración a TaskLinkService');
   }
 
   /**
@@ -168,19 +153,22 @@ export class TaskService {
   }
 
   /**
-   * Actualizar orden de tareas después de mover una tarea
+   * Actualizar orden de tareas después de mover una tarea.
+   * El backend recibe `afterTaskId` o `beforeTaskId` (UpdateOrderDto);
+   * aquí mapeamos el `mode` del Gantt a uno de los dos.
    */
   static async updateTaskOrder(
-    projectId: string,
+    _projectId: string,
     movedTaskId: string,
     targetTaskId: string | null,
     mode: 'before' | 'after'
   ): Promise<void> {
-    await apiClient.patch(`/v1/tasks/${movedTaskId}/order`, {
-      projectId,
-      targetTaskId,
-      mode,
-    });
+    const body: { afterTaskId?: string; beforeTaskId?: string } = {};
+    if (targetTaskId) {
+      if (mode === 'before') body.beforeTaskId = targetTaskId;
+      else body.afterTaskId = targetTaskId;
+    }
+    await apiClient.patch(`/v1/tasks/${movedTaskId}/order`, body);
   }
 }
 

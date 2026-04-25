@@ -3,9 +3,9 @@ import { TaskService } from '../services/taskService';
 import type {
   Task,
   CreateTaskData,
-  UpdateTaskData,
   TaskFilters
 } from '../types/domain';
+import type { UpdateTaskDto } from '@project-workgroup/shared';
 import { useAuth } from '../contexts/AuthContext';
 
 interface UseTasksReturn {
@@ -13,7 +13,7 @@ interface UseTasksReturn {
   loading: boolean;
   error: string | null;
   createTask: (data: CreateTaskData) => Promise<string>;
-  updateTask: (id: string, data: UpdateTaskData) => Promise<void>;
+  updateTask: (id: string, data: UpdateTaskDto) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   updateTaskProgress: (id: string, progress: number) => Promise<void>;
   addTaskDependency: (taskId: string, dependencyId: string) => Promise<void>;
@@ -104,7 +104,7 @@ export const useTasks = (projectId?: string, filters?: TaskFilters): UseTasksRet
     }
   }, [loadTasks]);
 
-  const updateTask = useCallback(async (id: string, data: UpdateTaskData) => {
+  const updateTask = useCallback(async (id: string, data: UpdateTaskDto) => {
     try {
       setError(null);
       await TaskService.updateTask(id, data);

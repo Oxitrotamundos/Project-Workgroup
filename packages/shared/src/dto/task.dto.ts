@@ -9,6 +9,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export const TASK_STATUSES = ['not-started', 'in-progress', 'completed', 'blocked'] as const;
@@ -85,6 +86,11 @@ export class UpdateTaskDto {
 
   @IsOptional() @IsBoolean()
   open?: boolean;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  parentId?: string | null;
 }
 
 export class UpdateProgressDto {

@@ -73,10 +73,8 @@ const ProjectView: React.FC = () => {
         projectId,
         name: 'Nueva Tarea Principal',
         description: 'Descripción de la nueva tarea',
-        assigneeId: user.id,
         priority: 'medium',
         type: 'task',
-        estimatedHours: 40
       });
 
       console.log('Nueva tarea creada exitosamente con ID:', taskId);
