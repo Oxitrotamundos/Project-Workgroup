@@ -34,7 +34,10 @@ function App() {
           <Routes>
             {/* Rutas públicas */}
             <Route path="/login" element={<LoginWrapper />} />
-            <Route path="/signup" element={<LoginWrapper />} />
+            <Route
+              path="/signup"
+              element={<Navigate to="/login" state={{ signupDisabled: true }} replace />}
+            />
 
             {/* Rutas protegidas con layout persistente */}
             <Route

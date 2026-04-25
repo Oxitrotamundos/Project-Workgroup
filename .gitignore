@@ -39,3 +39,4 @@ config/service-account-key.json
 # API service env files
 apps/api/.env
 apps/api/.env.local
+/docs/superpowers

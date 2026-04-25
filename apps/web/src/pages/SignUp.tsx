@@ -1,3 +1,4 @@
+// Deprecated: ruta /signup deshabilitada (ver docs/superpowers/specs/2026-04-24-login-email-password-design.md). Mantener para reactivación futura.
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import {
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type User as FirebaseUser
@@ -40,15 +41,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [showLoader, setShowLoader] = useState(true);
 
+  const signIn = async (email: string, password: string): Promise<void> => {
+    await signInWithEmailAndPassword(auth, email, password);
+  };
+
   const signInWithGoogle = async (): Promise<void> => {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
   };
 
-  const signIn = signInWithGoogle;
-
   const signUp = async (_email: string, _password: string, _displayName: string): Promise<void> => {
-    await signInWithGoogle();
+    throw new Error('Signup deshabilitado en esta versión.');
   };
 
   const signOut = async (): Promise<void> => {
@@ -95,6 +98,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     loading,
     signIn,
+    signInWithGoogle,
     signUp,
     signOut,
     logout,

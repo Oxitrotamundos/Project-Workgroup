@@ -14,8 +14,8 @@ Aplicación web de gestión de proyectos con visualización tipo Gantt. Frontend
 
 ## Requisitos
 
-* Node.js >= 18.19.0
-* npm >= 9.0.0
+* Node.js >= 20.0.0
+* pnpm >= 10.0.0 (instálalo con `corepack enable`, o `npm i -g pnpm@10`)
 * Docker + Docker Compose (para Postgres local)
 * Proyecto Firebase con provider Google habilitado
 
@@ -33,7 +33,7 @@ packages/
 
 1. Instalar dependencias:
    ```bash
-   npm install
+   pnpm install
    ```
 
 2. Copiar archivos `.env.example`:
@@ -42,22 +42,22 @@ packages/
 
 3. Levantar Postgres local:
    ```bash
-   npm run db:up
+   pnpm run db:up
    ```
 
 4. Aplicar migraciones:
    ```bash
-   npm run migrate
+   pnpm run migrate
    ```
 
 5. (Opcional) sembrar admin de prueba:
    ```bash
-   SEED_ADMIN_UID=<firebase-uid> SEED_ADMIN_EMAIL=<email> npm run seed
+   SEED_ADMIN_UID=<firebase-uid> SEED_ADMIN_EMAIL=<email> pnpm run seed
    ```
 
 6. Arrancar web + api concurrentemente:
    ```bash
-   npm run dev
+   pnpm run dev
    ```
 
 - Web:    http://localhost:5173
@@ -67,10 +67,10 @@ packages/
 ## Testing
 
 ```bash
-npm run test                 # web + api
-npm -w apps/web run test:run
-npm -w apps/api run test
-npm -w apps/api run test:e2e
+pnpm run test                 # web + api
+pnpm --filter @project-workgroup/web run test:run
+pnpm --filter @project-workgroup/api run test
+pnpm --filter @project-workgroup/api run test:e2e
 ```
 
 ## Stack tecnológico

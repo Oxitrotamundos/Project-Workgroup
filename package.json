@@ -3,29 +3,36 @@
   "private": true,
   "version": "0.2.0",
   "engines": {
-    "node": ">=20.0.0",
-    "npm": ">=9.0.0"
+    "node": ">=20.0.0"
   },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "build:shared": "npm -w packages/shared run build",
-    "dev": "npm run build:shared && concurrently -n web,api -c auto \"npm:dev:web\" \"npm:dev:api\"",
-    "dev:web": "npm -w apps/web run dev",
-    "dev:api": "npm -w apps/api run start:dev",
-    "build": "npm run build:shared && npm -w apps/web run build && npm -w apps/api run build",
-    "lint": "npm -w apps/web run lint && npm -w apps/api run lint",
-    "test": "npm run build:shared && npm -w apps/web run test:run && npm -w apps/api run test",
+    "build:shared": "pnpm --filter @project-workgroup/shared run build",
+    "dev": "pnpm run build:shared && concurrently -n web,api -c auto \"pnpm:dev:web\" \"pnpm:dev:api\"",
+    "dev:web": "pnpm --filter @project-workgroup/web run dev",
+    "dev:api": "pnpm --filter @project-workgroup/api run start:dev",
+    "build": "pnpm run build:shared && pnpm --filter @project-workgroup/web run build && pnpm --filter @project-workgroup/api run build",
+    "lint": "pnpm --filter @project-workgroup/web run lint && pnpm --filter @project-workgroup/api run lint",
+    "test": "pnpm run build:shared && pnpm --filter @project-workgroup/web run test:run && pnpm --filter @project-workgroup/api run test",
     "db:up": "docker compose -f apps/api/docker-compose.dev.yml up -d",
     "db:down": "docker compose -f apps/api/docker-compose.dev.yml down",
-    "migrate": "npm -w apps/api exec prisma migrate dev",
-    "seed": "npm -w apps/api exec prisma db seed",
-    "api:openapi:dump": "npm -w apps/api run openapi:dump",
-    "api:openapi:check": "npm -w apps/api run openapi:check"
+    "migrate": "pnpm --filter @project-workgroup/api exec prisma migrate dev",
+    "seed": "pnpm --filter @project-workgroup/api exec prisma db seed",
+    "api:openapi:dump": "pnpm --filter @project-workgroup/api run openapi:dump",
+    "api:openapi:check": "pnpm --filter @project-workgroup/api run openapi:check"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "argon2",
+      "esbuild",
+      "msw",
+      "prisma"
+    ]
   }
 }

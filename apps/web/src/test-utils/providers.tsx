@@ -25,6 +25,7 @@ const createMockAuthContext = (props: MockAuthContextProps = {}): AuthContextTyp
   user: props.user ?? mockUser,
   loading: props.loading ?? false,
   signIn: vi.fn(),
+  signInWithGoogle: vi.fn(),
   signUp: vi.fn(),
   signOut: vi.fn(),
   logout: vi.fn(),
