@@ -8,6 +8,7 @@ export class ApiError extends Error {
 export interface ApiClientOptions {
   baseUrl: string;
   tokenProvider: () => Promise<string | null>;
+  patchDebounceMs?: number;
 }
 
 export interface ApiClient {
@@ -15,9 +16,20 @@ export interface ApiClient {
   post<T>(path: string, body: unknown, init?: RequestInit): Promise<T>;
   patch<T>(path: string, body: unknown, init?: RequestInit): Promise<T>;
   delete(path: string, init?: RequestInit): Promise<void>;
+
+  enqueuePatch<T>(path: string, body: Record<string, unknown>): Promise<T>;
+  flushPatches(): Promise<void>;
+}
+
+interface PendingPatch {
+  merged: Record<string, unknown>;
+  resolvers: Array<{ resolve: (value: unknown) => void; reject: (err: unknown) => void }>;
+  timer: ReturnType<typeof setTimeout> | null;
 }
 
 export function createApiClient(opts: ApiClientOptions): ApiClient {
+  const debounceMs = opts.patchDebounceMs ?? 50;
+
   const doFetch = async (method: string, path: string, body?: unknown, init?: RequestInit): Promise<Response> => {
     const headers = new Headers(init?.headers);
     const token = await opts.tokenProvider();
@@ -50,11 +62,59 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     return (await res.json()) as T;
   };
 
+  const patchRaw = async <T>(path: string, body: unknown, init?: RequestInit) =>
+    asJson<T>(await doFetch('PATCH', path, body, init));
+
+  const pending = new Map<string, PendingPatch>();
+
+  const flushOne = async (path: string): Promise<void> => {
+    const entry = pending.get(path);
+    if (!entry) return;
+    pending.delete(path);
+    if (entry.timer !== null) {
+      clearTimeout(entry.timer);
+      entry.timer = null;
+    }
+    try {
+      const result = await patchRaw<unknown>(path, entry.merged);
+      entry.resolvers.forEach(r => r.resolve(result));
+    } catch (err) {
+      entry.resolvers.forEach(r => r.reject(err));
+    }
+  };
+
+  const enqueuePatch = <T>(path: string, body: Record<string, unknown>): Promise<T> => {
+    return new Promise<T>((resolve, reject) => {
+      const existing = pending.get(path);
+      if (existing) {
+        Object.assign(existing.merged, body);
+        existing.resolvers.push({ resolve: resolve as (v: unknown) => void, reject });
+        if (existing.timer !== null) clearTimeout(existing.timer);
+        existing.timer = setTimeout(() => { void flushOne(path); }, debounceMs);
+        return;
+      }
+      const entry: PendingPatch = {
+        merged: { ...body },
+        resolvers: [{ resolve: resolve as (v: unknown) => void, reject }],
+        timer: null,
+      };
+      entry.timer = setTimeout(() => { void flushOne(path); }, debounceMs);
+      pending.set(path, entry);
+    });
+  };
+
+  const flushPatches = async (): Promise<void> => {
+    const paths = Array.from(pending.keys());
+    await Promise.all(paths.map(p => flushOne(p)));
+  };
+
   return {
     get: async <T>(path: string, init?: RequestInit) => asJson<T>(await doFetch('GET', path, undefined, init)),
     post: async <T>(path: string, body: unknown, init?: RequestInit) => asJson<T>(await doFetch('POST', path, body, init)),
-    patch: async <T>(path: string, body: unknown, init?: RequestInit) => asJson<T>(await doFetch('PATCH', path, body, init)),
+    patch: <T>(path: string, body: unknown, init?: RequestInit) => patchRaw<T>(path, body, init),
     delete: async (path: string, init?: RequestInit) => { await doFetch('DELETE', path, undefined, init); },
+    enqueuePatch,
+    flushPatches,
   };
 }
 

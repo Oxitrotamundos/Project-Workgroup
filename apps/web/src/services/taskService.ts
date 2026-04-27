@@ -89,8 +89,31 @@ export class TaskService {
   }
 
   static async updateTask(id: string, data: UpdateTaskDto): Promise<Task> {
-    const result = await apiClient.patch<any>(`/v1/tasks/${id}`, data);
+    const result = await apiClient.enqueuePatch<any>(`/v1/tasks/${id}`, data as Record<string, unknown>);
     return toDomain(result);
+  }
+
+  static async getDescendants(projectId: string, rootId: string): Promise<Task[]> {
+    const all = await this.getProjectTasks(projectId);
+    const childrenByParent = new Map<string, Task[]>();
+    for (const t of all) {
+      const pid = t.parentId ?? '';
+      if (!pid) continue;
+      const list = childrenByParent.get(pid) ?? [];
+      list.push(t);
+      childrenByParent.set(pid, list);
+    }
+    const out: Task[] = [];
+    const stack = [rootId];
+    while (stack.length) {
+      const current = stack.pop()!;
+      const kids = childrenByParent.get(current) ?? [];
+      for (const k of kids) {
+        out.push(k);
+        stack.push(k.id);
+      }
+    }
+    return out;
   }
 
   static async deleteTask(id: string): Promise<void> {
