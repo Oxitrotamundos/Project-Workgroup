@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request = require('supertest');
 import { bootE2E, E2EHandle } from './e2e-setup';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AuthGuard } from '../src/auth/auth.guard';
@@ -47,7 +47,6 @@ describe('TaskLinks (e2e)', () => {
     });
     projectId = project.id;
 
-    // Create three tasks
     const makeTask = (name: string, order: string) =>
       prisma.task.create({
         data: {
@@ -94,7 +93,6 @@ describe('TaskLinks (e2e)', () => {
   });
 
   it('POST cycle link → 409', async () => {
-    // A→B already exists, now try B→A (cycle)
     const res = await request(handle.app.getHttpServer())
       .post(`/v1/projects/${projectId}/task-links`)
       .set('Authorization', 'Bearer fake-token')
@@ -111,7 +109,6 @@ describe('TaskLinks (e2e)', () => {
   });
 
   it('DELETE /v1/task-links/:id → 204', async () => {
-    // Get the first link ID
     const listRes = await request(handle.app.getHttpServer())
       .get(`/v1/projects/${projectId}/task-links`)
       .set('Authorization', 'Bearer fake-token');

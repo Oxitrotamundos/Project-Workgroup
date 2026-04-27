@@ -1,4 +1,4 @@
-import request from 'supertest';
+import request = require('supertest');
 import { bootE2E, E2EHandle } from './e2e-setup';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AuthGuard } from '../src/auth/auth.guard';
@@ -79,7 +79,6 @@ describe('Workload (e2e)', () => {
   });
 
   it('GET /v1/projects/:id/workload?dateFrom=&dateTo= → filters by date range', async () => {
-    // Add another entry outside date range
     await request(handle.app.getHttpServer())
       .post(`/v1/projects/${projectId}/workload`)
       .set('Authorization', 'Bearer fake-token')
