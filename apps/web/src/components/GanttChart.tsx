@@ -1,17 +1,14 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Gantt, Willow, Toolbar, defaultToolbarButtons } from 'wx-react-gantt';
 import type { Task } from '../types/domain';
-import { FirestoreGanttDataProvider } from '../services/ganttDataProvider';
+import { GanttDataProvider } from '../services/ganttDataProvider';
 import { taskManager } from '../services/taskManager';
 import { LocaleProvider } from './LocaleProvider';
 import { setupAutoLocalization } from '../utils/ganttLocalizer';
 
-// Importar localizaciones
 import coreLocaleEs from 'wx-core-locales/locales/es';
 import ganttLocaleEs from '../locales/gantt-es';
 
-// Configuración global de localización
-// Intentamos configurar la localización globalmente si existe el objeto global wx
 declare global {
   interface Window {
     wx?: any;
@@ -20,28 +17,21 @@ declare global {
   }
 }
 
-// Configurar localización globalmente al cargar el componente
 const setupGlobalLocalization = () => {
   if (typeof window !== 'undefined') {
-    // Configurar localización global para SVAR
     window.wx = window.wx || {};
     window.wx.locales = window.wx.locales || {};
-
-    // Configurar el locale español
     window.wx.locales['es'] = {
       ...coreLocaleEs,
       ...ganttLocaleEs
     };
 
-    // Establecer español como locale por defecto
     window.wx.locale = 'es';
 
-    // También intentar configurar directamente en el objeto global de i18n si existe
     if (window.wx.i18n) {
       window.wx.i18n.setLocale('es');
     }
 
-    // Configurar variables globales de localización que SVAR podría usar
     window.wxLocale = 'es';
     window.wxLocales = window.wx.locales;
 
@@ -52,8 +42,6 @@ const setupGlobalLocalization = () => {
     });
   }
 };
-
-// Tipos para el componente Gantt (eliminados los no utilizados)
 
 interface GanttScale {
   unit: 'day' | 'week' | 'month' | 'year';
@@ -88,22 +76,23 @@ const GanttChart: React.FC<GanttChartProps> = ({
 }) => {
   const internalApiRef = useRef<any>(null);
   const apiRef = externalApiRef || internalApiRef;
-  const [dataProvider, setDataProvider] = useState<FirestoreGanttDataProvider | null>(null);
+  const [dataProvider, setDataProvider] = useState<GanttDataProvider | null>(null);
   const [ganttData, setGanttData] = useState<{ tasks: any[], links: any[] }>({ tasks: [], links: [] });
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const errorBannerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mutationObserverRef = useRef<MutationObserver | null>(null);
-  const taskStateRef = useRef<Map<number, boolean>>(new Map());
+  const taskStateRef = useRef<Map<number | string, boolean>>(new Map());
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const localizationCleanupRef = useRef<(() => void) | null>(null);
+  const listenersInstalledRef = useRef(false);
 
-  // Configurar localización al montar el componente
   useEffect(() => {
     setupGlobalLocalization();
 
-    // Configurar auto-localización del DOM después de un pequeño delay
     const timeoutId = setTimeout(() => {
       const cleanup = setupAutoLocalization();
       localizationCleanupRef.current = cleanup;
-    }, 500); // Delay para asegurar que el Gantt esté montado
+    }, 500);
 
     return () => {
       clearTimeout(timeoutId);
@@ -114,19 +103,21 @@ const GanttChart: React.FC<GanttChartProps> = ({
     };
   }, []);
 
-  // Inicializar el data provider y suscribirse a eventos del TaskManager
   useEffect(() => {
     if (projectId && !dataProvider) {
-      console.log('Inicializando FirestoreGanttDataProvider para proyecto:', projectId);
-      const provider = new FirestoreGanttDataProvider(projectId);
+      console.log('Inicializando GanttDataProvider para proyecto:', projectId);
+      const provider = new GanttDataProvider(projectId);
 
-      // Configurar listener solo para operaciones que requieren recarga completa (add/delete)
+      provider.setOnError(({ message }) => {
+        setErrorBanner(message);
+        if (errorBannerTimeoutRef.current) clearTimeout(errorBannerTimeoutRef.current);
+        errorBannerTimeoutRef.current = setTimeout(() => setErrorBanner(null), 4000);
+      });
+
       provider.on('data-updated', async (eventData: any) => {
         console.log('Evento de actualización recibido:', eventData);
 
-        // Solo recargar para operaciones que realmente lo requieren
-        // NOTE: move-task no requiere recarga ya que el Gantt maneja la UI localmente
-        if (eventData.action === 'add-task' || eventData.action === 'delete-task') {
+        if (eventData.reload || eventData.action === 'add-task' || eventData.action === 'delete-task') {
           console.log('Recargando datos para operación:', eventData.action);
           try {
             const data = await provider.getData();
@@ -135,7 +126,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
             console.error('Error recargando datos:', error);
           }
         } else if (eventData.action === 'sync-error') {
-          // Error de sincronización - necesita recarga completa para consistencia
           console.warn('Error de sincronización detectado, recargando datos para consistencia');
           try {
             const data = await provider.getData();
@@ -148,7 +138,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
         }
       });
 
-      // Suscribirse a eventos del TaskManager solo para tareas creadas externamente (fuera del Gantt)
       const handleTaskManagerEvent = async (eventData: any) => {
         console.log('GanttChart: Evento de TaskManager recibido:', eventData);
 
@@ -167,23 +156,25 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
       setDataProvider(provider);
 
-      // Cleanup
       return () => {
         taskManager.off(handleTaskManagerEvent);
+        provider.setOnError(null);
+        if (errorBannerTimeoutRef.current) {
+          clearTimeout(errorBannerTimeoutRef.current);
+          errorBannerTimeoutRef.current = null;
+        }
+        listenersInstalledRef.current = false;
 
-        // Cleanup mutation observer
         if (mutationObserverRef.current) {
           mutationObserverRef.current.disconnect();
           mutationObserverRef.current = null;
         }
 
-        // Cleanup polling
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
         }
 
-        // Cleanup auto-localization
         if (localizationCleanupRef.current) {
           localizationCleanupRef.current();
           localizationCleanupRef.current = null;
@@ -195,20 +186,18 @@ const GanttChart: React.FC<GanttChartProps> = ({
       if (dataProvider) {
         dataProvider.destroy();
       }
+      listenersInstalledRef.current = false;
 
-      // Cleanup mutation observer
       if (mutationObserverRef.current) {
         mutationObserverRef.current.disconnect();
         mutationObserverRef.current = null;
       }
 
-      // Cleanup polling
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
 
-      // Cleanup auto-localization
       if (localizationCleanupRef.current) {
         localizationCleanupRef.current();
         localizationCleanupRef.current = null;
@@ -216,7 +205,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     };
   }, [projectId]);
 
-  // Cargar datos iniciales
   useEffect(() => {
     if (dataProvider) {
       const loadData = async () => {
@@ -233,7 +221,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   }, [dataProvider]);
 
-  // Actualizar datos cuando cambian las tareas desde props
   useEffect(() => {
     if (dataProvider && tasks.length > 0) {
       const loadData = async () => {
@@ -250,19 +237,12 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   }, [tasks, dataProvider]);
 
-
-
-  // Los datos ahora vienen del FirestoreGanttDataProvider
-  // ganttData se actualiza automáticamente cuando cambian los datos en Firestore
-
-  // Configuración de escalas de tiempo
   const scales: GanttScale[] = React.useMemo(() => [
     { unit: 'month', step: 1, format: 'MMMM yyyy' },
     { unit: 'week', step: 1, format: 'w' },
     { unit: 'day', step: 1, format: 'd' }
   ], []);
 
-  // Configuración de localización en español (para uso en la función de inicialización)
   const locale = React.useMemo(() => {
     return {
       ...coreLocaleEs,
@@ -270,9 +250,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
     };
   }, []);
 
-  // Configuración de markers - marker para el día actual
   const markers = React.useMemo(() => {
-    // Normalizar la fecha a las 00:00:00 del día actual para posicionamiento preciso
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -285,7 +263,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     ];
   }, []);
 
-  // Configuración de columnas
   const columns: GanttColumn[] = React.useMemo(() => [
     { id: 'text', header: 'Nombre de la tarea', flexGrow: 2 },
     { id: 'start', header: 'Fecha de inicio', align: 'center', flexGrow: 1 },
@@ -301,7 +278,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
           <div class="task-actions">
             <button
               class="add-child-btn"
-              onclick="window.addChildTask(${task.id})"
+              onclick="window.addChildTask('${String(task.id).replace(/'/g, "\\'")}')"
               title="Agregar subtarea"
             >
               +
@@ -312,20 +289,17 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   ], [dataProvider]);
 
-  // Función para calcular diferencia de días
   const dayDiff = (next: Date, prev: Date): number => {
     const d = (next.getTime() - prev.getTime()) / 1000 / 60 / 60 / 24;
     return Math.ceil(Math.abs(d));
   };
 
-  // Función para obtener el progreso de una summary task
   const getSummaryProgress = (id: number): number => {
     const [totalProgress, totalDuration] = collectProgressFromKids(id);
     const res = totalProgress / totalDuration;
     return isNaN(res) ? 0 : Math.round(res);
   };
 
-  // Función para recopilar progreso de tareas hijas
   const collectProgressFromKids = (id: number): [number, number] => {
     let totalProgress = 0;
     let totalDuration = 0;
@@ -334,7 +308,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
     const task = apiRef.current.getTask(id);
     if (!task) return [0, 0];
-    
+
     const kids = task.data;
 
     kids?.forEach((kid: any) => {
@@ -353,7 +327,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     return [totalProgress, totalDuration];
   };
 
-  // Función para recalcular el progreso de summary tasks
   const recalcSummaryProgress = (id: number, self: boolean = false) => {
     if (!apiRef.current) return;
 
@@ -365,7 +338,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
       const summary = self && task.type === 'summary' ? id : tasks.getSummaryId(id);
 
       if (summary) {
+        const summaryTask = apiRef.current.getTask(summary);
         const progress = getSummaryProgress(summary);
+        const current = Math.round(summaryTask?.progress ?? 0);
+        if (current === progress) return;
         apiRef.current.exec('update-task', {
           id: summary,
           task: { progress }
@@ -374,69 +350,60 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   };
 
-  // Optimized collapse detection using multiple methods
-  const setupCollapseDetection = useCallback((api: any, provider: FirestoreGanttDataProvider | null) => {
+  const setupCollapseDetection = useCallback((api: any, provider: GanttDataProvider | null) => {
     if (!provider || mutationObserverRef.current) return;
 
-    // Initialize task state tracking
     const initializeTaskStates = () => {
       const tasks = api.getState()?.tasks;
       if (tasks && Array.isArray(tasks)) {
         tasks.forEach((task: any) => {
           if (task.data && task.data.length > 0) {
-            // Task has children, track its open state
-            const isOpen = !task.$collapsed; // wx-react-gantt uses $collapsed property
+            const isOpen = !task.$collapsed;
             taskStateRef.current.set(task.id, isOpen);
           }
         });
       }
     };
 
-    // Initialize immediately and after small delay to catch late-loading tasks
     initializeTaskStates();
     setTimeout(initializeTaskStates, 200);
 
-    // Enhanced mutation observer with better detection
     const observer = new MutationObserver((mutations) => {
       let shouldDetectChanges = false;
-      
+
       mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && 
-            (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
-          
+        if (mutation.type === 'attributes' &&
+          (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+
           const element = mutation.target as HTMLElement;
-          
-          // Look for any gantt-related class changes that might indicate expand/collapse
-          if (element.classList && 
-              (element.classList.contains('wx-gantt-tree-cell') ||
-               element.classList.contains('wx-gantt-task') ||
-               element.classList.contains('wx-gantt-row') ||
-               element.querySelector('.wx-gantt-tree-cell'))) {
-            
+
+          if (element.classList &&
+            (element.classList.contains('wx-gantt-tree-cell') ||
+              element.classList.contains('wx-gantt-task') ||
+              element.classList.contains('wx-gantt-row') ||
+              element.querySelector('.wx-gantt-tree-cell'))) {
+
             shouldDetectChanges = true;
           }
         }
-        
-        // Also detect when child elements are added/removed (collapse/expand effects)
+
         if (mutation.type === 'childList') {
           const element = mutation.target as HTMLElement;
-          if (element.classList && 
-              (element.classList.contains('wx-gantt') ||
-               element.closest('.wx-gantt'))) {
+          if (element.classList &&
+            (element.classList.contains('wx-gantt') ||
+              element.closest('.wx-gantt'))) {
             shouldDetectChanges = true;
           }
         }
       });
-      
+
       if (shouldDetectChanges) {
-        // Use immediate detection for better responsiveness
         setTimeout(() => {
           detectCollapseChanges(api, provider);
         }, 10);
       }
     });
 
-    // Start observing the gantt container
     const ganttContainer = document.querySelector('.wx-gantt');
     if (ganttContainer) {
       observer.observe(ganttContainer, {
@@ -449,23 +416,18 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   }, []);
 
-  // Optimized collapse detection
-  const detectCollapseChanges = useCallback(async (api: any, provider: FirestoreGanttDataProvider | null) => {
+  const detectCollapseChanges = useCallback(async (api: any, provider: GanttDataProvider | null) => {
     if (!api || !provider) {
       return;
     }
 
     try {
-      // Get tasks using the most reliable method (_tasks from state)
       let taskArray: any[] = [];
-
-      // Primary method: Get tasks from state._tasks (most reliable)
       const state = api.getState();
       if (state?._tasks && Array.isArray(state._tasks)) {
         taskArray = state._tasks;
       }
 
-      // Fallback methods if primary fails
       if (taskArray.length === 0) {
         if (typeof api.getTaskIds === 'function') {
           const taskIds = api.getTaskIds();
@@ -486,13 +448,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
       if (taskArray && Array.isArray(taskArray) && taskArray.length > 0) {
         let changesDetected = 0;
 
-        // Process collapse/expand state changes
         const changePromises = taskArray.map(async (task: any) => {
           if (task.data && task.data.length > 0) {
-            // Get current collapse state from wx-react-gantt
             let currentlyOpen = true; // default
 
-            // wx-react-gantt uses 'open' property to track state
             if (task.open !== undefined) {
               currentlyOpen = task.open;
             } else if (task.$collapsed !== undefined) {
@@ -504,12 +463,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
             const previouslyOpen = taskStateRef.current.get(task.id);
 
             if (previouslyOpen !== undefined && previouslyOpen !== currentlyOpen) {
-              // State change detected
               taskStateRef.current.set(task.id, currentlyOpen);
               changesDetected++;
 
               try {
-                // Sync with Firestore
                 await provider.handleExpandCollapseState({
                   id: task.id,
                   isOpen: currentlyOpen
@@ -520,7 +477,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
                 console.error(`Error sincronizando estado de tarea ${task.id}:`, syncError);
               }
             } else if (previouslyOpen === undefined) {
-              // First time tracking this task
               taskStateRef.current.set(task.id, currentlyOpen);
             }
           }
@@ -537,41 +493,40 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   }, []);
 
-
-
-  // Función global para agregar subtarea
-  const addChildTask = useCallback(async (parentId: number) => {
+  const addChildTask = useCallback(async (parentId: number | string) => {
     if (!apiRef.current || !dataProvider) return;
 
     try {
-      // Obtener el firestoreId del padre usando el mapeo
-      const parentFirestoreId = dataProvider.getFirestoreIdFromGanttId(parentId);
+      const parentTaskId = dataProvider.getTaskIdFromGanttId(parentId);
 
-      if (!parentFirestoreId) {
-        console.error('No se encontró el ID de Firestore para la tarea padre:', parentId);
+      if (!parentTaskId) {
+        console.error('No se encontró el ID de la tarea padre:', parentId);
         return;
       }
 
-      // Crear subtarea con skipEvent=true para evitar recarga del componente
-      await taskManager.createSubtask(parentFirestoreId, {
+      await taskManager.createSubtask(parentTaskId, {
         projectId,
         name: 'Nueva Subtarea',
         description: 'Subtarea creada desde el Gantt',
         priority: 'medium',
         type: 'task',
         estimatedHours: 8,
-        skipEvent: true // Evitar evento que causaría recarga y colapso
+        skipEvent: true
       });
 
-      console.log('Subtarea creada exitosamente para padre:', parentFirestoreId);
+      console.log('Subtarea creada exitosamente para padre:', parentTaskId);
 
     } catch (error) {
       console.error('Error creando subtarea:', error);
     }
   }, [dataProvider, projectId]);
 
-  // Función de inicialización del Gantt
   const initGantt = useCallback((api: any) => {
+    if (!api) {
+      console.warn('initGantt: api es undefined/null, se omite la inicialización');
+      return;
+    }
+
     if (apiRef.current) {
       Object.assign(apiRef.current, api);
     } else {
@@ -582,7 +537,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
       });
     }
 
-    // Configurar localización directamente en el API del Gantt
     try {
       if (api && typeof api.setLocale === 'function') {
         console.log('Configurando localización via API');
@@ -595,92 +549,84 @@ const GanttChart: React.FC<GanttChartProps> = ({
       console.warn('No se pudo configurar la localización via API:', error);
     }
 
-    // Configurar el data provider como el siguiente en la cadena de eventos
     if (dataProvider) {
-      console.log('Configurando FirestoreGanttDataProvider como siguiente en la cadena');
-      
-      // Guard defensivo (aunque setNext funciona en nuestro caso)
+      console.log('Configurando GanttDataProvider como siguiente en la cadena');
+
       if (typeof api.setNext === 'function') {
         api.setNext(dataProvider);
         console.log('setNext configurado exitosamente');
       } else {
         console.warn('setNext no disponible, usando configuración alternativa');
-        // Fallback directo sin setNext
         dataProvider.setGanttApi(api);
       }
-      
-      // Pasar referencia del API al dataProvider para consultas directas (sin crear loop)
+
       dataProvider.setGanttApi(api);
-      
-      // NOTA: Según documentación oficial, el estado expand/collapse se controla 
-      // mediante la propiedad 'open' en los datos iniciales, no mediante API
+
       console.log('Estado de expand/collapse se gestiona mediante propiedad open en datos iniciales');
     }
 
-    // Inicializar el cálculo automático de progreso para summary tasks existentes
-    const currentTasks = api.getState()?.tasks;
-    if (currentTasks && Array.isArray(currentTasks)) {
-      currentTasks.forEach((task: any) => {
-        recalcSummaryProgress(task.id, true);
+    if (!listenersInstalledRef.current) {
+      listenersInstalledRef.current = true;
+
+      const currentTasks = api.getState()?.tasks;
+      if (currentTasks && Array.isArray(currentTasks)) {
+        currentTasks.forEach((task: any) => {
+          recalcSummaryProgress(task.id, true);
+        });
+      }
+
+      api.on('update-task', ({ id }: any) => {
+        recalcSummaryProgress(id);
       });
+
+      api.on('delete-task', ({ source }: any) => {
+        recalcSummaryProgress(source, true);
+      });
+
+      api.on('copy-task', ({ id }: any) => {
+        recalcSummaryProgress(id);
+      });
+
+      api.on('move-task', ({ id, source, inProgress }: any) => {
+        if (inProgress) return;
+
+        const movedTask = api.getTask(id);
+        if (movedTask && movedTask.parent !== source) {
+          recalcSummaryProgress(source, true);
+        }
+        recalcSummaryProgress(id);
+      });
+
+      setTimeout(() => {
+        setupCollapseDetection(api, dataProvider);
+
+        pollingIntervalRef.current = setInterval(() => {
+          if (dataProvider && api) {
+            try {
+              detectCollapseChanges(api, dataProvider);
+            } catch (error) {
+              console.error('Error en polling detection:', error);
+            }
+          }
+        }, 1000);
+      }, 100);
     }
 
-    api.on('update-task', ({ id }: any) => {
-      recalcSummaryProgress(id);
-    });
-
-    api.on('delete-task', ({ source }: any) => {
-      recalcSummaryProgress(source, true);
-    });
-
-    api.on('copy-task', ({ id }: any) => {
-      recalcSummaryProgress(id);
-    });
-
-    api.on('move-task', ({ id, source, inProgress }: any) => {
-      if (inProgress) return;
-
-      const movedTask = api.getTask(id);
-      if (movedTask && movedTask.parent !== source) {
-        recalcSummaryProgress(source, true);
-      }
-      recalcSummaryProgress(id);
-    });
-
-    // Setup collapse detection using DOM observation + polling
-    setTimeout(() => {
-      setupCollapseDetection(api, dataProvider);
-
-      // Polling para capturar cambios que el MutationObserver pueda perderse
-      pollingIntervalRef.current = setInterval(() => {
-        if (dataProvider && api) {
-          try {
-            detectCollapseChanges(api, dataProvider);
-          } catch (error) {
-            console.error('Error en polling detection:', error);
-          }
-        }
-      }, 1000); // Verificar cada segundo
-    }, 100);
-
-    // Configurar listeners estándar para el progreso de summary tasks
-
-    console.log('Gantt API inicializado correctamente con FirestoreGanttDataProvider');
+    console.log('Gantt API inicializado correctamente con GanttDataProvider');
   }, [dataProvider, projectId, locale]);
 
-  // Efecto para inicializar el Gantt cuando el dataProvider y los datos estén listos
   useEffect(() => {
-    if (apiRef.current && dataProvider && ganttData.tasks.length >= 0) {
-      // Retrasar la inicialización para permitir que el Gantt monte con datos
+    if (apiRef.current && dataProvider) {
       const initTimer = setTimeout(() => {
-        initGantt(apiRef.current);
-      }, 50); // Pequeño delay para asegurar que el Gantt tenga datos
+        if (apiRef.current) {
+          initGantt(apiRef.current);
+        }
+      }, 50);
 
       return () => clearTimeout(initTimer);
     }
-  }, [dataProvider, ganttData, initGantt]);
+  }, [dataProvider, initGantt]);
 
-  // Configurar función global para agregar subtareas
   useEffect(() => {
     (window as any).addChildTask = addChildTask;
 
@@ -714,7 +660,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     );
   }
 
-  // Mostrar estado vacío cuando no hay tareas
   if (!loading && tasks.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -737,18 +682,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     );
   }
 
-  /**
-   * Handler personalizado para el botón "New Task" del toolbar.
-   * 
-   * IMPORTANTE: Los botones del defaultToolbarButtons no vienen con handlers
-   * asignados por defecto. Para que el botón "New Task" funcione, necesitamos
-   * asignar manualmente un handler personalizado que use nuestro TaskManager.
-   * 
-   * Esta solución garantiza que:
-   * - El botón "New Task" crea tareas usando el TaskManager centralizado
-   * - Las tareas se sincronizan automáticamente con el GanttChart
-   * - Se mantiene la consistencia del flujo de creación de tareas
-   */
   const handleAddTaskFromToolbar = async () => {
     try {
       await taskManager.createTask({
@@ -763,13 +696,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   };
 
-  /**
-   * Configuración personalizada del toolbar.
-   * 
-   * - Filtra botones 'edit-task' y 'delete-task' (no implementados)
-   * - Asigna handler personalizado al botón 'add-task' para usar TaskManager
-   * - Mantiene todos los demás botones con su funcionalidad original
-   */
   const toolbarItems = defaultToolbarButtons
     .filter(button => button.id !== 'edit-task' && button.id !== 'delete-task')
     .map(button => {
@@ -782,15 +708,16 @@ const GanttChart: React.FC<GanttChartProps> = ({
       return button;
     });
 
-
-
   return (
     <LocaleProvider>
       <div className="h-full gantt-container relative">
-        {/* Barra de herramientas */}
+        {errorBanner && (
+          <div className="absolute top-2 right-2 z-50 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded shadow text-sm">
+            {errorBanner}
+          </div>
+        )}
         <Toolbar api={apiRef.current} items={toolbarItems} />
 
-        {/* Gantt Chart */}
         <Willow>
           <Gantt
             init={initGantt}
