@@ -20,20 +20,30 @@ export interface GanttDataProviderData {
   links: any[];
 }
 
-export class FirestoreGanttDataProvider {
+export type GanttErrorCallback = (err: { message: string; cause?: unknown }) => void;
+
+export class GanttDataProvider {
   private projectId: string;
   private listeners: Map<string, Function[]> = new Map();
   private _ganttApi: any = null;
   private _next: any = null;
-  private tempIdMapping: Map<string, string> = new Map(); // temp://... -> real ID
+  private tempIdMapping: Map<string, string> = new Map();
   private taskCache: Map<string, Task> = new Map();
   private linkCache: Map<string, TaskLink> = new Map();
+  private onError: GanttErrorCallback | null = null;
 
   constructor(projectId: string) {
     this.projectId = projectId;
   }
 
-  getFirestoreIdFromGanttId(ganttId: number): string | undefined {
+  setOnError(cb: GanttErrorCallback | null): void {
+    this.onError = cb;
+  }
+
+  getTaskIdFromGanttId(ganttId: number | string): string | undefined {
+    if (typeof ganttId === 'string' && ganttId.startsWith('temp://')) {
+      return this.tempIdMapping.get(ganttId);
+    }
     return String(ganttId);
   }
 
@@ -41,11 +51,11 @@ export class FirestoreGanttDataProvider {
     return this.taskCache.get(taskId);
   }
 
-  getFullTaskDataByGanttId(ganttId: number): Task | undefined {
+  getFullTaskDataByGanttId(ganttId: number | string): Task | undefined {
     return this.getFullTaskData(String(ganttId));
   }
 
-  getLinkFirestoreIdFromGanttId(ganttId: number | string): string | undefined {
+  getLinkIdFromGanttId(ganttId: number | string): string | undefined {
     if (typeof ganttId === 'string' && ganttId.startsWith('temp://')) {
       return this.linkCache.get(ganttId)?.id;
     }
@@ -57,13 +67,13 @@ export class FirestoreGanttDataProvider {
   }
 
   getFullLinkDataByGanttId(ganttId: number | string): TaskLink | undefined {
-    const linkId = this.getLinkFirestoreIdFromGanttId(ganttId);
+    const linkId = this.getLinkIdFromGanttId(ganttId);
     return linkId ? this.getFullLinkData(linkId) : undefined;
   }
 
   async restoreExpansionStates(): Promise<void> {
     if (!this._ganttApi) {
-      console.warn('FirestoreGanttDataProvider: API del Gantt no disponible para restaurar estados');
+      console.warn('GanttDataProvider: API del Gantt no disponible para restaurar estados');
       return;
     }
 
@@ -76,12 +86,11 @@ export class FirestoreGanttDataProvider {
         return;
       }
 
-      console.log('FirestoreGanttDataProvider: Iniciando restauración de estados de expansión');
+      console.log('GanttDataProvider: Iniciando restauración de estados de expansión');
       let restoredCount = 0;
 
       for (const [taskId, taskData] of this.taskCache.entries()) {
-        const ganttId = Number(taskId);
-        if (isNaN(ganttId)) continue;
+        const ganttId = taskId;
 
         const ganttTask = this._ganttApi.getTask(ganttId);
         const hasChildren = ganttTask && ganttTask.data && ganttTask.data.length > 0;
@@ -107,9 +116,9 @@ export class FirestoreGanttDataProvider {
         }
       }
 
-      console.log(`FirestoreGanttDataProvider: Restauración completada. ${restoredCount} tareas procesadas`);
+      console.log(`GanttDataProvider: Restauración completada. ${restoredCount} tareas procesadas`);
     } catch (error) {
-      console.error('FirestoreGanttDataProvider: Error restaurando estados de expansión:', error);
+      console.error('GanttDataProvider: Error restaurando estados de expansión:', error);
     }
   }
 
@@ -122,19 +131,19 @@ export class FirestoreGanttDataProvider {
   }
 
   async exec(action: string, data: any): Promise<any> {
-    console.log('FirestoreGanttDataProvider: Ejecutando acción:', { action, data });
+    console.log('GanttDataProvider: Ejecutando acción:', { action, data });
     try {
       const result = await this.send(action, data);
       return result;
     } catch (error) {
-      console.error('FirestoreGanttDataProvider: Error ejecutando acción:', error);
+      console.error('GanttDataProvider: Error ejecutando acción:', error);
       throw error;
     }
   }
 
   async getData(): Promise<GanttDataProviderData> {
     try {
-      console.log('FirestoreGanttDataProvider: Cargando datos del proyecto:', this.projectId);
+      console.log('GanttDataProvider: Cargando datos del proyecto:', this.projectId);
 
       const [tasks, links] = await Promise.all([
         TaskService.getProjectTasks(this.projectId),
@@ -154,7 +163,7 @@ export class FirestoreGanttDataProvider {
 
       const ganttTasks = tasks.map((task: Task) => {
         if (!task.id || !task.name) {
-          console.warn('FirestoreGanttDataProvider: Tarea con datos incompletos ignorada:', task);
+          console.warn('GanttDataProvider: Tarea con datos incompletos ignorada:', task);
           return null;
         }
 
@@ -166,28 +175,27 @@ export class FirestoreGanttDataProvider {
           if (isNaN(startDate.getTime())) startDate = new Date();
           if (isNaN(endDate.getTime())) endDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
         } catch (error) {
-          console.warn('FirestoreGanttDataProvider: Error convirtiendo fechas:', error);
+          console.warn('GanttDataProvider: Error convirtiendo fechas:', error);
           startDate = new Date();
           endDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
         }
 
         const durationInMs = endDate.getTime() - startDate.getTime();
-        const durationInDays = Math.ceil(durationInMs / (1000 * 60 * 60 * 24));
-
-        const numericId = Number(task.id);
-        const parentNumericId = task.parentId ? Number(task.parentId) : undefined;
+        const durationInDays = Number.isFinite(task.duration)
+          ? task.duration
+          : Math.ceil(durationInMs / (1000 * 60 * 60 * 24));
 
         const hasChildren = tasks.some(otherTask => otherTask.parentId === task.id);
 
         const ganttTask: any = {
-          id: numericId,
+          id: task.id,
           text: task.name,
           start: startDate,
           end: endDate,
           duration: durationInDays,
           progress: task.progress || 0,
           type: task.type || 'task',
-          parent: parentNumericId ?? 0,
+          parent: task.parentId ?? 0,
           data: []
         };
 
@@ -195,7 +203,7 @@ export class FirestoreGanttDataProvider {
           ganttTask.open = task.open !== false;
         }
 
-        ganttTask._internalFirestoreId = task.id;
+        ganttTask._internalTaskId = task.id;
 
         this.validateGanttTaskCompatibility(ganttTask);
 
@@ -205,27 +213,17 @@ export class FirestoreGanttDataProvider {
       const ganttLinks: GanttLinkData[] = [];
 
       links.forEach((link: TaskLink) => {
-        const sourceNumericId = Number(link.sourceTaskId);
-        const targetNumericId = Number(link.targetTaskId);
-
-        if (isNaN(sourceNumericId) || isNaN(targetNumericId)) {
-          console.warn('FirestoreGanttDataProvider: Enlace ignorado, IDs inválidos:', link);
-          return;
-        }
-
-        const linkNumericId = Number(link.id);
-
         const ganttLink: GanttLinkData = {
-          id: linkNumericId,
-          source: sourceNumericId,
-          target: targetNumericId,
+          id: link.id,
+          source: link.sourceTaskId,
+          target: link.targetTaskId,
           type: link.type
         };
 
         ganttLinks.push(ganttLink);
       });
 
-      console.log('FirestoreGanttDataProvider: Datos cargados:', {
+      console.log('GanttDataProvider: Datos cargados:', {
         totalTasks: tasks.length,
         validTasks: ganttTasks.length,
         totalLinks: links.length,
@@ -234,19 +232,22 @@ export class FirestoreGanttDataProvider {
 
       return { tasks: ganttTasks, links: ganttLinks };
     } catch (error) {
-      console.error('FirestoreGanttDataProvider: Error cargando datos:', error);
+      console.error('GanttDataProvider: Error cargando datos:', error);
       throw error;
     }
   }
 
   async send(action: string, data: any, _id?: string): Promise<any> {
-    console.log('FirestoreGanttDataProvider: Procesando acción:', { action, data });
+    console.log('GanttDataProvider: Procesando acción:', { action, data });
 
     try {
       switch (action) {
         case 'add-task':
           return await this.handleAddTask(data);
         case 'update-task':
+          if (data?.inProgress || data?._rollback) {
+            return { success: true };
+          }
           return await this.handleUpdateTask(data);
         case 'delete-task':
           return await this.handleDeleteTask(data);
@@ -255,7 +256,7 @@ export class FirestoreGanttDataProvider {
         case 'drag-task':
           return await this.handleDragTask(data);
         case 'render-data':
-          console.log('FirestoreGanttDataProvider: render-data procesado');
+          console.log('GanttDataProvider: render-data procesado');
           return { success: true };
         case 'add-link':
           return await this.handleAddLink(data);
@@ -280,18 +281,18 @@ export class FirestoreGanttDataProvider {
           return this._next ? this._next.send(action, data) : { success: false, error: 'Acción no soportada' };
       }
     } catch (error) {
-      console.error('FirestoreGanttDataProvider: Error procesando acción:', error);
+      console.error('GanttDataProvider: Error procesando acción:', error);
       throw error;
     }
   }
 
   private async handleAddTask(data: any): Promise<any> {
-    console.log('FirestoreGanttDataProvider: Redirigiendo creación de tarea al TaskManager');
+    console.log('GanttDataProvider: Redirigiendo creación de tarea al TaskManager');
 
     const { taskManager } = await import('./taskManager');
 
     const parentId = data.mode === 'child' && data.target
-      ? this.getFirestoreIdFromGanttId(data.target)
+      ? this.getTaskIdFromGanttId(data.target)
       : undefined;
 
     try {
@@ -326,17 +327,21 @@ export class FirestoreGanttDataProvider {
         this.tempIdMapping.set(data.id, taskId);
       }
 
+      const createdTask = await TaskService.getTask(taskId);
+      if (createdTask) this.taskCache.set(taskId, createdTask);
+      this.emit('data-updated', { action: 'add-task', reload: true, taskId });
+
       return { success: true, id: taskId };
     } catch (error) {
-      console.error('FirestoreGanttDataProvider: Error creando tarea:', error);
+      console.error('GanttDataProvider: Error creando tarea:', error);
       throw error;
     }
   }
 
   private async handleUpdateTask(data: any): Promise<any> {
-    console.log('FirestoreGanttDataProvider: Actualizando tarea:', data);
+    console.log('GanttDataProvider: Actualizando tarea:', data);
 
-    let taskId: string | undefined = data.firestoreId;
+    let taskId: string | undefined = data.taskId;
 
     if (!taskId && data.id) {
       if (typeof data.id === 'string' && data.id.startsWith('temp://')) {
@@ -347,7 +352,7 @@ export class FirestoreGanttDataProvider {
     }
 
     if (!taskId) {
-      console.error('FirestoreGanttDataProvider: No se encontró ID de tarea para actualización:', data);
+      console.error('GanttDataProvider: No se encontró ID de tarea para actualización:', data);
       throw new Error('ID de tarea requerido para actualización');
     }
 
@@ -404,41 +409,81 @@ export class FirestoreGanttDataProvider {
       }
     }
 
-    if (calls.length > 0) {
-      await Promise.all(calls);
+    if (calls.length === 0) {
+      return { success: true };
     }
 
-    return { success: true };
+    const cached = this.taskCache.get(taskId);
+    const ganttPrev = this._ganttApi?.getTask?.(taskId);
+    const snapshot = {
+      start: cached?.startDate ? new Date(cached.startDate) : ganttPrev?.start,
+      end: cached?.endDate ? new Date(cached.endDate) : ganttPrev?.end,
+      duration: ganttPrev?.duration,
+      progress: cached?.progress ?? ganttPrev?.progress,
+      text: cached?.name ?? ganttPrev?.text,
+    };
+
+    try {
+      await Promise.all(calls);
+      const updatedTask = await TaskService.getTask(taskId);
+      if (updatedTask) this.taskCache.set(taskId, updatedTask);
+      this.emit('data-updated', { action: 'task-updated', reload: true, taskId });
+      return { success: true };
+    } catch (error) {
+      console.error('GanttDataProvider: Error persistiendo update, revirtiendo UI:', error);
+      if (this._ganttApi?.exec && ganttPrev) {
+        try {
+          this._ganttApi.exec('update-task', {
+            id: taskId,
+            task: {
+              start: snapshot.start,
+              end: snapshot.end,
+              duration: snapshot.duration,
+              progress: snapshot.progress,
+              text: snapshot.text,
+            },
+            _rollback: true,
+          });
+        } catch (rollbackError) {
+          console.error('GanttDataProvider: Error en rollback visual:', rollbackError);
+        }
+      }
+      this.onError?.({ message: 'No se pudo guardar el cambio. Se revirtió.', cause: error });
+      this.emit('data-updated', { action: 'sync-error', error });
+      throw error;
+    }
   }
 
   private async handleDeleteTask(data: any): Promise<any> {
-    console.log('FirestoreGanttDataProvider: Eliminando tarea:', data);
+    console.log('GanttDataProvider: Eliminando tarea:', data);
 
-    let taskId: string | undefined = data.firestoreId;
+    let taskId: string | undefined = data.taskId;
 
     if (!taskId && data.id) {
       taskId = String(data.id);
     }
 
     if (!taskId) {
-      console.error('FirestoreGanttDataProvider: No se encontró ID de tarea para eliminación:', data);
+      console.error('GanttDataProvider: No se encontró ID de tarea para eliminación:', data);
       throw new Error('ID de tarea requerido para eliminación');
     }
 
     await TaskService.deleteTask(taskId);
+    this.taskCache.delete(taskId);
+    this.emit('data-updated', { action: 'delete-task', reload: true, taskId });
 
     return { success: true };
   }
 
   private async handleMoveTask(data: any): Promise<any> {
-    console.log('FirestoreGanttDataProvider: Moviendo tarea:', data);
+    console.log('GanttDataProvider: Moviendo tarea:', data);
 
     if (data.inProgress) {
       return;
     }
 
     try {
-      let movedTaskId: string | undefined = data.firestoreId;
+      let movedTaskId: string | undefined = data.taskId;
       if (!movedTaskId && data.id) {
         if (typeof data.id === 'string' && data.id.startsWith('temp://')) {
           movedTaskId = this.tempIdMapping.get(data.id);
@@ -449,27 +494,31 @@ export class FirestoreGanttDataProvider {
 
       let targetTaskId: string | null = null;
       if (data.target) {
-        targetTaskId = String(data.target);
+        targetTaskId = this.getTaskIdFromGanttId(data.target) ?? String(data.target);
       }
 
       if (!movedTaskId) {
-        console.error('FirestoreGanttDataProvider: No se pudo obtener el ID de la tarea movida');
+        console.error('GanttDataProvider: No se pudo obtener el ID de la tarea movida');
         return;
       }
 
       const hierarchyResult = await this.processTaskHierarchyUpdate({ id: data.id });
 
       if (!hierarchyResult.success) {
-        console.error('FirestoreGanttDataProvider: Error en jerarquía');
+        console.error('GanttDataProvider: Error en jerarquía');
         return hierarchyResult;
       }
 
       const { TaskService: TS } = await import('./taskService');
-      await TS.updateTaskOrder(this.projectId, movedTaskId, targetTaskId || null, data.mode || 'after');
+      const updatedTask = await TS.updateTaskOrder(this.projectId, movedTaskId, targetTaskId || null, data.mode || 'after');
+      this.taskCache.set(updatedTask.id, updatedTask);
+      this.emit('data-updated', { action: 'move-task', reload: true, taskId: movedTaskId });
 
       return { success: true };
     } catch (error) {
-      console.error('FirestoreGanttDataProvider: Error al actualizar orden de tarea:', error);
+      console.error('GanttDataProvider: Error al actualizar orden de tarea:', error);
+      this.onError?.({ message: 'No se pudo mover la tarea. Recargando datos...', cause: error });
+      this.emit('data-updated', { action: 'sync-error', error });
       throw error;
     }
   }
@@ -487,7 +536,7 @@ export class FirestoreGanttDataProvider {
     let movedTaskId: string;
     if (typeof taskId === 'string' && taskId.startsWith('temp://')) {
       const resolved = this.tempIdMapping.get(taskId);
-      if (!resolved) return { success: false, error: 'Firestore ID no encontrado' };
+      if (!resolved) return { success: false, error: 'ID de tarea no encontrado' };
       movedTaskId = resolved;
     } else {
       movedTaskId = String(taskId);
@@ -498,8 +547,8 @@ export class FirestoreGanttDataProvider {
       const movedTask = this._ganttApi.getTask(taskId);
 
       if (movedTask) {
-        if (movedTask.parent) {
-          newParentId = String(movedTask.parent);
+        if (movedTask.parent && movedTask.parent !== 0 && movedTask.parent !== '0') {
+          newParentId = this.getTaskIdFromGanttId(movedTask.parent) ?? String(movedTask.parent);
         } else {
           newParentId = null;
         }
@@ -511,9 +560,11 @@ export class FirestoreGanttDataProvider {
     if (newParentId !== undefined) {
       try {
         const { TaskService: TS } = await import('./taskService');
-        await TS.updateTask(movedTaskId, { parentId: newParentId });
+        const updatedTask = await TS.updateTask(movedTaskId, { parentId: newParentId });
+        this.taskCache.set(updatedTask.id, updatedTask);
       } catch (error) {
-        console.error('FirestoreGanttDataProvider: Error actualizando parentId:', error);
+        console.error('GanttDataProvider: Error actualizando parentId:', error);
+        this.onError?.({ message: 'No se pudo mover la tarea. Recargando datos...', cause: error });
         this.emit('data-updated', { action: 'sync-error', error });
         return { success: false, error: 'Error actualizando jerarquía' };
       }
@@ -523,30 +574,8 @@ export class FirestoreGanttDataProvider {
   }
 
   private async handleDragTask(data: any): Promise<any> {
-    console.log('FirestoreGanttDataProvider: Arrastrando tarea:', data);
-
-    if (data.inProgress) {
-      return;
-    }
-
-    if (this._ganttApi && this._ganttApi.getTask) {
-      const updatedTask = this._ganttApi.getTask(data.id);
-
-      if (updatedTask) {
-        const taskData = {
-          id: data.id,
-          start: updatedTask.start,
-          end: updatedTask.end,
-          duration: updatedTask.duration,
-          text: updatedTask.text,
-          progress: updatedTask.progress,
-          type: updatedTask.type
-        };
-        return await this.handleUpdateTask(taskData);
-      }
-    }
-
-    return;
+    if (data?.inProgress) return { success: true };
+    return { success: true };
   }
 
   on(event: string, callback: Function): void {
@@ -607,19 +636,19 @@ export class FirestoreGanttDataProvider {
 
   private validateGanttTaskCompatibility(task: any): void {
     const requiredProps = ['id', 'text', 'start', 'end', 'duration', 'progress', 'type', 'parent', 'data'];
-    const allowedCustomProps = ['_internalFirestoreId'];
+    const allowedCustomProps = ['_internalTaskId'];
 
     for (const prop of requiredProps) {
       if (!(prop in task)) {
-        console.warn(`FirestoreGanttDataProvider: Propiedad requerida faltante: ${prop}`, task);
+        console.warn(`GanttDataProvider: Propiedad requerida faltante: ${prop}`, task);
       }
     }
 
     if (!(task.start instanceof Date)) {
-      console.warn('FirestoreGanttDataProvider: start no es Date object:', typeof task.start);
+      console.warn('GanttDataProvider: start no es Date object:', typeof task.start);
     }
     if (!(task.end instanceof Date)) {
-      console.warn('FirestoreGanttDataProvider: end no es Date object:', typeof task.end);
+      console.warn('GanttDataProvider: end no es Date object:', typeof task.end);
     }
 
     const taskProps = Object.keys(task);
@@ -628,15 +657,15 @@ export class FirestoreGanttDataProvider {
     );
 
     if (extraProps.length > 0) {
-      console.warn('FirestoreGanttDataProvider: Propiedades extra detectadas:', extraProps);
+      console.warn('GanttDataProvider: Propiedades extra detectadas:', extraProps);
     }
   }
 
   private async handleAddLink(data: any): Promise<GanttLinkResponse> {
-    console.log('FirestoreGanttDataProvider: Creando enlace:', data);
+    console.log('GanttDataProvider: Creando enlace:', data);
 
     try {
-      let sourceId: number, targetId: number, linkType: any, tempId: any;
+      let sourceId: number | string, targetId: number | string, linkType: any, tempId: any;
 
       if (data.link) {
         sourceId = data.link.source;
@@ -650,8 +679,8 @@ export class FirestoreGanttDataProvider {
         tempId = data.id;
       }
 
-      const sourceTaskId = String(sourceId);
-      const targetTaskId = String(targetId);
+      const sourceTaskId = this.getTaskIdFromGanttId(sourceId) ?? String(sourceId);
+      const targetTaskId = this.getTaskIdFromGanttId(targetId) ?? String(targetId);
 
       const validation = await TaskLinkService.validateLinkCreation(sourceTaskId, targetTaskId, this.projectId);
       if (!validation.valid) {
@@ -672,10 +701,11 @@ export class FirestoreGanttDataProvider {
           this.linkCache.set(String(tempId), newLink);
         }
       }
+      this.emit('data-updated', { action: 'add-link', reload: true, linkId });
 
       return { success: true, id: linkId };
     } catch (error) {
-      console.error('FirestoreGanttDataProvider: Error creando enlace:', error);
+      console.error('GanttDataProvider: Error creando enlace:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Error desconocido al crear enlace'
@@ -684,10 +714,10 @@ export class FirestoreGanttDataProvider {
   }
 
   private async handleUpdateLink(data: GanttLinkEvent): Promise<GanttLinkResponse> {
-    console.log('FirestoreGanttDataProvider: Actualizando enlace:', data);
+    console.log('GanttDataProvider: Actualizando enlace:', data);
 
     try {
-      const linkId = this.getLinkFirestoreIdFromGanttId(data.id!);
+      const linkId = this.getLinkIdFromGanttId(data.id!);
 
       if (!linkId) {
         return { success: false, error: 'No se encontró el ID para el enlace' };
@@ -709,10 +739,11 @@ export class FirestoreGanttDataProvider {
       if (updatedLink) {
         this.linkCache.set(linkId, updatedLink);
       }
+      this.emit('data-updated', { action: 'update-link', reload: true, linkId });
 
       return { success: true, id: linkId };
     } catch (error) {
-      console.error('FirestoreGanttDataProvider: Error actualizando enlace:', error);
+      console.error('GanttDataProvider: Error actualizando enlace:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Error desconocido al actualizar enlace'
@@ -721,23 +752,22 @@ export class FirestoreGanttDataProvider {
   }
 
   private async handleDeleteLink(data: GanttLinkEvent): Promise<GanttLinkResponse> {
-    console.log('FirestoreGanttDataProvider: Eliminando enlace:', data);
+    console.log('GanttDataProvider: Eliminando enlace:', data);
 
     try {
       let ganttId: string | number;
 
       if (typeof data.id === 'string') {
-        ganttId = data.id.startsWith('temp://') ? data.id : parseInt(data.id, 10);
+        ganttId = data.id;
       } else if (data.id !== undefined) {
         ganttId = data.id;
       } else {
         return { success: false, error: 'ID no definido' };
       }
 
-      let linkId = this.getLinkFirestoreIdFromGanttId(ganttId!);
+      let linkId = this.getLinkIdFromGanttId(ganttId!);
 
       if (!linkId) {
-        // Try by source/target match in cache
         if (data.source && data.target) {
           const sourceId = String(data.source);
           const targetId = String(data.target);
@@ -770,10 +800,11 @@ export class FirestoreGanttDataProvider {
 
       await TaskLinkService.deleteLink(linkId);
       this.linkCache.delete(linkId);
+      this.emit('data-updated', { action: 'delete-link', reload: true, linkId });
 
       return { success: true, id: linkId };
     } catch (error) {
-      console.error('FirestoreGanttDataProvider: Error eliminando enlace:', error);
+      console.error('GanttDataProvider: Error eliminando enlace:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Error desconocido al eliminar enlace'

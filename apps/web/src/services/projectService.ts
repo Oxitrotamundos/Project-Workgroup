@@ -21,6 +21,22 @@ const toDomain = (r: any): Project => ({
   updatedAt: r.updatedAt ?? '',
 });
 
+const toPaginatedProjects = (res: any, pageSize: number): PaginatedResponse<Project> => {
+  const rawItems = Array.isArray(res) ? res : (res?.items ?? []);
+  const items = rawItems.map(toDomain);
+  const total = typeof res?.total === 'number' ? res.total : items.length;
+  const hasMore = typeof res?.hasMore === 'boolean' ? res.hasMore : Boolean(res?.nextCursor) || items.length > pageSize;
+
+  return {
+    items: items.slice(0, pageSize),
+    total,
+    page: typeof res?.page === 'number' ? res.page : 1,
+    pageSize,
+    hasMore,
+    lastDoc: res?.lastDoc ?? res?.nextCursor,
+  };
+};
+
 export class ProjectService {
 
   static async createProject(data: CreateProjectData): Promise<string> {
@@ -52,15 +68,8 @@ export class ProjectService {
     pageSize: number = 10
   ): Promise<PaginatedResponse<Project>> {
     try {
-      const res = await apiClient.get<any[]>('/v1/projects');
-      const items = res.map(toDomain);
-      return {
-        items: items.slice(0, pageSize),
-        total: items.length,
-        page: 1,
-        pageSize,
-        hasMore: items.length > pageSize,
-      };
+      const res = await apiClient.get<any>('/v1/projects');
+      return toPaginatedProjects(res, pageSize);
     } catch (error) {
       console.error('Error getting user projects:', error);
       return { items: [], total: 0, page: 1, pageSize, hasMore: false };
@@ -98,15 +107,8 @@ export class ProjectService {
     _lastDoc?: any
   ): Promise<PaginatedResponse<Project>> {
     try {
-      const res = await apiClient.get<any[]>('/v1/projects');
-      const items = res.map(toDomain);
-      return {
-        items: items.slice(0, pageSize),
-        total: items.length,
-        page: 1,
-        pageSize,
-        hasMore: items.length > pageSize,
-      };
+      const res = await apiClient.get<any>('/v1/projects');
+      return toPaginatedProjects(res, pageSize);
     } catch (error) {
       console.error('Error getting all projects:', error);
       throw new Error('Error al obtener todos los proyectos');

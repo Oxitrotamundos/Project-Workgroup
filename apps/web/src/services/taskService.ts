@@ -7,6 +7,12 @@ import type {
 } from '../types/domain';
 import type { UpdateTaskDto } from '@project-workgroup/shared';
 
+const toNumber = (value: unknown, fallback = 0): number => {
+  if (value === null || value === undefined || value === '') return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 const toDomain = (r: any): Task => ({
   id: r.id,
   projectId: r.projectId,
@@ -14,7 +20,7 @@ const toDomain = (r: any): Task => ({
   description: r.description,
   startDate: r.startDate ?? '',
   endDate: r.endDate ?? '',
-  duration: r.duration ?? 1,
+  duration: toNumber(r.duration, 1),
   progress: r.progress ?? 0,
   assigneeId: r.assigneeId,
   parentId: r.parentId,
@@ -22,23 +28,17 @@ const toDomain = (r: any): Task => ({
   tags: r.tags ?? [],
   priority: r.priority ?? 'medium',
   color: r.color ?? '#3B82F6',
-  estimatedHours: r.estimatedHours ?? 0,
-  actualHours: r.actualHours,
+  estimatedHours: toNumber(r.estimatedHours, 0),
+  actualHours: r.actualHours === null || r.actualHours === undefined ? undefined : toNumber(r.actualHours, 0),
   status: r.status ?? 'not-started',
   type: r.type ?? 'task',
-  order: r.order ?? 0,
+  order: toNumber(r.order, 0),
   open: r.open ?? true,
   createdAt: r.createdAt ?? '',
   updatedAt: r.updatedAt ?? '',
 });
 
-/**
- * Servicio para gestionar tareas a través del API REST
- */
 export class TaskService {
-  /**
-   * Obtener el próximo número de orden para un proyecto
-   */
   static async getNextOrderForProject(projectId: string): Promise<number> {
     try {
       const tasks = await this.getProjectTasks(projectId);
@@ -51,9 +51,6 @@ export class TaskService {
     }
   }
 
-  /**
-   * Crear una nueva tarea
-   */
   static async createTask(data: CreateTaskData): Promise<string> {
     const result = await apiClient.post<any>(`/v1/projects/${data.projectId}/tasks`, {
       name: data.name,
@@ -70,9 +67,6 @@ export class TaskService {
     return result.id;
   }
 
-  /**
-   * Obtener una tarea por ID
-   */
   static async getTask(id: string): Promise<Task | null> {
     try {
       const result = await apiClient.get<any>(`/v1/tasks/${id}`);
@@ -84,9 +78,6 @@ export class TaskService {
     }
   }
 
-  /**
-   * Obtener tareas de un proyecto
-   */
   static async getProjectTasks(projectId: string, _filters?: TaskFilters): Promise<Task[]> {
     try {
       const result = await apiClient.get<any[]>(`/v1/projects/${projectId}/tasks`);
@@ -97,16 +88,11 @@ export class TaskService {
     }
   }
 
-  /**
-   * Actualizar una tarea
-   */
-  static async updateTask(id: string, data: UpdateTaskDto): Promise<void> {
-    await apiClient.patch(`/v1/tasks/${id}`, data);
+  static async updateTask(id: string, data: UpdateTaskDto): Promise<Task> {
+    const result = await apiClient.patch<any>(`/v1/tasks/${id}`, data);
+    return toDomain(result);
   }
 
-  /**
-   * Eliminar una tarea y sus enlaces asociados
-   */
   static async deleteTask(id: string): Promise<void> {
     await apiClient.delete(`/v1/tasks/${id}`);
   }
@@ -122,8 +108,9 @@ export class TaskService {
   /**
    * Actualizar el progreso de una tarea
    */
-  static async updateTaskProgress(id: string, progress: number): Promise<void> {
-    await apiClient.patch(`/v1/tasks/${id}/progress`, { progress });
+  static async updateTaskProgress(id: string, progress: number): Promise<Task> {
+    const result = await apiClient.patch<any>(`/v1/tasks/${id}/progress`, { progress });
+    return toDomain(result);
   }
 
   /**
@@ -145,30 +132,24 @@ export class TaskService {
     return this.getProjectTasks(projectId);
   }
 
-  /**
-   * Update task expand/collapse state
-   */
-  static async updateTaskExpandState(taskId: string, isOpen: boolean): Promise<void> {
-    await apiClient.patch(`/v1/tasks/${taskId}`, { open: isOpen });
+  static async updateTaskExpandState(taskId: string, isOpen: boolean): Promise<Task> {
+    const result = await apiClient.patch<any>(`/v1/tasks/${taskId}`, { open: isOpen });
+    return toDomain(result);
   }
 
-  /**
-   * Actualizar orden de tareas después de mover una tarea.
-   * El backend recibe `afterTaskId` o `beforeTaskId` (UpdateOrderDto);
-   * aquí mapeamos el `mode` del Gantt a uno de los dos.
-   */
   static async updateTaskOrder(
     _projectId: string,
     movedTaskId: string,
     targetTaskId: string | null,
     mode: 'before' | 'after'
-  ): Promise<void> {
+  ): Promise<Task> {
     const body: { afterTaskId?: string; beforeTaskId?: string } = {};
     if (targetTaskId) {
       if (mode === 'before') body.beforeTaskId = targetTaskId;
       else body.afterTaskId = targetTaskId;
     }
-    await apiClient.patch(`/v1/tasks/${movedTaskId}/order`, body);
+    const result = await apiClient.patch<any>(`/v1/tasks/${movedTaskId}/order`, body);
+    return toDomain(result);
   }
 }
 

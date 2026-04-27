@@ -305,17 +305,17 @@ export interface TaskLinkFilters {
 
 // Formato de enlace para SVAR Gantt
 export interface GanttLinkData {
-  id: number;
-  source: number;
-  target: number;
+  id: string | number;
+  source: string | number;
+  target: string | number;
   type: TaskLinkType;
 }
 
 // Evento de enlace desde SVAR Gantt
 export interface GanttLinkEvent {
   id?: number | string;
-  source?: number;
-  target?: number;
+  source?: number | string;
+  target?: number | string;
   type?: TaskLinkType;
   mode?: string;
 }

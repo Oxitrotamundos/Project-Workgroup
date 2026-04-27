@@ -2,21 +2,21 @@ declare module 'wx-react-gantt' {
   import { ComponentType, ReactNode } from 'react';
 
   export interface GanttTask {
-    id: number;
+    id: number | string;
     text: string;
     start: Date;
     end: Date;
     duration: number;
     progress: number;
     type?: 'task' | 'summary' | 'milestone';
-    parent?: number;
+    parent?: number | string;
     lazy?: boolean;
   }
 
   export interface GanttLink {
-    id: number;
-    source: number;
-    target: number;
+    id: number | string;
+    source: number | string;
+    target: number | string;
     type: 'e2s' | 's2s' | 'e2e' | 's2e';
   }
 

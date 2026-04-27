@@ -19,7 +19,6 @@ const Dashboard: React.FC = () => {
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
 
 
-  // Crear usuario en Firestore si no existe
   React.useEffect(() => {
     const createUserIfNotExists = async () => {
       if (user) {
@@ -33,7 +32,7 @@ const Dashboard: React.FC = () => {
             });
           }
         } catch (error) {
-          console.error('Error creating user in Firestore:', error);
+          console.error('Error creating user in backend:', error);
         }
       }
     };
@@ -41,7 +40,6 @@ const Dashboard: React.FC = () => {
     createUserIfNotExists();
   }, [user]);
 
-  // Actualiza la navegación cuando se cargan los proyectos - solo cuando cambia la cantidad
   const prevProjectsLength = React.useRef<number>();
   React.useEffect(() => {
     if (prevProjectsLength.current !== projects.length) {
@@ -65,7 +63,6 @@ const Dashboard: React.FC = () => {
   };
 
   const handleViewProject = (projectId: string) => {
-    // Navegar a la vista del proyecto/Gantt
     navigate(`/project/${projectId}`);
   };
 
@@ -80,7 +77,7 @@ const Dashboard: React.FC = () => {
       setEditingProject(null);
     } catch (error) {
       console.error('Error submitting project:', error);
-      throw error; // Re-throw para que el modal pueda manejar el error
+      throw error;
     }
   };
 

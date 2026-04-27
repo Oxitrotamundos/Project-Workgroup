@@ -4,7 +4,6 @@ import 'wx-react-gantt/dist/gantt.css';
 import '../styles/gantt-custom.css';
 import { useTasks } from '../hooks/usetasks';
 import { useProject } from '../hooks/useProject';
-import { useGanttActions } from '../hooks/useGanttActions';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '../contexts/NavigationContext';
 import { ProjectActions, ProjectInfo } from '../components/Layout';
@@ -21,28 +20,16 @@ const ProjectView: React.FC = () => {
   const { user } = useAuth();
   const { updateNavigation } = useNavigation();
 
-  // Hooks personalizados para manejar el estado y lógica
   const { project, loading, error, refetch } = useProject(projectId);
   const { tasks, loading: tasksLoading, error: tasksError, refetch: refetchTasks } = useTasks(projectId);
-  
-  // Hook para manejar las acciones del Gantt
-  useGanttActions({
-    projectId: projectId || '',
-    onTasksChange: refetchTasks
-  });
-
-  // Handlers para las acciones del header
-  const handleViewTeam = React.useCallback(() => {
+    const handleViewTeam = React.useCallback(() => {
     console.log('View team clicked');
-    // Aquí se podría abrir un modal para ver el equipo
   }, []);
 
   const handleChangeView = React.useCallback(() => {
     console.log('Change view clicked');
-    // Aquí se podría cambiar entre diferentes vistas del Gantt
   }, []);
 
-  // Memoriza las acciones del proyecto para prevenir recreación innecesaria
   const projectActions = React.useMemo(() => (
     <ProjectActions
       onViewTeam={handleViewTeam}
@@ -51,20 +38,18 @@ const ProjectView: React.FC = () => {
     />
   ), [handleViewTeam, handleChangeView]);
 
-  // Actualiza la navegación cuando se carga el proyecto
   const prevProjectName = React.useRef<string>();
   React.useEffect(() => {
     if (project && prevProjectName.current !== project.name) {
       updateNavigation({
         title: project.name,
-        subtitle: undefined, // Limpia el subtítulo de la navegación cuando se cambia de proyecto
+        subtitle: undefined,
         actions: projectActions
       });
       prevProjectName.current = project.name;
     }
   }, [project?.name, updateNavigation, projectActions]);
 
-  // Handlers para las acciones del header
   const handleAddTask = async () => {
     if (!projectId || !user) return;
     
@@ -79,8 +64,6 @@ const ProjectView: React.FC = () => {
 
       console.log('Nueva tarea creada exitosamente con ID:', taskId);
       
-      // El TaskManager emitirá eventos que automáticamente actualizarán el GanttChart
-      // También forzar recarga de las tareas para actualizar el contador
       refetchTasks();
     } catch (error) {
       console.error('Error creando tarea:', error);
@@ -92,8 +75,6 @@ const ProjectView: React.FC = () => {
       }
     }
   };
-
-  // Funcionalidades de Firestore implementadas para creación de tareas
 
   return (
     <ProjectStateManager
