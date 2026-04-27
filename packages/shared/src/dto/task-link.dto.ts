@@ -1,4 +1,4 @@
-import { IsIn, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 
 export const TASK_LINK_TYPES = ['e2s', 's2s', 'e2e', 's2e'] as const;
 export type TaskLinkType = (typeof TASK_LINK_TYPES)[number];
@@ -14,6 +14,12 @@ export class CreateTaskLinkDto {
   type!: TaskLinkType;
 }
 
+export class UpdateTaskLinkDto {
+  @IsOptional()
+  @IsIn(TASK_LINK_TYPES)
+  type?: TaskLinkType;
+}
+
 export interface TaskLinkResponse {
   id: string;
   projectId: string;
@@ -21,4 +27,5 @@ export interface TaskLinkResponse {
   targetTaskId: string;
   type: TaskLinkType;
   createdAt: string;
+  updatedAt: string;
 }
