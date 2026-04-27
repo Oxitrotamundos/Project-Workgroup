@@ -592,7 +592,125 @@
         ]
       }
     },
+    "/tasks/{taskId}/source-links": {
+      "get": {
+        "operationId": "TaskLinksController_listSource",
+        "parameters": [
+          {
+            "name": "taskId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "task-links"
+        ]
+      }
+    },
+    "/tasks/{taskId}/target-links": {
+      "get": {
+        "operationId": "TaskLinksController_listTarget",
+        "parameters": [
+          {
+            "name": "taskId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "task-links"
+        ]
+      }
+    },
     "/task-links/{id}": {
+      "get": {
+        "operationId": "TaskLinksController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "task-links"
+        ]
+      },
+      "patch": {
+        "operationId": "TaskLinksController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskLinkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "task-links"
+        ]
+      },
       "delete": {
         "operationId": "TaskLinksController_remove",
         "parameters": [
@@ -833,6 +951,10 @@
         "properties": {}
       },
       "CreateTaskLinkDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateTaskLinkDto": {
         "type": "object",
         "properties": {}
       },

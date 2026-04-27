@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, CanActivate, ExecutionContext, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../prisma/prisma.service';
 import { REQUIRE_PROJECT_KEY } from './require-project.decorator';
@@ -17,7 +17,12 @@ export class ProjectMembershipGuard implements CanActivate {
     if (req.user?.role === 'admin') return true;
     const raw = req.params[paramName];
     if (!raw) throw new ForbiddenException('missing project param');
-    const projectId = BigInt(raw);
+    let projectId: bigint;
+    try {
+      projectId = BigInt(raw);
+    } catch {
+      throw new BadRequestException(`${paramName} must be a valid id`);
+    }
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
     if (!project) throw new NotFoundException('project not found');
     if (project.ownerId === req.user?.id) return true;
