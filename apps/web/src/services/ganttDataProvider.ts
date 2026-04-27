@@ -27,6 +27,17 @@ const toIsoDate = (value: Date | string | undefined | null): string | undefined 
   return undefined;
 };
 
+export const toGanttId = (id: string | number | bigint | null | undefined): GanttId | undefined => {
+  if (id === undefined || id === null || id === '') return undefined;
+  if (typeof id === 'number') return id;
+  if (typeof id === 'bigint') {
+    const n = Number(id);
+    return Number.isSafeInteger(n) ? n : String(id);
+  }
+  const n = Number(id);
+  return Number.isSafeInteger(n) ? n : id;
+};
+
 export interface GanttDataProviderData {
   tasks: GanttTask[];
   links: GanttLinkData[];
@@ -43,7 +54,6 @@ export class GanttDataProvider {
   private taskCache: Map<string, Task> = new Map();
   private linkCache: Map<string, TaskLink> = new Map();
   private onError: GanttErrorCallback | null = null;
-  private interceptorsInstalled = false;
 
   constructor(projectId: string) {
     this.projectId = projectId;
@@ -86,28 +96,16 @@ export class GanttDataProvider {
 
   setGanttApi(api: GanttApi): void {
     this._ganttApi = api;
-    this.installInterceptors(api);
   }
 
   setNext(next: { send: (action: string, data: unknown) => unknown }): void {
     this._next = next;
   }
 
-  private installInterceptors(api: GanttApi): void {
-    if (this.interceptorsInstalled) return;
-    this.interceptorsInstalled = true;
-
-    api.intercept('update-task', (d) => {
-      if (d?.inProgress || d?._rollback || d?._silent) return false;
-      return undefined;
-    });
-    api.intercept('drag-task', () => false);
-    api.intercept('move-task', (d) => (d?.inProgress ? false : undefined));
-    api.intercept('add-task', (d) => (d?._silent ? false : undefined));
-    api.intercept('delete-task', (d) => (d?._silent ? false : undefined));
-    api.intercept('add-link', (d) => (d?._silent ? false : undefined));
-    api.intercept('update-link', (d) => (d?._silent ? false : undefined));
-    api.intercept('delete-link', (d) => (d?._silent ? false : undefined));
+  private isUiOnlyEvent(data: unknown): boolean {
+    if (!data || typeof data !== 'object') return false;
+    const d = data as { inProgress?: boolean; _rollback?: boolean; _silent?: boolean };
+    return Boolean(d.inProgress || d._rollback || d._silent);
   }
 
   async exec(action: string, data: unknown): Promise<unknown> {
@@ -130,12 +128,15 @@ export class GanttDataProvider {
       .map((task) => this.toGanttTask(task, tasks))
       .filter((t): t is GanttTask => t !== null);
 
-    const ganttLinks: GanttLinkData[] = links.map((link) => ({
-      id: link.id,
-      source: link.sourceTaskId,
-      target: link.targetTaskId,
-      type: link.type,
-    }));
+    const ganttLinks: GanttLinkData[] = links
+      .map((link) => {
+        const id = toGanttId(link.id);
+        const source = toGanttId(link.sourceTaskId);
+        const target = toGanttId(link.targetTaskId);
+        if (id === undefined || source === undefined || target === undefined) return null;
+        return { id, source, target, type: link.type };
+      })
+      .filter((l): l is GanttLinkData => l !== null);
 
     return { tasks: ganttTasks, links: ganttLinks };
   }
@@ -159,15 +160,18 @@ export class GanttDataProvider {
       ? task.duration
       : Math.ceil((endDate.getTime() - startDate.getTime()) / 86_400_000);
 
+    const ganttId = toGanttId(task.id);
+    if (ganttId === undefined) return null;
+
     const ganttTask: GanttTask = {
-      id: task.id,
+      id: ganttId,
       text: task.name,
       start: startDate,
       end: endDate,
       duration: durationInDays,
       progress: task.progress || 0,
       type: task.type || 'task',
-      parent: task.parentId ?? 0,
+      parent: toGanttId(task.parentId) ?? 0,
     };
 
     if (allTasks) {
@@ -179,6 +183,10 @@ export class GanttDataProvider {
   }
 
   async send(action: string, data: unknown): Promise<unknown> {
+
+    if (this.isUiOnlyEvent(data)) return { success: true };
+    if (action === 'drag-task') return { success: true };
+
     try {
       switch (action) {
         case 'add-task':
@@ -207,9 +215,9 @@ export class GanttDataProvider {
   private applyEntityUpdate(taskId: string, fresh: Task, descendants?: Task[]): void {
     this.taskCache.set(taskId, fresh);
     const ganttTask = this.toGanttTask(fresh);
-    if (ganttTask && this._ganttApi) {
+    if (ganttTask && this._ganttApi && ganttTask.id !== undefined) {
       this._ganttApi.exec('update-task', {
-        id: taskId,
+        id: ganttTask.id,
         task: ganttTask,
         _silent: true,
       });
@@ -217,9 +225,9 @@ export class GanttDataProvider {
     descendants?.forEach((d) => {
       this.taskCache.set(d.id, d);
       const gd = this.toGanttTask(d);
-      if (gd && this._ganttApi) {
+      if (gd && this._ganttApi && gd.id !== undefined) {
         this._ganttApi.exec('update-task', {
-          id: d.id,
+          id: gd.id,
           task: gd,
           _silent: true,
         });
@@ -271,10 +279,10 @@ export class GanttDataProvider {
     if (created) {
       this.taskCache.set(taskId, created);
       const ganttTask = this.toGanttTask(created);
-      if (ganttTask && this._ganttApi && data.id !== undefined) {
+      if (ganttTask && this._ganttApi && data.id !== undefined && ganttTask.id !== undefined) {
         this._ganttApi.exec('update-task', {
           id: data.id,
-          task: { ...ganttTask, id: taskId },
+          task: { ...ganttTask, id: ganttTask.id },
           _silent: true,
         });
       }
@@ -433,11 +441,20 @@ export class GanttDataProvider {
         if (tempId !== undefined) this.linkCache.set(String(tempId), newLink);
       }
       if (tempId !== undefined && this._ganttApi) {
-        this._ganttApi.exec('update-link', {
-          id: tempId,
-          link: { id: linkId, source: sourceTaskId, target: targetTaskId, type: linkType },
-          _silent: true,
-        });
+        const linkGanttId = toGanttId(linkId);
+        const sourceGanttId = toGanttId(sourceTaskId);
+        const targetGanttId = toGanttId(targetTaskId);
+        if (
+          linkGanttId !== undefined &&
+          sourceGanttId !== undefined &&
+          targetGanttId !== undefined
+        ) {
+          this._ganttApi.exec('update-link', {
+            id: tempId,
+            link: { id: linkGanttId, source: sourceGanttId, target: targetGanttId, type: linkType },
+            _silent: true,
+          });
+        }
       }
       return { success: true, id: linkId };
     } catch (error) {
@@ -506,14 +523,10 @@ export class GanttDataProvider {
     }
   }
 
-  /**
-   * Compara el estado de expand/collapse del Gantt con el cache y emite
-   * PATCH solo donde haya divergencia. Sirve como red de seguridad si los
-   * eventos `open-task`/`close-task` no se disparan en alguna ruta.
-   */
   async reconcileExpansionStates(api: GanttApi): Promise<void> {
     const state = api.getState();
-    const tasks = state?._tasks ?? state?.tasks ?? [];
+    if (!state) return;
+    const tasks = state._tasks ?? state.tasks ?? [];
     for (const ganttTask of tasks) {
       if (!ganttTask.data || ganttTask.data.length === 0) continue;
       const cached = this.taskCache.get(String(ganttTask.id));
@@ -547,6 +560,7 @@ export class GanttDataProvider {
     this.tempIdMapping.clear();
     this.taskCache.clear();
     this.linkCache.clear();
-    this.interceptorsInstalled = false;
+    this._ganttApi = null;
+    this._next = null;
   }
 }
