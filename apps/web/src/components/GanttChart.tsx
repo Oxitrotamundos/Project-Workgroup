@@ -60,6 +60,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
 }) => {
   const internalApiRef = useRef<GanttApi | null>(null);
   const apiRef = externalApiRef ?? internalApiRef;
+  const [toolbarApi, setToolbarApi] = useState<GanttApi | null>(null);
   const [dataProvider, setDataProvider] = useState<GanttDataProvider | null>(null);
   const [ganttData, setGanttData] = useState<{ tasks: GanttTask[]; links: GanttLink[] }>({
     tasks: [],
@@ -299,6 +300,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
       } else {
         Object.defineProperty(apiRef, 'current', { value: api, writable: true, configurable: true });
       }
+      setToolbarApi(api);
 
       try {
         if (typeof api.setLocale === 'function') api.setLocale(locale);
@@ -418,8 +420,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
             {errorBanner}
           </div>
         )}
-        <Toolbar api={apiRef.current} items={toolbarItems} />
         <Willow>
+          <Toolbar api={toolbarApi} items={toolbarItems} />
           <Gantt
             init={initGantt}
             tasks={ganttData.tasks}
