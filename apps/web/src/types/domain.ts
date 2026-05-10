@@ -91,6 +91,7 @@ export interface Task extends BaseDocument {
   type: TaskType;
   order: number;
   open?: boolean;
+  version?: number;
 }
 
 // Datos para crear tarea

@@ -332,9 +332,112 @@
   line-height: 1 !important;
 }
 
-/* Ajustes para el contenedor del Gantt con toolbar */
+/* Ajustes para el contenedor del Gantt con toolbar.
+   El -50px descuenta el Toolbar; el flex-1 del wrapper ya reserva
+   espacio para el GanttTimeline, así que no hace falta descontarlo aquí. */
 .gantt-container .wx-gantt {
   height: calc(100% - 50px) !important;
+}
+
+/* ── GanttTimeline scrubber — Studio Monitor ─────────────────────────── */
+.gantt-timeline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 5px;
+  user-select: none;
+}
+
+/* Zoom badge */
+.gantt-timeline__zoom-badge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 2px 8px 2px 6px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.gantt-timeline__zoom-icon {
+  font-size: 11px;
+  color: #6366f1;
+  line-height: 1;
+}
+
+/* Track: light precision strip */
+.gantt-timeline__track {
+  position: relative;
+  flex: 1;
+  height: 22px;
+  background: #e2e8f0;
+  border-radius: 5px;
+  overflow: visible;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);
+}
+
+/* Minimap layer */
+.gantt-timeline__minimap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 5px;
+}
+
+.gantt-timeline__minibar {
+  position: absolute;
+  border-radius: 2px;
+  opacity: 0.45;
+}
+
+/* Viewport thumb */
+.gantt-timeline__thumb {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  display: flex;
+  align-items: stretch;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1.5px solid rgba(99, 102, 241, 0.55);
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.15);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gantt-timeline__thumb:hover {
+  border-color: rgba(99, 102, 241, 0.8);
+  box-shadow: 0 1px 6px rgba(99, 102, 241, 0.25);
+}
+
+.gantt-timeline__thumb--panning {
+  background: rgba(99, 102, 241, 0.13);
+}
+
+/* Pan zone */
+.gantt-timeline__center {
+  flex: 1;
+  cursor: grab;
+  min-width: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.025) 50%,
+    transparent 100%
+  );
+}
+
+.gantt-timeline__center--active {
+  cursor: grabbing;
 }
 
 /* Responsive toolbar */
