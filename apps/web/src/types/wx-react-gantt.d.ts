@@ -100,6 +100,7 @@ declare module 'wx-react-gantt' {
     'close-task': { id: GanttId; _fromRestore?: boolean };
     'expand-task': { id?: GanttId };
     'collapse-task': { id?: GanttId };
+    'scroll-chart': { left?: number; top?: number };
     'expand-scale': Record<string, unknown>;
     'show-editor': { id?: GanttId };
     'hide-editor': Record<string, unknown>;

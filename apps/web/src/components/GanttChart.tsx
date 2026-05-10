@@ -18,6 +18,7 @@ import { GanttDataProvider } from '../services/ganttDataProvider';
 import { taskManager } from '../services/taskManager';
 import { LocaleProvider } from './LocaleProvider';
 import { setupAutoLocalization } from '../utils/ganttLocalizer';
+import { GanttTimeline } from './GanttTimeline';
 
 import coreLocaleEs from 'wx-core-locales/locales/es';
 import ganttLocaleEs from '../locales/gantt-es';
@@ -60,6 +61,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
 }) => {
   const internalApiRef = useRef<GanttApi | null>(null);
   const apiRef = externalApiRef ?? internalApiRef;
+  const [cellWidth, setCellWidth] = useState(30);
+  const [scrollLeft, setScrollLeft] = useState(0);
   const [toolbarApi, setToolbarApi] = useState<GanttApi | null>(null);
   const [dataProvider, setDataProvider] = useState<GanttDataProvider | null>(null);
   const [ganttData, setGanttData] = useState<{ tasks: GanttTask[]; links: GanttLink[] }>({
@@ -330,6 +333,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
         }
         recalcSummaryProgress(id);
       });
+      api.on('scroll-chart', (ev: { left?: number; top?: number }) => {
+        setScrollLeft(ev.left ?? 0);
+      });
 
       if (dataProvider) {
         api.on('open-task', ({ id, _fromRestore }) => {
@@ -414,24 +420,35 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
   return (
     <LocaleProvider>
-      <div className="h-full gantt-container relative">
+      <div className="h-full gantt-container relative flex flex-col">
         {errorBanner && (
           <div className="absolute top-2 right-2 z-50 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded shadow text-sm">
             {errorBanner}
           </div>
         )}
-        <Willow>
-          <Toolbar api={toolbarApi} items={toolbarItems} />
-          <Gantt
-            init={initGantt}
-            tasks={ganttData.tasks}
-            links={ganttData.links}
-            scales={scales}
-            columns={columns}
-            markers={markers}
-            cellWidth={30}
-          />
-        </Willow>
+        <div className="flex-1 min-h-0">
+          <Willow>
+            <Toolbar api={toolbarApi} items={toolbarItems} />
+            <Gantt
+              init={initGantt}
+              tasks={ganttData.tasks}
+              links={ganttData.links}
+              scales={scales}
+              columns={columns}
+              markers={markers}
+              cellWidth={cellWidth}
+            />
+          </Willow>
+        </div>
+        <GanttTimeline
+          cellWidth={cellWidth}
+          onCellWidthChange={setCellWidth}
+          scrollLeft={scrollLeft}
+          api={apiRef.current}
+          tasks={ganttData.tasks}
+          minCellWidth={8}
+          maxCellWidth={120}
+        />
       </div>
     </LocaleProvider>
   );
