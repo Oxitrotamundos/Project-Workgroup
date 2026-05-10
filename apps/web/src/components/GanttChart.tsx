@@ -61,7 +61,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
 }) => {
   const internalApiRef = useRef<GanttApi | null>(null);
   const apiRef = externalApiRef ?? internalApiRef;
-  const [cellWidth, setCellWidth] = useState(30);
+  const [pxPerDay, setPxPerDay] = useState(30);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [toolbarApi, setToolbarApi] = useState<GanttApi | null>(null);
   const [dataProvider, setDataProvider] = useState<GanttDataProvider | null>(null);
@@ -139,14 +139,24 @@ const GanttChart: React.FC<GanttChartProps> = ({
     );
   }, [dataProvider, loadGanttData]);
 
-  const scales: GanttScale[] = React.useMemo(
-    () => [
-      { unit: 'month', step: 1, format: 'MMMM yyyy' },
-      { unit: 'week', step: 1, format: 'w' },
-      { unit: 'day', step: 1, format: 'd' },
-    ],
-    [],
-  );
+  const { scales, cellWidth, zoomLevel, zoomLabel } = React.useMemo(() => {
+    const tiers = [
+      { level: 0, label: 'Año',         max: 0.5,      factor: 365,    scales: [{ unit: 'year', step: 1, format: 'yyyy' }] },
+      { level: 1, label: 'Año / Trim.', max: 2,        factor: 91,     scales: [{ unit: 'year', step: 1, format: 'yyyy' }, { unit: 'quarter', step: 1, format: "'T'Q" }] },
+      { level: 2, label: 'Trim. / Mes', max: 8,        factor: 30,     scales: [{ unit: 'quarter', step: 1, format: "'T'Q yyyy" }, { unit: 'month', step: 1, format: 'MMM' }] },
+      { level: 3, label: 'Mes / Sem.',  max: 25,       factor: 7,      scales: [{ unit: 'month', step: 1, format: 'MMM yyyy' }, { unit: 'week', step: 1, format: "'sem' w" }] },
+      { level: 4, label: 'Mes / Día',   max: 100,      factor: 1,      scales: [{ unit: 'month', step: 1, format: 'MMM yyyy' }, { unit: 'day', step: 1, format: 'd' }] },
+      { level: 5, label: 'Día / 6h',    max: 400,      factor: 0.25,   scales: [{ unit: 'day', step: 1, format: 'EEE d MMM' }, { unit: 'hour', step: 6, format: 'HH:mm' }] },
+      { level: 6, label: 'Día / Hora',  max: Infinity, factor: 1 / 24, scales: [{ unit: 'day', step: 1, format: 'EEE d MMM' }, { unit: 'hour', step: 1, format: 'HH:mm' }] },
+    ] as const;
+    const tier = tiers.find((t) => pxPerDay <= t.max) ?? tiers[tiers.length - 1];
+    return {
+      scales: tier.scales as unknown as GanttScale[],
+      cellWidth: Math.max(8, Math.round(pxPerDay * tier.factor)),
+      zoomLevel: tier.level,
+      zoomLabel: tier.label,
+    };
+  }, [pxPerDay]);
 
   const locale = React.useMemo(() => ({ ...coreLocaleEs, ...ganttLocaleEs }), []);
 
@@ -294,6 +304,30 @@ const GanttChart: React.FC<GanttChartProps> = ({
     };
   }, [addChildTask]);
 
+  useEffect(() => {
+    const MIN_PX = 0.05;
+    const MAX_PX = 2400;
+    const SENSITIVITY = 0.0035; // ajuste por unidad de deltaY (multiplicativo)
+
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const target = e.target as Element | null;
+      if (!target?.closest('.gantt-container .wx-chart')) return;
+
+      e.stopPropagation();
+      e.preventDefault();
+
+      const factor = Math.exp(-e.deltaY * SENSITIVITY);
+      setPxPerDay((prev) => {
+        const next = prev * factor;
+        return Math.max(MIN_PX, Math.min(MAX_PX, next));
+      });
+    };
+
+    document.addEventListener('wheel', onWheel, { capture: true, passive: false });
+    return () => document.removeEventListener('wheel', onWheel, true);
+  }, []);
+
   const initGantt = useCallback(
     (api: GanttApi) => {
       if (!api) return;
@@ -336,7 +370,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
       api.on('scroll-chart', (ev: { left?: number; top?: number }) => {
         setScrollLeft(ev.left ?? 0);
       });
-
       if (dataProvider) {
         api.on('open-task', ({ id, _fromRestore }) => {
           if (_fromRestore) return;
@@ -441,13 +474,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
           </Willow>
         </div>
         <GanttTimeline
-          cellWidth={cellWidth}
-          onCellWidthChange={setCellWidth}
           scrollLeft={scrollLeft}
           api={apiRef.current}
           tasks={ganttData.tasks}
-          minCellWidth={8}
-          maxCellWidth={120}
+          zoomLevel={zoomLevel}
+          zoomLabel={zoomLabel}
         />
       </div>
     </LocaleProvider>

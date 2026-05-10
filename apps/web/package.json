@@ -20,11 +20,13 @@
   "dependencies": {
     "@project-workgroup/shared": "workspace:*",
     "@rive-app/react-canvas": "^4.23.3",
+    "@tanstack/react-query": "^5.100.9",
     "firebase": "^12.2.1",
     "lucide-react": "^0.539.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.8.0",
+    "reflect-metadata": "^0.2.2",
     "wx-core-locales": "^2.2.1",
     "wx-gantt-data-provider": "^2.2.1",
     "wx-gantt-locales": "^2.2.1",
