@@ -129,4 +129,195 @@ describe('apiClient', () => {
       await expectations;
     });
   });
+
+  describe('retries on transient errors', () => {
+    it('retries GET on 503 with backoff up to 3 times', async () => {
+      vi.useFakeTimers();
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(new Response('{}', { status: 503 }))
+        .mockResolvedValueOnce(new Response('{}', { status: 503 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      (globalThis as any).fetch = fetchMock;
+
+      const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
+      const promise = client.get<{ ok: boolean }>('/v1/x');
+      await vi.advanceTimersByTimeAsync(2000);
+      await expect(promise).resolves.toEqual({ ok: true });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not retry POST without Idempotency-Key on 503', async () => {
+      const fetchMock = vi.fn().mockResolvedValueOnce(new Response('{}', { status: 503 }));
+      (globalThis as any).fetch = fetchMock;
+
+      const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
+      await expect(client.patch('/v1/tasks/1', { name: 'A' })).rejects.toBeInstanceOf(ApiError);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('optimistic locking auto-merge', () => {
+    it('uses currentVersion from envelope error and retries without GET', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: { code: 'TASK_VERSION_STALE', message: 'stale', currentVersion: 5 } }), {
+            status: 409,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: '1', version: 6 }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      (globalThis as any).fetch = fetchMock;
+
+      const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
+      const result = await client.patch<{ id: string; version: number }>('/v1/tasks/1', {
+        name: 'X',
+        expectedVersion: 1,
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0][1].method).toBe('PATCH');
+      expect(fetchMock.mock.calls[1][1].method).toBe('PATCH');
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ name: 'X', expectedVersion: 5 });
+      expect(result).toEqual({ id: '1', version: 6 });
+    });
+
+    it('parses NestJS HttpException with custom-object shape (code at root)', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              code: 'TASK_VERSION_STALE',
+              message: 'task has been modified by another request',
+              currentVersion: 15,
+            }),
+            { status: 409, headers: { 'content-type': 'application/json' } },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: '1', version: 16 }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      (globalThis as any).fetch = fetchMock;
+
+      const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
+      const result = await client.patch<{ id: string; version: number }>('/v1/tasks/18', {
+        name: 'X',
+        expectedVersion: 13,
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ name: 'X', expectedVersion: 15 });
+      expect(result).toEqual({ id: '1', version: 16 });
+    });
+
+    it('parses NestJS default error shape and retries with fresh version', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              statusCode: 409,
+              message: { code: 'TASK_VERSION_STALE', message: 'stale', currentVersion: 8 },
+              error: 'Conflict',
+            }),
+            { status: 409, headers: { 'content-type': 'application/json' } },
+          ),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: '1', version: 9 }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      (globalThis as any).fetch = fetchMock;
+
+      const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
+      const result = await client.patch<{ id: string; version: number }>('/v1/tasks/1/progress', {
+        progress: 50,
+        expectedVersion: 1,
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ progress: 50, expectedVersion: 8 });
+      expect(result).toEqual({ id: '1', version: 9 });
+    });
+
+    it('falls back to GET refetch when currentVersion is missing from the error', async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: { code: 'TASK_VERSION_STALE', message: 'stale' } }), {
+            status: 409,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: '1', version: 5 }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: '1', version: 6 }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      (globalThis as any).fetch = fetchMock;
+
+      const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
+      const result = await client.patch<{ id: string; version: number }>('/v1/tasks/1', {
+        name: 'X',
+        expectedVersion: 1,
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock.mock.calls[1][1].method).toBe('GET');
+      expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ name: 'X', expectedVersion: 5 });
+      expect(result).toEqual({ id: '1', version: 6 });
+    });
+
+    it('falls back to PATCH without expectedVersion when version cannot be determined', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: { code: 'TASK_VERSION_STALE', message: 'stale' } }), {
+            status: 409,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: '1' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: '1' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      (globalThis as any).fetch = fetchMock;
+
+      const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
+      await client.patch('/v1/tasks/1', { name: 'X', expectedVersion: 1 });
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      const lastBody = JSON.parse(fetchMock.mock.calls[2][1].body);
+      expect(lastBody).toEqual({ name: 'X' });
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+  });
 });
