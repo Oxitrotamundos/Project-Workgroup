@@ -11,7 +11,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { CreateTaskDto, UpdateTaskDto, UpdateProgressDto, UpdateOrderDto } from '@project-workgroup/shared';
+import {
+  ApplyPropagationDto,
+  BulkTaskUpdateDto,
+  CreateTaskDto,
+  UpdateOrderDto,
+  UpdateProgressDto,
+  UpdateTaskDto,
+} from '@project-workgroup/shared';
 import { AuthGuard, AuthUser } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ProjectMembershipGuard } from '../auth/project-membership.guard';
@@ -47,6 +54,17 @@ export class TasksController {
     return this.tasks.create(this.id(projectId, 'projectId'), dto);
   }
 
+  @Patch('projects/:projectId/tasks/bulk')
+  @UseGuards(ProjectMembershipGuard)
+  @RequireProject('projectId')
+  async bulkUpdate(
+    @Param('projectId') projectId: string,
+    @Body() dto: BulkTaskUpdateDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.tasks.bulkUpdate(this.id(projectId, 'projectId'), dto, user);
+  }
+
   @Get('tasks/:id')
   async getById(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.tasks.getById(this.id(id), user);
@@ -71,5 +89,19 @@ export class TasksController {
   @HttpCode(204)
   async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     await this.tasks.remove(this.id(id), user);
+  }
+
+  @Post('tasks/:id/propagate-dates/preview')
+  async previewPropagation(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.tasks.previewPropagation(this.id(id), user);
+  }
+
+  @Post('tasks/:id/propagate-dates/apply')
+  async applyPropagation(
+    @Param('id') id: string,
+    @Body() dto: ApplyPropagationDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.tasks.applyPropagation(this.id(id), dto, user);
   }
 }

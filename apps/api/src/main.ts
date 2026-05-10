@@ -1,12 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { mountSwagger } from './swagger';
 import { BigIntSerializerInterceptor } from './common/bigint-serializer.interceptor';
+import { AuditContextInterceptor } from './common/audit-context.interceptor';
+import { IdempotencyInterceptor } from './common/idempotency.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
+
   const config = app.get(ConfigService);
 
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1', prefix: 'v' });
@@ -16,7 +21,11 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.useGlobalInterceptors(new BigIntSerializerInterceptor());
+  app.useGlobalInterceptors(
+    new BigIntSerializerInterceptor(),
+    new AuditContextInterceptor(),
+    app.get(IdempotencyInterceptor),
+  );
 
   mountSwagger(app);
 

@@ -1,15 +1,27 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '../generated/prisma/client';
+import { MetricsService } from '../observability/metrics.service';
 import {
+  ApplyPropagationDto,
+  BulkTaskUpdateDto,
+  BulkTaskUpdateResponse,
   CreateTaskDto,
-  UpdateTaskDto,
-  UpdateProgressDto,
-  UpdateOrderDto,
+  PropagationChange,
+  PropagationPreview,
+  SummaryPatch,
   TaskResponse,
+  UpdateOrderDto,
+  UpdateProgressDto,
+  UpdateTaskDto,
 } from '@project-workgroup/shared';
 import { AuthUser } from '../auth/auth.guard';
 import { statusToPrisma, statusToWire, priorityToPrisma, priorityToWire } from './wire';
 import { firstOrder, between, after } from './fractional-index';
+
+type TxClient = Prisma.TransactionClient;
+type DbClient = PrismaService | TxClient;
 
 type TaskRow = {
   id: bigint;
@@ -31,6 +43,7 @@ type TaskRow = {
   tags: string[];
   estimatedHours: { toString(): string };
   actualHours: { toString(): string } | null;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -47,7 +60,16 @@ type SummaryStats = {
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @InjectPinoLogger(TasksService.name) private readonly logger?: PinoLogger,
+    @Optional() private readonly metrics?: MetricsService,
+  ) {}
+
+  private logOp(op: string, fields: Record<string, unknown>, durationMs: number): void {
+    this.logger?.info({ op, durationMs, ...fields }, `task ${op}`);
+    this.metrics?.recordUpdate(op, 'ok', durationMs);
+  }
 
   private toResponse(t: TaskRow): TaskResponse {
     return {
@@ -70,9 +92,31 @@ export class TasksService {
       tags: t.tags,
       estimatedHours: t.estimatedHours.toString(),
       actualHours: t.actualHours?.toString() ?? null,
+      version: t.version,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
     };
+  }
+
+  private isVersionConflict(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    );
+  }
+
+  private async assertVersionConflict(id: bigint, expectedVersion: number, op: string): Promise<never> {
+    const current = await this.prisma.task.findUnique({ where: { id }, select: { version: true } });
+    this.logger?.warn(
+      { op, taskId: id.toString(), expectedVersion, currentVersion: current?.version ?? null },
+      'task version conflict',
+    );
+    this.metrics?.recordConflict(op);
+    throw new ConflictException({
+      code: 'TASK_VERSION_STALE',
+      message: 'task has been modified by another request',
+      currentVersion: current?.version ?? null,
+    });
   }
 
   private async assertProjectAccess(projectId: bigint, user: AuthUser): Promise<void> {
@@ -229,8 +273,8 @@ export class TasksService {
     }
   }
 
-  private async recalculateProjectSummaries(projectId: bigint): Promise<void> {
-    const tasks = await this.prisma.task.findMany({
+  private async recalculateProjectSummaries(projectId: bigint, client: DbClient = this.prisma): Promise<SummaryPatch[]> {
+    const tasks = await client.task.findMany({
       where: { projectId },
       select: {
         id: true,
@@ -298,6 +342,26 @@ export class TasksService {
       return result;
     };
 
+    const patches: SummaryPatch[] = [];
+    const summaryIds = tasks
+      .filter((task) => task.type === 'summary')
+      .map((task) => task.id);
+    const previousById = new Map<string, { startDate: Date; endDate: Date; duration: string; progress: number }>();
+    if (summaryIds.length > 0) {
+      const previous = await client.task.findMany({
+        where: { id: { in: summaryIds } },
+        select: { id: true, startDate: true, endDate: true, duration: true, progress: true },
+      });
+      for (const p of previous) {
+        previousById.set(p.id.toString(), {
+          startDate: p.startDate,
+          endDate: p.endDate,
+          duration: p.duration.toString(),
+          progress: p.progress,
+        });
+      }
+    }
+
     for (const summary of tasks.filter((task) => task.type === 'summary')) {
       const stats = collect(summary);
       const hasChildren = (childrenByParent.get(summary.id.toString()) ?? []).length > 0;
@@ -309,21 +373,42 @@ export class TasksService {
           : stats.fallbackCount > 0
             ? Math.round(stats.fallbackProgress / stats.fallbackCount)
             : 0;
+      const clampedProgress = Math.max(0, Math.min(100, progress));
       const duration = Math.max(
         0,
         Math.ceil((stats.endDate.getTime() - stats.startDate.getTime()) / (1000 * 60 * 60 * 24)),
       ).toString();
 
-      await this.prisma.task.update({
+      const prev = previousById.get(summary.id.toString());
+      const unchanged =
+        prev &&
+        prev.startDate.getTime() === stats.startDate.getTime() &&
+        prev.endDate.getTime() === stats.endDate.getTime() &&
+        prev.duration === duration &&
+        prev.progress === clampedProgress;
+      if (unchanged) continue;
+
+      const updated = await client.task.update({
         where: { id: summary.id },
         data: {
           startDate: stats.startDate,
           endDate: stats.endDate,
           duration,
-          progress: Math.max(0, Math.min(100, progress)),
+          progress: clampedProgress,
+          version: { increment: 1 },
         },
+        select: { id: true, startDate: true, endDate: true, duration: true, progress: true, version: true },
+      });
+      patches.push({
+        id: updated.id.toString(),
+        startDate: updated.startDate.toISOString().slice(0, 10),
+        endDate: updated.endDate.toISOString().slice(0, 10),
+        duration: updated.duration.toString(),
+        progress: updated.progress,
+        version: updated.version,
       });
     }
+    return patches;
   }
 
   async list(projectId: bigint): Promise<TaskResponse[]> {
@@ -335,6 +420,7 @@ export class TasksService {
   }
 
   async create(projectId: bigint, dto: CreateTaskDto): Promise<TaskResponse> {
+    const startedAt = Date.now();
     const parentId = await this.validateParent(projectId, null, dto.parentId);
     const assigneeId = await this.resolveAssigneeId(dto.assigneeId);
     const order = await this.resolveNeighborOrders(projectId, dto.afterTaskId);
@@ -344,27 +430,33 @@ export class TasksService {
       this.parseDate(dto.endDate, 'endDate'),
     );
 
-    const task = await this.prisma.task.create({
-      data: {
-        projectId,
-        parentId: parentId ?? null,
-        assigneeId: assigneeId ?? null,
-        name: dto.name,
-        description: dto.description ?? null,
-        startDate: schedule.startDate,
-        endDate: schedule.endDate,
-        duration: schedule.duration,
-        priority: priorityToPrisma(dto.priority),
-        status: statusToPrisma(dto.status),
-        type: dto.type as any,
-        color: dto.color,
-        order,
+    const refreshed = await this.prisma.$transaction(
+      async (tx) => {
+        const created = await tx.task.create({
+          data: {
+            projectId,
+            parentId: parentId ?? null,
+            assigneeId: assigneeId ?? null,
+            name: dto.name,
+            description: dto.description ?? null,
+            startDate: schedule.startDate,
+            endDate: schedule.endDate,
+            duration: schedule.duration,
+            priority: priorityToPrisma(dto.priority),
+            status: statusToPrisma(dto.status),
+            type: dto.type as any,
+            color: dto.color,
+            order,
+          },
+        });
+        await this.recalculateProjectSummaries(projectId, tx);
+        return tx.task.findUnique({ where: { id: created.id } }) ?? created;
       },
-    });
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 },
+    );
 
-    await this.recalculateProjectSummaries(projectId);
-    const refreshed = await this.prisma.task.findUnique({ where: { id: task.id } });
-    return this.toResponse(refreshed ?? task);
+    this.logOp('create', { projectId: projectId.toString(), taskId: refreshed!.id.toString() }, Date.now() - startedAt);
+    return this.toResponse(refreshed!);
   }
 
   async getById(id: bigint, user: AuthUser): Promise<TaskResponse> {
@@ -373,6 +465,7 @@ export class TasksService {
   }
 
   async update(id: bigint, dto: UpdateTaskDto, user: AuthUser): Promise<TaskResponse> {
+    const startedAt = Date.now();
     const existing = await this.assertTaskAccess(id, user);
     const nextType = dto.type ?? (existing.type as any);
     const schedule = this.normalizeSchedule(
@@ -384,53 +477,346 @@ export class TasksService {
     const parentId = await this.validateParent(existing.projectId, id, dto.parentId);
     const assigneeId = await this.resolveAssigneeId(dto.assigneeId);
 
-    const task = await this.prisma.task.update({
-      where: { id },
-      data: {
-        ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...((dto.startDate !== undefined || dto.endDate !== undefined || dto.type !== undefined) && {
-          startDate: schedule.startDate,
-          endDate: schedule.endDate,
-          duration: schedule.duration,
-        }),
-        ...(dto.priority !== undefined && { priority: priorityToPrisma(dto.priority) }),
-        ...(dto.status !== undefined && { status: statusToPrisma(dto.status) }),
-        ...(dto.type !== undefined && { type: dto.type as any }),
-        ...(dto.color !== undefined && { color: dto.color }),
-        ...(assigneeId !== undefined && { assigneeId }),
-        ...(dto.open !== undefined && { open: dto.open }),
-        ...(parentId !== undefined && { parentId }),
-      },
-    });
+    const where = dto.expectedVersion !== undefined ? { id, version: dto.expectedVersion } : { id };
 
-    await this.recalculateProjectSummaries(existing.projectId);
-    const refreshed = await this.prisma.task.findUnique({ where: { id } });
-    return this.toResponse(refreshed ?? task);
+    let refreshed;
+    try {
+      refreshed = await this.prisma.$transaction(
+        async (tx) => {
+          const updated = await tx.task.update({
+            where,
+            data: {
+              ...(dto.name !== undefined && { name: dto.name }),
+              ...(dto.description !== undefined && { description: dto.description }),
+              ...((dto.startDate !== undefined || dto.endDate !== undefined || dto.type !== undefined) && {
+                startDate: schedule.startDate,
+                endDate: schedule.endDate,
+                duration: schedule.duration,
+              }),
+              ...(dto.priority !== undefined && { priority: priorityToPrisma(dto.priority) }),
+              ...(dto.status !== undefined && { status: statusToPrisma(dto.status) }),
+              ...(dto.type !== undefined && { type: dto.type as any }),
+              ...(dto.color !== undefined && { color: dto.color }),
+              ...(assigneeId !== undefined && { assigneeId }),
+              ...(dto.open !== undefined && { open: dto.open }),
+              ...(parentId !== undefined && { parentId }),
+              version: { increment: 1 },
+            },
+          });
+          await this.recalculateProjectSummaries(existing.projectId, tx);
+          return tx.task.findUnique({ where: { id } }) ?? updated;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 },
+      );
+    } catch (err) {
+      if (dto.expectedVersion !== undefined && this.isVersionConflict(err)) {
+        return this.assertVersionConflict(id, dto.expectedVersion, 'update');
+      }
+      throw err;
+    }
+
+    this.logOp(
+      'update',
+      { projectId: existing.projectId.toString(), taskId: id.toString(), fields: Object.keys(dto) },
+      Date.now() - startedAt,
+    );
+    return this.toResponse(refreshed!);
   }
 
   async updateProgress(id: bigint, dto: UpdateProgressDto, user: AuthUser): Promise<TaskResponse> {
+    const startedAt = Date.now();
     const existing = await this.assertTaskAccess(id, user);
-    const task = await this.prisma.task.update({
-      where: { id },
-      data: { progress: dto.progress },
-    });
-    await this.recalculateProjectSummaries(existing.projectId);
-    const refreshed = await this.prisma.task.findUnique({ where: { id } });
-    return this.toResponse(refreshed ?? task);
+    const where = dto.expectedVersion !== undefined ? { id, version: dto.expectedVersion } : { id };
+
+    let refreshed;
+    try {
+      refreshed = await this.prisma.$transaction(
+        async (tx) => {
+          const updated = await tx.task.update({
+            where,
+            data: { progress: dto.progress, version: { increment: 1 } },
+          });
+          await this.recalculateProjectSummaries(existing.projectId, tx);
+          return tx.task.findUnique({ where: { id } }) ?? updated;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 },
+      );
+    } catch (err) {
+      if (dto.expectedVersion !== undefined && this.isVersionConflict(err)) {
+        return this.assertVersionConflict(id, dto.expectedVersion, 'updateProgress');
+      }
+      throw err;
+    }
+
+    this.logOp(
+      'updateProgress',
+      { projectId: existing.projectId.toString(), taskId: id.toString(), progress: dto.progress },
+      Date.now() - startedAt,
+    );
+    return this.toResponse(refreshed!);
   }
 
   async updateOrder(id: bigint, dto: UpdateOrderDto, user: AuthUser): Promise<TaskResponse> {
+    const startedAt = Date.now();
     const existing = await this.assertTaskAccess(id, user);
     const order = await this.resolveNeighborOrders(existing.projectId, dto.afterTaskId, dto.beforeTaskId);
-    const task = await this.prisma.task.update({ where: { id }, data: { order } });
-    await this.recalculateProjectSummaries(existing.projectId);
-    return this.toResponse(task);
+    const where = dto.expectedVersion !== undefined ? { id, version: dto.expectedVersion } : { id };
+
+    let updated;
+    try {
+      updated = await this.prisma.$transaction(
+        async (tx) => {
+          const task = await tx.task.update({
+            where,
+            data: { order, version: { increment: 1 } },
+          });
+          await this.recalculateProjectSummaries(existing.projectId, tx);
+          return task;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 },
+      );
+    } catch (err) {
+      if (dto.expectedVersion !== undefined && this.isVersionConflict(err)) {
+        return this.assertVersionConflict(id, dto.expectedVersion, 'updateOrder');
+      }
+      throw err;
+    }
+
+    this.logOp(
+      'updateOrder',
+      { projectId: existing.projectId.toString(), taskId: id.toString() },
+      Date.now() - startedAt,
+    );
+    return this.toResponse(updated);
   }
 
   async remove(id: bigint, user: AuthUser): Promise<void> {
+    const startedAt = Date.now();
     const existing = await this.assertTaskAccess(id, user);
-    await this.prisma.task.delete({ where: { id } });
-    await this.recalculateProjectSummaries(existing.projectId);
+    await this.prisma.$transaction(
+      async (tx) => {
+        await tx.task.delete({ where: { id } });
+        await this.recalculateProjectSummaries(existing.projectId, tx);
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 },
+    );
+
+    this.logOp(
+      'remove',
+      { projectId: existing.projectId.toString(), taskId: id.toString() },
+      Date.now() - startedAt,
+    );
+  }
+
+  async previewPropagation(sourceTaskId: bigint, user: AuthUser): Promise<PropagationPreview> {
+    const source = await this.assertTaskAccess(sourceTaskId, user);
+
+    const allLinks = await this.prisma.taskLink.findMany({
+      where: { projectId: source.projectId },
+      select: { sourceTaskId: true, targetTaskId: true, type: true },
+    });
+    const linksBySource = new Map<string, typeof allLinks>();
+    for (const link of allLinks) {
+      const key = link.sourceTaskId.toString();
+      linksBySource.set(key, [...(linksBySource.get(key) ?? []), link]);
+    }
+
+    const allTaskIds = new Set<string>();
+    for (const l of allLinks) {
+      allTaskIds.add(l.sourceTaskId.toString());
+      allTaskIds.add(l.targetTaskId.toString());
+    }
+    allTaskIds.add(sourceTaskId.toString());
+    const tasks = await this.prisma.task.findMany({
+      where: { id: { in: Array.from(allTaskIds).map((id) => BigInt(id)) } },
+      select: { id: true, projectId: true, startDate: true, endDate: true, version: true },
+    });
+    const taskById = new Map(tasks.map((t) => [t.id.toString(), t]));
+
+    const proposed = new Map<string, { startDate: Date; endDate: Date; via: PropagationChange['via']; fromTaskId: string }>();
+    const queue: string[] = [sourceTaskId.toString()];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      if (visited.has(currentId)) continue;
+      visited.add(currentId);
+
+      const currentProposed = proposed.get(currentId);
+      const currentTask = taskById.get(currentId);
+      if (!currentTask) continue;
+
+      const currentStart = currentProposed?.startDate ?? currentTask.startDate;
+      const currentEnd = currentProposed?.endDate ?? currentTask.endDate;
+
+      const outgoing = linksBySource.get(currentId) ?? [];
+      for (const link of outgoing) {
+        const targetId = link.targetTaskId.toString();
+        if (targetId === sourceTaskId.toString()) continue;
+        const targetTask = taskById.get(targetId);
+        if (!targetTask) continue;
+
+        const targetStart = proposed.get(targetId)?.startDate ?? targetTask.startDate;
+        const targetEnd = proposed.get(targetId)?.endDate ?? targetTask.endDate;
+        const durationMs = targetEnd.getTime() - targetStart.getTime();
+
+        let newStart = targetStart;
+        let newEnd = targetEnd;
+        switch (link.type) {
+          case 'e2s':
+            newStart = new Date(currentEnd);
+            newEnd = new Date(newStart.getTime() + durationMs);
+            break;
+          case 's2s':
+            newStart = new Date(currentStart);
+            newEnd = new Date(newStart.getTime() + durationMs);
+            break;
+          case 'e2e':
+            newEnd = new Date(currentEnd);
+            newStart = new Date(newEnd.getTime() - durationMs);
+            break;
+          case 's2e':
+            newEnd = new Date(currentStart);
+            newStart = new Date(newEnd.getTime() - durationMs);
+            break;
+        }
+
+        if (newStart.getTime() === targetStart.getTime() && newEnd.getTime() === targetEnd.getTime()) {
+          continue;
+        }
+
+        proposed.set(targetId, {
+          startDate: newStart,
+          endDate: newEnd,
+          via: link.type as PropagationChange['via'],
+          fromTaskId: currentId,
+        });
+        queue.push(targetId);
+      }
+    }
+
+    const changes: PropagationChange[] = [];
+    for (const [taskId, p] of proposed.entries()) {
+      const task = taskById.get(taskId)!;
+      changes.push({
+        taskId,
+        currentVersion: task.version,
+        currentStartDate: task.startDate.toISOString().slice(0, 10),
+        currentEndDate: task.endDate.toISOString().slice(0, 10),
+        proposedStartDate: p.startDate.toISOString().slice(0, 10),
+        proposedEndDate: p.endDate.toISOString().slice(0, 10),
+        via: p.via,
+        fromTaskId: p.fromTaskId,
+      });
+    }
+
+    return { sourceTaskId: sourceTaskId.toString(), changes };
+  }
+
+  async applyPropagation(sourceTaskId: bigint, dto: ApplyPropagationDto, user: AuthUser): Promise<BulkTaskUpdateResponse> {
+    const source = await this.assertTaskAccess(sourceTaskId, user);
+    return this.bulkUpdate(
+      source.projectId,
+      {
+        updates: dto.changes.map((c) => ({
+          id: c.taskId,
+          expectedVersion: c.expectedVersion,
+          data: { startDate: c.startDate, endDate: c.endDate },
+        })),
+      },
+      user,
+    );
+  }
+
+  async bulkUpdate(projectId: bigint, dto: BulkTaskUpdateDto, user: AuthUser): Promise<BulkTaskUpdateResponse> {
+    const startedAt = Date.now();
+    await this.assertProjectAccess(projectId, user);
+
+    const ids = dto.updates.map((u) => this.parseBigInt(u.id, 'id'));
+    const owned = await this.prisma.task.findMany({
+      where: { id: { in: ids }, projectId },
+      select: { id: true },
+    });
+    if (owned.length !== ids.length) {
+      throw new BadRequestException('one or more tasks do not belong to this project');
+    }
+
+    const result = await this.prisma.$transaction(
+      async (tx) => {
+        const updatedTasks: TaskRow[] = [];
+        for (const item of dto.updates) {
+          const itemId = this.parseBigInt(item.id, 'id');
+          const data = item.data;
+          const expectedVersion = item.expectedVersion ?? data.expectedVersion;
+          const where = expectedVersion !== undefined ? { id: itemId, version: expectedVersion } : { id: itemId };
+          const existing = await tx.task.findUnique({ where: { id: itemId } });
+          if (!existing) {
+            throw new NotFoundException(`task ${item.id} not found`);
+          }
+
+          const nextType = data.type ?? (existing.type as any);
+          const schedule = this.normalizeSchedule(
+            nextType,
+            data.startDate ? this.parseDate(data.startDate, 'startDate') : existing.startDate,
+            data.endDate ? this.parseDate(data.endDate, 'endDate') : existing.endDate,
+          );
+          const parentId = await this.validateParent(existing.projectId, itemId, data.parentId);
+          const assigneeId = await this.resolveAssigneeId(data.assigneeId);
+
+          try {
+            const updated = await tx.task.update({
+              where,
+              data: {
+                ...(data.name !== undefined && { name: data.name }),
+                ...(data.description !== undefined && { description: data.description }),
+                ...((data.startDate !== undefined || data.endDate !== undefined || data.type !== undefined) && {
+                  startDate: schedule.startDate,
+                  endDate: schedule.endDate,
+                  duration: schedule.duration,
+                }),
+                ...(data.priority !== undefined && { priority: priorityToPrisma(data.priority) }),
+                ...(data.status !== undefined && { status: statusToPrisma(data.status) }),
+                ...(data.type !== undefined && { type: data.type as any }),
+                ...(data.color !== undefined && { color: data.color }),
+                ...(assigneeId !== undefined && { assigneeId }),
+                ...(data.open !== undefined && { open: data.open }),
+                ...(parentId !== undefined && { parentId }),
+                version: { increment: 1 },
+              },
+            });
+            updatedTasks.push(updated);
+          } catch (err) {
+            if (expectedVersion !== undefined && this.isVersionConflict(err)) {
+              throw new ConflictException({
+                code: 'TASK_VERSION_STALE',
+                message: 'task has been modified by another request',
+                taskId: item.id,
+                expectedVersion,
+              });
+            }
+            throw err;
+          }
+        }
+
+        const summariesPatched = await this.recalculateProjectSummaries(projectId, tx);
+        return { tasks: updatedTasks, summariesPatched };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 30000 },
+    );
+
+    this.logOp(
+      'bulkUpdate',
+      {
+        projectId: projectId.toString(),
+        count: dto.updates.length,
+        summariesChanged: result.summariesPatched.length,
+      },
+      Date.now() - startedAt,
+    );
+
+    return {
+      tasks: result.tasks.map((t) => this.toResponse(t)),
+      summariesPatched: result.summariesPatched,
+    };
   }
 }

@@ -1,6 +1,7 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { TasksService } from './tasks.service';
 import { AuthUser } from '../auth/auth.guard';
+import { Prisma } from '../generated/prisma/client';
 
 const admin: AuthUser = { id: 1n, role: 'admin', firebaseUid: null, via: 'api_key' };
 const member: AuthUser = { id: 20n, role: 'member', firebaseUid: null, via: 'api_key' };
@@ -25,31 +26,36 @@ const taskRow = (overrides: Partial<any> = {}) => ({
   tags: [],
   estimatedHours: { toString: () => '0' },
   actualHours: null,
+  version: 1,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   ...overrides,
 });
 
 describe('TasksService', () => {
-  const makePrisma = () => ({
-    project: {
-      findUnique: jest.fn(),
-    },
-    projectMember: {
-      findUnique: jest.fn(),
-    },
-    user: {
-      findUnique: jest.fn(),
-    },
-    task: {
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-  });
+  const makePrisma = () => {
+    const prisma: any = {
+      project: {
+        findUnique: jest.fn(),
+      },
+      projectMember: {
+        findUnique: jest.fn(),
+      },
+      user: {
+        findUnique: jest.fn(),
+      },
+      task: {
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      },
+    };
+    prisma.$transaction = jest.fn(async (fn: any) => fn(prisma));
+    return prisma;
+  };
 
   it('rejects task access for users outside the project', async () => {
     const prisma = makePrisma();
@@ -109,5 +115,63 @@ describe('TasksService', () => {
       where: { id: 10n },
       data: expect.objectContaining({ progress: 50 }),
     }));
+  });
+
+  it('rejects update when expectedVersion does not match current version', async () => {
+    const prisma = makePrisma();
+    const stored = taskRow({ version: 5 });
+    prisma.task.findUnique.mockImplementation(({ where, select }: any) => {
+      if (select?.version) return Promise.resolve({ version: 5 });
+      return Promise.resolve(stored);
+    });
+    prisma.task.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Record not found', {
+        code: 'P2025',
+        clientVersion: '7.8.0',
+      } as any),
+    );
+    const service = new TasksService(prisma as any);
+
+    await expect(
+      service.update(10n, { name: 'new', expectedVersion: 4 }, admin),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(prisma.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 10n, version: 4 } }),
+    );
+  });
+
+  it('rejects bulkUpdate when one task does not belong to the project', async () => {
+    const prisma = makePrisma();
+    prisma.task.findMany.mockResolvedValue([{ id: 10n }]);
+    const service = new TasksService(prisma as any);
+
+    await expect(
+      service.bulkUpdate(
+        1n,
+        { updates: [{ id: '10', data: { name: 'A' } }, { id: '99', data: { name: 'B' } }] },
+        admin,
+      ),
+    ).rejects.toThrow(/do not belong/);
+  });
+
+  it('increments version on successful update', async () => {
+    const prisma = makePrisma();
+    const before = taskRow({ version: 1 });
+    const after = taskRow({ name: 'renamed', version: 2 });
+    prisma.task.findUnique.mockResolvedValueOnce(before).mockResolvedValue(after);
+    prisma.task.update.mockResolvedValue(after);
+    prisma.task.findMany.mockResolvedValue([after]);
+    const service = new TasksService(prisma as any);
+
+    const result = await service.update(10n, { name: 'renamed', expectedVersion: 1 }, admin);
+
+    expect(prisma.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10n, version: 1 },
+        data: expect.objectContaining({ name: 'renamed', version: { increment: 1 } }),
+      }),
+    );
+    expect(result.version).toBe(2);
   });
 });
