@@ -58,6 +58,11 @@ enum TaskLinkType {
   s2e
 }
 
+enum CalendarScope {
+  global
+  project
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model User {
@@ -96,6 +101,7 @@ model Project {
   tasks     Task[]
   taskLinks TaskLink[]
   workload  Workload[]
+  calendar  WorkingCalendar?
 
   @@index([ownerId, status])
   @@map("projects")
@@ -210,6 +216,49 @@ model ApiKey {
 
   @@index([userId])
   @@map("api_keys")
+}
+
+model WorkingCalendar {
+  id        BigInt        @id @default(autoincrement())
+  scope     CalendarScope
+  projectId BigInt?       @unique @map("project_id")
+  name      String
+  timezone  String
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  project  Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  patterns WorkingDayPattern[]
+  holidays Holiday[]
+
+  @@map("working_calendars")
+}
+
+model WorkingDayPattern {
+  calendarId BigInt    @map("calendar_id")
+  weekday    Int
+  enabled    Boolean   @default(true)
+  dayStart   DateTime? @map("day_start") @db.Time(6)
+  breakStart DateTime? @map("break_start") @db.Time(6)
+  breakEnd   DateTime? @map("break_end") @db.Time(6)
+  dayEnd     DateTime? @map("day_end") @db.Time(6)
+
+  calendar WorkingCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@id([calendarId, weekday])
+  @@map("working_day_patterns")
+}
+
+model Holiday {
+  calendarId      BigInt   @map("calendar_id")
+  date            DateTime @db.Date
+  label           String
+  recurringYearly Boolean  @default(false) @map("recurring_yearly")
+
+  calendar WorkingCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@id([calendarId, date])
+  @@map("holidays")
 }
 
 model IdempotencyKey {
