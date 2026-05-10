@@ -1,4 +1,5 @@
 import { apiClient } from '../lib/apiClient';
+import { wouldCreateCycle, type CycleEdge } from '../utils/cycleDetector';
 import type {
   TaskLink,
   CreateTaskLinkData,
@@ -83,20 +84,33 @@ export class TaskLinkService {
   static async validateLinkCreation(
     sourceTaskId: string,
     targetTaskId: string,
-    _projectId: string
+    projectId: string
   ): Promise<{ valid: boolean; error?: string }> {
     if (sourceTaskId === targetTaskId) {
       return { valid: false, error: 'No se puede crear un enlace de una tarea a sí misma' };
+    }
+    const links = await TaskLinkService.getProjectLinks(projectId);
+    const edges: CycleEdge[] = links.map((l) => ({
+      sourceTaskId: l.sourceTaskId,
+      targetTaskId: l.targetTaskId,
+    }));
+    if (wouldCreateCycle(edges, sourceTaskId, targetTaskId)) {
+      return { valid: false, error: 'Crear este enlace generaría una dependencia circular' };
     }
     return { valid: true };
   }
 
   static async detectCircularDependency(
-    _projectId: string,
-    _source: string,
-    _target: string
+    projectId: string,
+    source: string,
+    target: string
   ): Promise<boolean> {
-    return false;
+    const links = await TaskLinkService.getProjectLinks(projectId);
+    const edges: CycleEdge[] = links.map((l) => ({
+      sourceTaskId: l.sourceTaskId,
+      targetTaskId: l.targetTaskId,
+    }));
+    return wouldCreateCycle(edges, source, target);
   }
 }
 

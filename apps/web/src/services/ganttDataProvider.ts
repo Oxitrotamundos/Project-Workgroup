@@ -54,6 +54,8 @@ export class GanttDataProvider {
   private taskCache: Map<string, Task> = new Map();
   private linkCache: Map<string, TaskLink> = new Map();
   private onError: GanttErrorCallback | null = null;
+  private throttleMs = 150;
+  private throttleTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor(projectId: string) {
     this.projectId = projectId;
@@ -187,6 +189,31 @@ export class GanttDataProvider {
     if (this.isUiOnlyEvent(data)) return { success: true };
     if (action === 'drag-task') return { success: true };
 
+    if (action === 'update-task' || action === 'move-task') {
+      const taskId = this.resolveTaskId((data as { id?: GanttId }).id);
+      if (taskId) {
+        const key = `${action}:${taskId}`;
+        const existing = this.throttleTimers.get(key);
+        if (existing) clearTimeout(existing);
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(async () => {
+            this.throttleTimers.delete(key);
+            try {
+              const result =
+                action === 'update-task'
+                  ? await this.handleUpdateTask(data as GanttActionPayloadMap['update-task'])
+                  : await this.handleMoveTask(data as GanttActionPayloadMap['move-task']);
+              resolve(result);
+            } catch (err) {
+              console.error('GanttDataProvider: error procesando acción', action, err);
+              reject(err);
+            }
+          }, this.throttleMs);
+          this.throttleTimers.set(key, timer);
+        });
+      }
+    }
+
     try {
       switch (action) {
         case 'add-task':
@@ -235,9 +262,7 @@ export class GanttDataProvider {
     });
   }
 
-  // -------------------------------------------------------------------------
   // Handlers
-  // -------------------------------------------------------------------------
 
   private async handleAddTask(data: GanttActionPayloadMap['add-task']): Promise<unknown> {
     const { taskManager } = await import('./taskManager');
@@ -296,28 +321,51 @@ export class GanttDataProvider {
     if (!taskId) throw new Error('ID de tarea requerido para actualización');
 
     const taskData: Partial<GanttTask> = data.task && typeof data.task === 'object' ? data.task : {};
+    const cachedForVersion = this.taskCache.get(taskId);
+    const isSummary = (taskData.type ?? cachedForVersion?.type) === 'summary';
 
     const updateData: UpdateTaskDto = {};
+
     const nextName = taskData.text;
-    if (nextName !== undefined) updateData.name = String(nextName);
+    if (nextName !== undefined && String(nextName) !== cachedForVersion?.name) {
+      updateData.name = String(nextName);
+    }
+
     const nextDescription = taskData.details;
-    if (nextDescription !== undefined) updateData.description = String(nextDescription);
-    const nextStart = toIsoDate(taskData.start);
-    if (nextStart !== undefined) updateData.startDate = nextStart;
-    const nextEnd = toIsoDate(taskData.end);
-    if (nextEnd !== undefined) updateData.endDate = nextEnd;
-    if (taskData.type !== undefined) updateData.type = taskData.type;
+    if (nextDescription !== undefined && String(nextDescription) !== (cachedForVersion?.description ?? '')) {
+      updateData.description = String(nextDescription);
+    }
+
+    if (!isSummary) {
+      const nextStart = toIsoDate(taskData.start);
+      if (nextStart !== undefined && nextStart !== cachedForVersion?.startDate) {
+        updateData.startDate = nextStart;
+      }
+      const nextEnd = toIsoDate(taskData.end);
+      if (nextEnd !== undefined && nextEnd !== cachedForVersion?.endDate) {
+        updateData.endDate = nextEnd;
+      }
+    }
+
+    if (taskData.type !== undefined && taskData.type !== cachedForVersion?.type) {
+      updateData.type = taskData.type;
+    }
+
+    const hasMeaningfulChange = Object.keys(updateData).length > 0;
+    if (hasMeaningfulChange && cachedForVersion?.version !== undefined) {
+      updateData.expectedVersion = cachedForVersion.version;
+    }
 
     const calls: Array<Promise<Task>> = [];
-    if (Object.keys(updateData).length > 0) {
+    if (hasMeaningfulChange) {
       calls.push(TaskService.updateTask(taskId, updateData));
     }
 
-    if (taskData.progress !== undefined && Number.isFinite(taskData.progress)) {
+    if (!isSummary && taskData.progress !== undefined && Number.isFinite(taskData.progress)) {
       const cached = this.taskCache.get(taskId);
       const nextProgress = Math.max(0, Math.min(100, Math.round(Number(taskData.progress))));
       if (!cached || cached.progress !== nextProgress) {
-        calls.push(TaskService.updateTaskProgress(taskId, nextProgress));
+        calls.push(TaskService.updateTaskProgress(taskId, nextProgress, cached?.version));
       }
     }
 
@@ -388,14 +436,18 @@ export class GanttDataProvider {
     }
 
     try {
+      const cachedMoved = this.taskCache.get(movedTaskId);
       if (newParentId !== undefined) {
-        await TaskService.updateTask(movedTaskId, { parentId: newParentId ?? null });
+        const parentUpdate: UpdateTaskDto = { parentId: newParentId ?? null };
+        if (cachedMoved?.version !== undefined) parentUpdate.expectedVersion = cachedMoved.version;
+        await TaskService.updateTask(movedTaskId, parentUpdate);
       }
       const updated = await TaskService.updateTaskOrder(
         this.projectId,
         movedTaskId,
         targetTaskId,
         (data.mode as 'before' | 'after') || 'after',
+        this.taskCache.get(movedTaskId)?.version,
       );
       const descendants = await TaskService.getDescendants(this.projectId, movedTaskId);
       this.applyEntityUpdate(movedTaskId, updated, descendants);
@@ -505,9 +557,7 @@ export class GanttDataProvider {
     }
   }
 
-  // -------------------------------------------------------------------------
   // Expand/collapse — listeners nativos + reconciliación de fallback
-  // -------------------------------------------------------------------------
 
   async handleExpandCollapseState(args: { id: GanttId; isOpen: boolean }): Promise<void> {
     const taskId = String(args.id);
@@ -537,9 +587,7 @@ export class GanttDataProvider {
     }
   }
 
-  // -------------------------------------------------------------------------
   // Utilidades internas
-  // -------------------------------------------------------------------------
 
   private resolveTaskId(rawId: GanttId | undefined): string | undefined {
     if (rawId === undefined || rawId === null) return undefined;
@@ -560,6 +608,8 @@ export class GanttDataProvider {
     this.tempIdMapping.clear();
     this.taskCache.clear();
     this.linkCache.clear();
+    this.throttleTimers.forEach((t) => clearTimeout(t));
+    this.throttleTimers.clear();
     this._ganttApi = null;
     this._next = null;
   }

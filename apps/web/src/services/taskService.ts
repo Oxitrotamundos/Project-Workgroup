@@ -5,7 +5,23 @@ import type {
   TaskFilters,
   TaskType
 } from '../types/domain';
-import type { UpdateTaskDto } from '@project-workgroup/shared';
+import type {
+  BulkTaskUpdateResponse,
+  PropagationPreview,
+  SummaryPatch,
+  UpdateTaskDto,
+} from '@project-workgroup/shared';
+
+export interface BulkUpdateItem {
+  id: string;
+  data: UpdateTaskDto;
+  expectedVersion?: number;
+}
+
+export interface BulkUpdateResult {
+  tasks: Task[];
+  summariesPatched: SummaryPatch[];
+}
 
 const toNumber = (value: unknown, fallback = 0): number => {
   if (value === null || value === undefined || value === '') return fallback;
@@ -34,6 +50,7 @@ const toDomain = (r: any): Task => ({
   type: r.type ?? 'task',
   order: toNumber(r.order, 0),
   open: r.open ?? true,
+  version: typeof r.version === 'number' ? r.version : undefined,
   createdAt: r.createdAt ?? '',
   updatedAt: r.updatedAt ?? '',
 });
@@ -131,8 +148,10 @@ export class TaskService {
   /**
    * Actualizar el progreso de una tarea
    */
-  static async updateTaskProgress(id: string, progress: number): Promise<Task> {
-    const result = await apiClient.patch<any>(`/v1/tasks/${id}/progress`, { progress });
+  static async updateTaskProgress(id: string, progress: number, expectedVersion?: number): Promise<Task> {
+    const body: Record<string, unknown> = { progress };
+    if (typeof expectedVersion === 'number') body.expectedVersion = expectedVersion;
+    const result = await apiClient.patch<any>(`/v1/tasks/${id}/progress`, body);
     return toDomain(result);
   }
 
@@ -160,17 +179,48 @@ export class TaskService {
     return toDomain(result);
   }
 
+  static async bulkUpdate(projectId: string, updates: BulkUpdateItem[]): Promise<BulkUpdateResult> {
+    const result = await apiClient.patch<BulkTaskUpdateResponse>(
+      `/v1/projects/${projectId}/tasks/bulk`,
+      { updates },
+    );
+    return {
+      tasks: result.tasks.map(toDomain),
+      summariesPatched: result.summariesPatched,
+    };
+  }
+
+  static async previewPropagation(taskId: string): Promise<PropagationPreview> {
+    return apiClient.post<PropagationPreview>(`/v1/tasks/${taskId}/propagate-dates/preview`, {});
+  }
+
+  static async applyPropagation(
+    taskId: string,
+    changes: Array<{ taskId: string; startDate: string; endDate: string; expectedVersion?: number }>,
+  ): Promise<BulkUpdateResult> {
+    const result = await apiClient.post<BulkTaskUpdateResponse>(
+      `/v1/tasks/${taskId}/propagate-dates/apply`,
+      { changes },
+    );
+    return {
+      tasks: result.tasks.map(toDomain),
+      summariesPatched: result.summariesPatched,
+    };
+  }
+
   static async updateTaskOrder(
     _projectId: string,
     movedTaskId: string,
     targetTaskId: string | null,
-    mode: 'before' | 'after'
+    mode: 'before' | 'after',
+    expectedVersion?: number,
   ): Promise<Task> {
-    const body: { afterTaskId?: string; beforeTaskId?: string } = {};
+    const body: Record<string, unknown> = {};
     if (targetTaskId) {
       if (mode === 'before') body.beforeTaskId = targetTaskId;
       else body.afterTaskId = targetTaskId;
     }
+    if (typeof expectedVersion === 'number') body.expectedVersion = expectedVersion;
     const result = await apiClient.patch<any>(`/v1/tasks/${movedTaskId}/order`, body);
     return toDomain(result);
   }
