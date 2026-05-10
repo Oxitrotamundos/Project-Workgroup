@@ -33,6 +33,46 @@ const taskRow = (overrides: Partial<any> = {}) => ({
 });
 
 describe('TasksService', () => {
+  const fakeCalendar = {
+    id: 1n,
+    scope: 'global' as const,
+    projectId: null,
+    name: 'Test',
+    timezone: 'UTC',
+    patterns: [],
+    holidays: [],
+    hoursPerDay: 8,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
+  const makeResolver = () => ({
+    resolveForProject: jest.fn().mockResolvedValue(fakeCalendar),
+    loadGlobal: jest.fn().mockResolvedValue(fakeCalendar),
+    loadForProjectStrict: jest.fn().mockResolvedValue(null),
+    invalidate: jest.fn(),
+    hoursForWeekday: jest.fn().mockReturnValue(8),
+    effectiveHoursPerDay: jest.fn().mockReturnValue(8),
+    isWorkingDay: jest.fn().mockReturnValue(true),
+    isHoliday: jest.fn().mockReturnValue(false),
+  });
+
+  const makeScheduling = () => ({
+    scheduleTask: jest.fn(({ estimatedHours, startDate }: any) => ({
+      startDate,
+      endDate: startDate,
+      workload: estimatedHours
+        ? [{ date: startDate, allocatedHours: estimatedHours }]
+        : [],
+    })),
+    workingDaysBetween: jest.fn(),
+    toUtcDateOnly: jest.fn((d: Date) => d),
+    addDays: jest.fn((d: Date, n: number) => new Date(d.getTime() + n * 86_400_000)),
+  });
+
+  const makeService = (prisma: any) =>
+    new TasksService(prisma, makeResolver() as any, makeScheduling() as any);
+
   const makePrisma = () => {
     const prisma: any = {
       project: {
@@ -52,6 +92,10 @@ describe('TasksService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
+      workload: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
     };
     prisma.$transaction = jest.fn(async (fn: any) => fn(prisma));
     return prisma;
@@ -62,7 +106,7 @@ describe('TasksService', () => {
     prisma.task.findUnique.mockResolvedValue(taskRow());
     prisma.project.findUnique.mockResolvedValue({ ownerId: 10n });
     prisma.projectMember.findUnique.mockResolvedValue(null);
-    const service = new TasksService(prisma as any);
+    const service = makeService(prisma);
 
     await expect(service.getById(10n, member)).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -78,7 +122,7 @@ describe('TasksService', () => {
     prisma.task.create.mockResolvedValue(created);
     prisma.task.findMany.mockResolvedValue([]);
     prisma.task.findUnique.mockResolvedValue(created);
-    const service = new TasksService(prisma as any);
+    const service = makeService(prisma);
 
     const result = await service.create(1n, {
       name: 'Milestone',
@@ -107,7 +151,7 @@ describe('TasksService', () => {
     prisma.task.findUnique.mockResolvedValue(child);
     prisma.task.update.mockResolvedValue(child);
     prisma.task.findMany.mockResolvedValue([summary, child]);
-    const service = new TasksService(prisma as any);
+    const service = makeService(prisma);
 
     await service.updateProgress(11n, { progress: 50 }, admin);
 
@@ -130,7 +174,7 @@ describe('TasksService', () => {
         clientVersion: '7.8.0',
       } as any),
     );
-    const service = new TasksService(prisma as any);
+    const service = makeService(prisma);
 
     await expect(
       service.update(10n, { name: 'new', expectedVersion: 4 }, admin),
@@ -144,7 +188,7 @@ describe('TasksService', () => {
   it('rejects bulkUpdate when one task does not belong to the project', async () => {
     const prisma = makePrisma();
     prisma.task.findMany.mockResolvedValue([{ id: 10n }]);
-    const service = new TasksService(prisma as any);
+    const service = makeService(prisma);
 
     await expect(
       service.bulkUpdate(
@@ -162,7 +206,7 @@ describe('TasksService', () => {
     prisma.task.findUnique.mockResolvedValueOnce(before).mockResolvedValue(after);
     prisma.task.update.mockResolvedValue(after);
     prisma.task.findMany.mockResolvedValue([after]);
-    const service = new TasksService(prisma as any);
+    const service = makeService(prisma);
 
     const result = await service.update(10n, { name: 'renamed', expectedVersion: 1 }, admin);
 

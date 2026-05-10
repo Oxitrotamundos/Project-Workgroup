@@ -15,6 +15,7 @@ import { WorkloadModule } from './workload/workload.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { IdempotencyModule } from './common/idempotency.module';
 import { ObservabilityModule } from './observability/observability.module';
+import { CalendarModule } from './calendar/calendar.module';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -46,6 +47,7 @@ const isProd = process.env.NODE_ENV === 'production';
     ApiKeysModule,
     IdempotencyModule,
     ObservabilityModule,
+    CalendarModule,
   ],
 })
 export class AppModule {}
