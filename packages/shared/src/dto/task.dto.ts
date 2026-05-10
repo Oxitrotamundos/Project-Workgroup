@@ -1,8 +1,12 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   Max,
@@ -10,7 +14,9 @@ import {
   Min,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export const TASK_STATUSES = ['not-started', 'in-progress', 'completed', 'blocked'] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -91,11 +97,17 @@ export class UpdateTaskDto {
   @ValidateIf((_, value) => value !== null)
   @IsString()
   parentId?: string | null;
+
+  @IsOptional() @IsInt() @Min(1)
+  expectedVersion?: number;
 }
 
 export class UpdateProgressDto {
   @IsInt() @Min(0) @Max(100)
   progress!: number;
+
+  @IsOptional() @IsInt() @Min(1)
+  expectedVersion?: number;
 }
 
 export class UpdateOrderDto {
@@ -104,6 +116,9 @@ export class UpdateOrderDto {
 
   @IsOptional() @IsString()
   beforeTaskId?: string;
+
+  @IsOptional() @IsInt() @Min(1)
+  expectedVersion?: number;
 }
 
 export interface TaskResponse {
@@ -126,6 +141,82 @@ export interface TaskResponse {
   tags: string[];
   estimatedHours: string;
   actualHours: string | null;
+  version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export class BulkTaskUpdateItemDto {
+  @IsString()
+  id!: string;
+
+  @IsObject()
+  @ValidateNested()
+  @Type(() => UpdateTaskDto)
+  data!: UpdateTaskDto;
+
+  @IsOptional() @IsInt() @Min(1)
+  expectedVersion?: number;
+}
+
+export class BulkTaskUpdateDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => BulkTaskUpdateItemDto)
+  updates!: BulkTaskUpdateItemDto[];
+}
+
+export interface SummaryPatch {
+  id: string;
+  startDate: string;
+  endDate: string;
+  duration: string;
+  progress: number;
+  version: number;
+}
+
+export interface BulkTaskUpdateResponse {
+  tasks: TaskResponse[];
+  summariesPatched: SummaryPatch[];
+}
+
+export interface PropagationChange {
+  taskId: string;
+  currentVersion: number;
+  currentStartDate: string;
+  currentEndDate: string;
+  proposedStartDate: string;
+  proposedEndDate: string;
+  via: 'e2s' | 's2s' | 'e2e' | 's2e';
+  fromTaskId: string;
+}
+
+export interface PropagationPreview {
+  sourceTaskId: string;
+  changes: PropagationChange[];
+}
+
+export class ApplyPropagationDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => PropagationApplyItemDto)
+  changes!: PropagationApplyItemDto[];
+}
+
+export class PropagationApplyItemDto {
+  @IsString()
+  taskId!: string;
+
+  @IsDateString()
+  startDate!: string;
+
+  @IsDateString()
+  endDate!: string;
+
+  @IsOptional() @IsInt() @Min(1)
+  expectedVersion?: number;
 }
