@@ -1,5 +1,7 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '../generated/prisma/client';
 import { CreateTaskLinkDto, TaskLinkResponse, UpdateTaskLinkDto } from '@project-workgroup/shared';
 import { AuthUser } from '../auth/auth.guard';
 import { wouldCreateCycle, Edge } from './cycle-detector';
@@ -10,13 +12,17 @@ type TaskLinkRow = {
   sourceTaskId: bigint;
   targetTaskId: bigint;
   type: string;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 };
 
 @Injectable()
 export class TaskLinksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @InjectPinoLogger(TaskLinksService.name) private readonly logger?: PinoLogger,
+  ) {}
 
   private toResponse(l: TaskLinkRow): TaskLinkResponse {
     return {
@@ -25,6 +31,7 @@ export class TaskLinksService {
       sourceTaskId: l.sourceTaskId.toString(),
       targetTaskId: l.targetTaskId.toString(),
       type: l.type as TaskLinkResponse['type'],
+      version: l.version,
       createdAt: l.createdAt.toISOString(),
       updatedAt: l.updatedAt.toISOString(),
     };
@@ -113,6 +120,10 @@ export class TaskLinksService {
       }));
 
       if (wouldCreateCycle(edges, dto.sourceTaskId, dto.targetTaskId)) {
+        this.logger?.warn(
+          { projectId: projectId.toString(), sourceTaskId: dto.sourceTaskId, targetTaskId: dto.targetTaskId },
+          'task link rejected: would create cycle',
+        );
         throw new ConflictException('adding this link would create a cycle');
       }
 
@@ -124,6 +135,10 @@ export class TaskLinksService {
           type: dto.type as any,
         },
       });
+      this.logger?.info(
+        { op: 'create-link', projectId: projectId.toString(), linkId: link.id.toString() },
+        'task link created',
+      );
       return this.toResponse(link);
     });
   }
@@ -175,10 +190,33 @@ export class TaskLinksService {
     });
     if (duplicate && duplicate.id !== id) throw new ConflictException('link already exists');
 
-    const link = await this.prisma.taskLink.update({
-      where: { id },
-      data: { type: dto.type as any },
-    });
+    const where = dto.expectedVersion !== undefined ? { id, version: dto.expectedVersion } : { id };
+
+    let link;
+    try {
+      link = await this.prisma.taskLink.update({
+        where,
+        data: { type: dto.type as any, version: { increment: 1 } },
+      });
+    } catch (err) {
+      if (
+        dto.expectedVersion !== undefined &&
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
+        const current = await this.prisma.taskLink.findUnique({ where: { id }, select: { version: true } });
+        this.logger?.warn(
+          { op: 'update-link', linkId: id.toString(), expectedVersion: dto.expectedVersion, currentVersion: current?.version ?? null },
+          'task link version conflict',
+        );
+        throw new ConflictException({
+          code: 'TASK_LINK_VERSION_STALE',
+          message: 'task link has been modified by another request',
+          currentVersion: current?.version ?? null,
+        });
+      }
+      throw err;
+    }
     return this.toResponse(link);
   }
 
