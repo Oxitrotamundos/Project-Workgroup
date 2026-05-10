@@ -6,6 +6,7 @@ import {
   IsDateString,
   IsIn,
   IsInt,
+  IsNumberString,
   IsObject,
   IsOptional,
   IsString,
@@ -37,8 +38,8 @@ export class CreateTaskDto {
   @IsDateString()
   startDate!: string;
 
-  @IsDateString()
-  endDate!: string;
+  @IsOptional() @IsDateString()
+  endDate?: string;
 
   @IsIn(TASK_PRIORITIES)
   priority!: TaskPriority;
@@ -60,6 +61,10 @@ export class CreateTaskDto {
 
   @IsOptional() @IsString()
   afterTaskId?: string;
+
+  // Esfuerzo en horas. Si viene, endDate se computa desde el calendario.
+  @IsOptional() @IsNumberString({ no_symbols: false })
+  estimatedHours?: string;
 }
 
 export class UpdateTaskDto {
@@ -100,6 +105,9 @@ export class UpdateTaskDto {
 
   @IsOptional() @IsInt() @Min(1)
   expectedVersion?: number;
+
+  @IsOptional() @IsNumberString({ no_symbols: false })
+  estimatedHours?: string;
 }
 
 export class UpdateProgressDto {
@@ -130,6 +138,7 @@ export interface TaskResponse {
   description: string | null;
   startDate: string;
   endDate: string;
+  /** @deprecated Derivable de estimatedHours / hoursPerDay. Se eliminará en una versión futura. */
   duration: string;
   progress: number;
   priority: TaskPriority;
@@ -141,6 +150,8 @@ export interface TaskResponse {
   tags: string[];
   estimatedHours: string;
   actualHours: string | null;
+  /** Horas efectivas por día laboral del calendario resuelto para este proyecto. */
+  hoursPerDay: string;
   version: number;
   createdAt: string;
   updatedAt: string;
