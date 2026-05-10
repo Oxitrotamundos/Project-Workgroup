@@ -9,7 +9,9 @@ const RETENTION_HOURS = 24;
 export class IdempotencyCleanupService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() @InjectPinoLogger(IdempotencyCleanupService.name) private readonly logger?: PinoLogger,
+    @Optional()
+    @InjectPinoLogger(IdempotencyCleanupService.name)
+    private readonly logger?: PinoLogger,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -23,7 +25,10 @@ export class IdempotencyCleanupService implements OnModuleInit {
       where: { createdAt: { lt: cutoff } },
     });
     if (count > 0) {
-      this.logger?.info({ removed: count, cutoff: cutoff.toISOString() }, 'idempotency keys purged');
+      this.logger?.info(
+        { removed: count, cutoff: cutoff.toISOString() },
+        'idempotency keys purged',
+      );
     }
   }
 }
