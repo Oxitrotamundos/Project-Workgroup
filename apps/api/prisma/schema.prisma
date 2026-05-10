@@ -136,6 +136,7 @@ model Task {
   tags           String[]     @default([])
   estimatedHours Decimal      @default(0) @map("estimated_hours") @db.Decimal(10, 2)
   actualHours    Decimal?     @map("actual_hours") @db.Decimal(10, 2)
+  version        Int          @default(1)
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
@@ -159,6 +160,7 @@ model TaskLink {
   sourceTaskId BigInt       @map("source_task_id")
   targetTaskId BigInt       @map("target_task_id")
   type         TaskLinkType
+  version      Int          @default(1)
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
@@ -208,4 +210,20 @@ model ApiKey {
 
   @@index([userId])
   @@map("api_keys")
+}
+
+model IdempotencyKey {
+  id             BigInt   @id @default(autoincrement())
+  key            String
+  userId         BigInt   @map("user_id")
+  method         String
+  path           String
+  requestHash    String   @map("request_hash")
+  responseStatus Int      @map("response_status")
+  responseBody   Json?    @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([key, userId])
+  @@index([createdAt])
+  @@map("idempotency_keys")
 }
