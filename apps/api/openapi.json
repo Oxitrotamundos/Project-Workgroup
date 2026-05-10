@@ -814,6 +814,142 @@
         ]
       }
     },
+    "/calendar/global": {
+      "get": {
+        "operationId": "CalendarController_getGlobal",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "calendar"
+        ]
+      },
+      "patch": {
+        "operationId": "CalendarController_upsertGlobal",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertCalendarDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "calendar"
+        ]
+      }
+    },
+    "/projects/{id}/calendar": {
+      "get": {
+        "operationId": "CalendarController_getForProject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "calendar"
+        ]
+      },
+      "patch": {
+        "operationId": "CalendarController_upsertForProject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertCalendarDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "calendar"
+        ]
+      },
+      "delete": {
+        "operationId": "CalendarController_deleteProjectOverride",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "calendar"
+        ]
+      }
+    },
     "/projects/{projectId}/task-links": {
       "post": {
         "operationId": "TaskLinksController_create",
@@ -1241,6 +1377,10 @@
         "properties": {}
       },
       "ApplyPropagationDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpsertCalendarDto": {
         "type": "object",
         "properties": {}
       },
