@@ -120,7 +120,7 @@ describe('TasksService', () => {
   it('rejects update when expectedVersion does not match current version', async () => {
     const prisma = makePrisma();
     const stored = taskRow({ version: 5 });
-    prisma.task.findUnique.mockImplementation(({ where, select }: any) => {
+    prisma.task.findUnique.mockImplementation(({ select }: any) => {
       if (select?.version) return Promise.resolve({ version: 5 });
       return Promise.resolve(stored);
     });
