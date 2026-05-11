@@ -10,6 +10,7 @@ const ROUTE_CONFIGS: RouteNavigationConfig = {
   '/dashboard': {
     title: 'Project Workgroup',
     subtitle: undefined,
+    crumbs: undefined,
     showLogo: true,
     showBackButton: false,
     actions: undefined,
@@ -17,8 +18,9 @@ const ROUTE_CONFIGS: RouteNavigationConfig = {
     logoAlt: 'Project Workgroup Logo'
   },
   '/project': {
-    title: undefined, // El título se establecerá por el componente de proyecto
+    title: undefined,
     subtitle: undefined,
+    crumbs: undefined,
     showLogo: false,
     showBackButton: true,
     backTo: '/dashboard',
