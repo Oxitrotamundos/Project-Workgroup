@@ -16,7 +16,9 @@ export const useTaskStats = (tasks: Task[]): TaskStats =>
     let blocked = 0;
     let inProgress = 0;
     for (const t of tasks) {
-      totalHours += t.estimatedHours ?? 0;
+      if (t.type !== 'summary') {
+        totalHours += t.estimatedHours ?? 0;
+      }
       if (t.status === 'completed') done += 1;
       else if (t.status === 'blocked') blocked += 1;
       else if (t.status === 'in-progress') inProgress += 1;

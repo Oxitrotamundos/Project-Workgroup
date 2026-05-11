@@ -158,11 +158,22 @@ const ProjectView: React.FC = () => {
   const handleUpdateTaskInline = React.useCallback(
     async (
       taskId: string,
-      patch: { status?: TaskStatus; priority?: TaskPriority; estimatedHours?: number; progress?: number },
+      patch: {
+        status?: TaskStatus;
+        priority?: TaskPriority;
+        estimatedHours?: number;
+        progress?: number;
+        startDate?: string;
+        endDate?: string;
+      },
       expectedVersion?: number,
     ) => {
       const hasGeneralPatch =
-        patch.status !== undefined || patch.priority !== undefined || patch.estimatedHours !== undefined;
+        patch.status !== undefined ||
+        patch.priority !== undefined ||
+        patch.estimatedHours !== undefined ||
+        patch.startDate !== undefined ||
+        patch.endDate !== undefined;
       let latest: Task | undefined;
       try {
         if (hasGeneralPatch) {
@@ -170,6 +181,8 @@ const ProjectView: React.FC = () => {
             ...(patch.status !== undefined && { status: patch.status }),
             ...(patch.priority !== undefined && { priority: patch.priority }),
             ...(patch.estimatedHours !== undefined && { estimatedHours: String(patch.estimatedHours) }),
+            ...(patch.startDate !== undefined && { startDate: patch.startDate }),
+            ...(patch.endDate !== undefined && { endDate: patch.endDate }),
             ...(expectedVersion !== undefined && { expectedVersion }),
           });
         }

@@ -298,6 +298,31 @@
   -moz-appearance: textfield;
 }
 
+.tv-date-trigger {
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tv-date-trigger:hover {
+  background: var(--surface-2);
+}
+
+.tv-date-input {
+  width: 100%;
+  min-width: 150px;
+  height: 24px;
+  padding: 0 6px;
+  background: var(--surface);
+  border: 1px solid var(--p-500);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-1);
+  outline: none;
+  box-shadow: var(--ring);
+}
+
 /* ── Inline menu popover ──────────────────────────────────────────── */
 .tv-popover {
   position: absolute;

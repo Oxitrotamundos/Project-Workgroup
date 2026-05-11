@@ -22,7 +22,14 @@ interface Props {
   onCreateTask?: (input: NewTaskInput) => Promise<void>;
   onUpdateTask?: (
     taskId: string,
-    patch: { status?: TaskStatus; priority?: TaskPriority; estimatedHours?: number; progress?: number },
+    patch: {
+      status?: TaskStatus;
+      priority?: TaskPriority;
+      estimatedHours?: number;
+      progress?: number;
+      startDate?: string;
+      endDate?: string;
+    },
     expectedVersion?: number,
   ) => Promise<void>;
   onTasksChanged?: (payload: GanttDataChangePayload) => void;

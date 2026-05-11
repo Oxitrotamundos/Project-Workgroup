@@ -14,8 +14,17 @@ type MenuTarget =
 
 type HoursEdit = { taskId: string; value: string } | null;
 type ProgressEdit = { taskId: string; value: string } | null;
+type DateField = 'startDate' | 'endDate';
+type DateEdit = { taskId: string; field: DateField; value: string } | null;
 
-type InlinePatch = { status?: TaskStatus; priority?: TaskPriority; estimatedHours?: number; progress?: number };
+type InlinePatch = {
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  estimatedHours?: number;
+  progress?: number;
+  startDate?: string;
+  endDate?: string;
+};
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   'not-started': 'Pendiente',
@@ -66,7 +75,31 @@ const formatDate = (iso: string): string => {
   const day = String(d.getUTCDate()).padStart(2, '0');
   const month = d.toLocaleString('es', { month: 'short', timeZone: 'UTC' }).replace('.', '');
   const year = String(d.getUTCFullYear()).slice(-2);
-  return `${day} ${month} ${year}`;
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${day} ${month} ${year} ${hh}:${mm}`;
+};
+
+const isoToLocalInput = (iso: string): string => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const yyyy = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${yyyy}-${mo}-${dd}T${hh}:${mm}`;
+};
+
+const localInputToIso = (value: string): string | null => {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+  if (!match) return null;
+  const [, y, mo, d, h, mi, s] = match;
+  const dt = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s ?? 0)));
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString();
 };
 
 const formatHours = (n: number | undefined): string => {
@@ -124,6 +157,7 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
   const [menu, setMenu] = useState<MenuTarget>(null);
   const [hoursEdit, setHoursEdit] = useState<HoursEdit>(null);
   const [progressEdit, setProgressEdit] = useState<ProgressEdit>(null);
+  const [dateEdit, setDateEdit] = useState<DateEdit>(null);
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
@@ -228,6 +262,27 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
     setProgressEdit({ taskId: task.id, value: String(task.progress ?? 0) });
   };
 
+  const startDateEdit = (task: Task, field: DateField) => {
+    if (!onUpdate || task.type === 'summary') return;
+    const source = field === 'startDate' ? task.startDate : task.endDate;
+    setDateEdit({ taskId: task.id, field, value: isoToLocalInput(source) });
+  };
+
+  const commitDateEdit = async (task: Task) => {
+    if (!dateEdit || dateEdit.taskId !== task.id) return;
+    const { field, value } = dateEdit;
+    setDateEdit(null);
+    if (!value) return;
+    const iso = localInputToIso(value);
+    if (!iso) {
+      setError('Fecha inválida');
+      return;
+    }
+    const currentIso = (field === 'startDate' ? task.startDate : task.endDate) ?? '';
+    if (currentIso && new Date(currentIso).toISOString() === iso) return;
+    await applyPatch(task, { [field]: iso } as InlinePatch);
+  };
+
   const commitProgressEdit = async (task: Task) => {
     if (!progressEdit || progressEdit.taskId !== task.id) return;
     const raw = progressEdit.value.trim();
@@ -283,10 +338,10 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
               <th className="tv-th tv-th--center tv-th-sortable" onClick={() => toggleSort('priority')} style={{ width: 64 }}>
                 Prio <SortArrow active={sortKey === 'priority'} dir={sortDir} />
               </th>
-              <th className="tv-th tv-th--right tv-th-sortable" onClick={() => toggleSort('startDate')} style={{ width: 110 }}>
+              <th className="tv-th tv-th--right tv-th-sortable" onClick={() => toggleSort('startDate')} style={{ width: 160 }}>
                 Inicio <SortArrow active={sortKey === 'startDate'} dir={sortDir} />
               </th>
-              <th className="tv-th tv-th--right tv-th-sortable" onClick={() => toggleSort('endDate')} style={{ width: 110 }}>
+              <th className="tv-th tv-th--right tv-th-sortable" onClick={() => toggleSort('endDate')} style={{ width: 160 }}>
                 Fin <SortArrow active={sortKey === 'endDate'} dir={sortDir} />
               </th>
               <th className="tv-th tv-th--right tv-th-sortable" onClick={() => toggleSort('estimatedHours')} style={{ width: 90 }}>
@@ -367,8 +422,72 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
                       )}
                     </span>
                   </td>
-                  <td className="tv-td tv-td--mono tv-td--num">{formatDate(task.startDate)}</td>
-                  <td className="tv-td tv-td--mono tv-td--num">{formatDate(task.endDate)}</td>
+                  <td className="tv-td tv-td--mono tv-td--num">
+                    {dateEdit?.taskId === task.id && dateEdit.field === 'startDate' ? (
+                      <input
+                        type="datetime-local"
+                        className="tv-date-input"
+                        value={dateEdit.value}
+                        autoFocus
+                        onChange={(e) => setDateEdit({ taskId: task.id, field: 'startDate', value: e.target.value })}
+                        onBlur={() => commitDateEdit(task)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            (e.currentTarget as HTMLInputElement).blur();
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            setDateEdit(null);
+                          }
+                        }}
+                        aria-label="Editar fecha y hora de inicio"
+                      />
+                    ) : onUpdate && task.type !== 'summary' ? (
+                      <button
+                        type="button"
+                        className="tv-trigger tv-date-trigger"
+                        onClick={() => startDateEdit(task, 'startDate')}
+                        aria-label={`Editar inicio, actual ${formatDate(task.startDate)}`}
+                      >
+                        {formatDate(task.startDate)}
+                      </button>
+                    ) : (
+                      formatDate(task.startDate)
+                    )}
+                  </td>
+                  <td className="tv-td tv-td--mono tv-td--num">
+                    {dateEdit?.taskId === task.id && dateEdit.field === 'endDate' ? (
+                      <input
+                        type="datetime-local"
+                        className="tv-date-input"
+                        value={dateEdit.value}
+                        autoFocus
+                        onChange={(e) => setDateEdit({ taskId: task.id, field: 'endDate', value: e.target.value })}
+                        onBlur={() => commitDateEdit(task)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            (e.currentTarget as HTMLInputElement).blur();
+                          } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            setDateEdit(null);
+                          }
+                        }}
+                        aria-label="Editar fecha y hora de fin"
+                      />
+                    ) : onUpdate && task.type !== 'summary' ? (
+                      <button
+                        type="button"
+                        className="tv-trigger tv-date-trigger"
+                        onClick={() => startDateEdit(task, 'endDate')}
+                        aria-label={`Editar fin, actual ${formatDate(task.endDate)}`}
+                      >
+                        {formatDate(task.endDate)}
+                      </button>
+                    ) : (
+                      formatDate(task.endDate)
+                    )}
+                  </td>
                   <td className="tv-td tv-td--num">
                     {hoursEdit?.taskId === task.id ? (
                       <input
