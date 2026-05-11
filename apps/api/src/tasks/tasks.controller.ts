@@ -50,7 +50,10 @@ export class TasksController {
   @Post('projects/:projectId/tasks')
   @UseGuards(ProjectMembershipGuard)
   @RequireProject('projectId')
-  async create(@Param('projectId') projectId: string, @Body() dto: CreateTaskDto) {
+  async create(
+    @Param('projectId') projectId: string,
+    @Body() dto: CreateTaskDto,
+  ) {
     return this.tasks.create(this.id(projectId, 'projectId'), dto);
   }
 
@@ -71,17 +74,29 @@ export class TasksController {
   }
 
   @Patch('tasks/:id')
-  async update(@Param('id') id: string, @Body() dto: UpdateTaskDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.tasks.update(this.id(id), dto, user);
   }
 
   @Patch('tasks/:id/progress')
-  async updateProgress(@Param('id') id: string, @Body() dto: UpdateProgressDto, @CurrentUser() user: AuthUser) {
+  async updateProgress(
+    @Param('id') id: string,
+    @Body() dto: UpdateProgressDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.tasks.updateProgress(this.id(id), dto, user);
   }
 
   @Patch('tasks/:id/order')
-  async updateOrder(@Param('id') id: string, @Body() dto: UpdateOrderDto, @CurrentUser() user: AuthUser) {
+  async updateOrder(
+    @Param('id') id: string,
+    @Body() dto: UpdateOrderDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.tasks.updateOrder(this.id(id), dto, user);
   }
 
@@ -92,7 +107,10 @@ export class TasksController {
   }
 
   @Post('tasks/:id/propagate-dates/preview')
-  async previewPropagation(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  async previewPropagation(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.tasks.previewPropagation(this.id(id), user);
   }
 

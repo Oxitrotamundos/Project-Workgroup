@@ -1,4 +1,11 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../generated/prisma/client';
@@ -17,10 +24,21 @@ import {
   UpdateTaskDto,
 } from '@project-workgroup/shared';
 import { AuthUser } from '../auth/auth.guard';
-import { statusToPrisma, statusToWire, priorityToPrisma, priorityToWire } from './wire';
+import {
+  statusToPrisma,
+  statusToWire,
+  priorityToPrisma,
+  priorityToWire,
+} from './wire';
 import { firstOrder, between, after } from './fractional-index';
-import { CalendarResolverService, ResolvedCalendar } from '../calendar/calendar-resolver.service';
-import { SchedulingService, ScheduledSlot } from '../calendar/scheduling.service';
+import {
+  CalendarResolverService,
+  ResolvedCalendar,
+} from '../calendar/calendar-resolver.service';
+import {
+  SchedulingService,
+  ScheduledSlot,
+} from '../calendar/scheduling.service';
 
 type TxClient = Prisma.TransactionClient;
 type DbClient = PrismaService | TxClient;
@@ -50,7 +68,10 @@ type TaskRow = {
   updatedAt: Date;
 };
 
-type SummaryCalcRow = Pick<TaskRow, 'id' | 'parentId' | 'startDate' | 'endDate' | 'duration' | 'progress' | 'type'>;
+type SummaryCalcRow = Pick<
+  TaskRow,
+  'id' | 'parentId' | 'startDate' | 'endDate' | 'duration' | 'progress' | 'type'
+>;
 type SummaryStats = {
   startDate: Date | null;
   endDate: Date | null;
@@ -66,11 +87,17 @@ export class TasksService {
     private readonly prisma: PrismaService,
     private readonly calendarResolver: CalendarResolverService,
     private readonly scheduling: SchedulingService,
-    @Optional() @InjectPinoLogger(TasksService.name) private readonly logger?: PinoLogger,
+    @Optional()
+    @InjectPinoLogger(TasksService.name)
+    private readonly logger?: PinoLogger,
     @Optional() private readonly metrics?: MetricsService,
   ) {}
 
-  private logOp(op: string, fields: Record<string, unknown>, durationMs: number): void {
+  private logOp(
+    op: string,
+    fields: Record<string, unknown>,
+    durationMs: number,
+  ): void {
     this.logger?.info({ op, durationMs, ...fields }, `task ${op}`);
     this.metrics?.recordUpdate(op, 'ok', durationMs);
   }
@@ -108,7 +135,9 @@ export class TasksService {
     if (raw === undefined || raw === null || raw === '') return undefined;
     const n = Number(raw);
     if (!Number.isFinite(n) || n < 0) {
-      throw new BadRequestException('estimatedHours must be a non-negative number');
+      throw new BadRequestException(
+        'estimatedHours must be a non-negative number',
+      );
     }
     return n;
   }
@@ -137,7 +166,8 @@ export class TasksService {
         startDate: rawStart,
         endDate: rawStart,
         duration: '0',
-        estimatedHours: estimatedHours !== undefined ? estimatedHours.toFixed(2) : undefined,
+        estimatedHours:
+          estimatedHours !== undefined ? estimatedHours.toFixed(2) : undefined,
         hoursPerDay,
         workload: [],
         calendar,
@@ -145,16 +175,15 @@ export class TasksService {
     }
 
     if (estimatedHours !== undefined && estimatedHours > 0) {
-      const result = this.scheduling.scheduleTask({
+      const result = this.scheduling.scheduleFromHours({
         estimatedHours,
-        startDate: rawStart,
+        startDateTime: rawStart,
         calendar,
       });
-      const durationDays = estimatedHours / hoursPerDay;
       return {
         startDate: result.startDate,
         endDate: result.endDate,
-        duration: durationDays.toFixed(2),
+        duration: (estimatedHours / hoursPerDay).toFixed(2),
         estimatedHours: estimatedHours.toFixed(2),
         hoursPerDay,
         workload: result.workload,
@@ -162,26 +191,42 @@ export class TasksService {
       };
     }
 
-    const endDate = rawEnd ?? rawStart;
-    if (endDate.getTime() < rawStart.getTime()) {
-      throw new BadRequestException('endDate must be greater than or equal to startDate');
+    if (rawEnd !== undefined) {
+      if (rawEnd.getTime() <= rawStart.getTime()) {
+        throw new BadRequestException('endDate must be greater than startDate');
+      }
+      const result = this.scheduling.scheduleFromRange({
+        startDateTime: rawStart,
+        endDateTime: rawEnd,
+        calendar,
+      });
+      return {
+        startDate: result.startDate,
+        endDate: result.endDate,
+        duration:
+          hoursPerDay > 0
+            ? (result.estimatedHours / hoursPerDay).toFixed(2)
+            : '0',
+        estimatedHours: result.estimatedHours.toFixed(2),
+        hoursPerDay,
+        workload: result.workload,
+        calendar,
+      };
     }
 
-    const workingDays = this.scheduling.workingDaysBetween(calendar, rawStart, endDate);
-    const effectiveWorkingDays = Math.max(workingDays, 1);
-    const derivedEstimatedHours = effectiveWorkingDays * hoursPerDay;
-    const scheduleResult = this.scheduling.scheduleTask({
-      estimatedHours: derivedEstimatedHours,
-      startDate: rawStart,
+    const defaultHours = hoursPerDay > 0 ? hoursPerDay : 8;
+    const result = this.scheduling.scheduleFromHours({
+      estimatedHours: defaultHours,
+      startDateTime: rawStart,
       calendar,
     });
     return {
-      startDate: scheduleResult.startDate,
-      endDate: scheduleResult.endDate,
-      duration: effectiveWorkingDays.toFixed(2),
-      estimatedHours: derivedEstimatedHours.toFixed(2),
+      startDate: result.startDate,
+      endDate: result.endDate,
+      duration: '1.00',
+      estimatedHours: defaultHours.toFixed(2),
       hoursPerDay,
-      workload: scheduleResult.workload,
+      workload: result.workload,
       calendar,
     };
   }
@@ -214,10 +259,22 @@ export class TasksService {
     );
   }
 
-  private async assertVersionConflict(id: bigint, expectedVersion: number, op: string): Promise<never> {
-    const current = await this.prisma.task.findUnique({ where: { id }, select: { version: true } });
+  private async assertVersionConflict(
+    id: bigint,
+    expectedVersion: number,
+    op: string,
+  ): Promise<never> {
+    const current = await this.prisma.task.findUnique({
+      where: { id },
+      select: { version: true },
+    });
     this.logger?.warn(
-      { op, taskId: id.toString(), expectedVersion, currentVersion: current?.version ?? null },
+      {
+        op,
+        taskId: id.toString(),
+        expectedVersion,
+        currentVersion: current?.version ?? null,
+      },
       'task version conflict',
     );
     this.metrics?.recordConflict(op);
@@ -228,7 +285,10 @@ export class TasksService {
     });
   }
 
-  private async assertProjectAccess(projectId: bigint, user: AuthUser): Promise<void> {
+  private async assertProjectAccess(
+    projectId: bigint,
+    user: AuthUser,
+  ): Promise<void> {
     if (user.role === 'admin') return;
 
     const project = await this.prisma.project.findUnique({
@@ -244,7 +304,10 @@ export class TasksService {
     if (!membership) throw new ForbiddenException('not a project member');
   }
 
-  private async assertTaskAccess(taskId: bigint, user: AuthUser): Promise<TaskRow> {
+  private async assertTaskAccess(
+    taskId: bigint,
+    user: AuthUser,
+  ): Promise<TaskRow> {
     const task = await this.prisma.task.findUnique({ where: { id: taskId } });
     if (!task) throw new NotFoundException('task not found');
     await this.assertProjectAccess(task.projectId, user);
@@ -267,17 +330,29 @@ export class TasksService {
     }
   }
 
-  private async resolveAssigneeId(assigneeId?: string): Promise<bigint | null | undefined> {
+  private async resolveAssigneeId(
+    assigneeId?: string,
+  ): Promise<bigint | null | undefined> {
     if (assigneeId === undefined) return undefined;
     if (!assigneeId) return null;
 
     const id = this.parseBigInt(assigneeId, 'assigneeId');
-    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
-    if (!user) throw new BadRequestException('assigneeId must reference an existing user');
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!user)
+      throw new BadRequestException(
+        'assigneeId must reference an existing user',
+      );
     return id;
   }
 
-  private async validateParent(projectId: bigint, taskId: bigint | null, parentId?: string | null): Promise<bigint | null | undefined> {
+  private async validateParent(
+    projectId: bigint,
+    taskId: bigint | null,
+    parentId?: string | null,
+  ): Promise<bigint | null | undefined> {
     if (parentId === undefined) return undefined;
     if (parentId === null || parentId === '') return null;
 
@@ -291,7 +366,9 @@ export class TasksService {
       select: { projectId: true, parentId: true },
     });
     if (!newParent || newParent.projectId !== projectId) {
-      throw new BadRequestException('parentId must be a task in the same project');
+      throw new BadRequestException(
+        'parentId must be a task in the same project',
+      );
     }
 
     let cursor: bigint | null = newParent.parentId;
@@ -318,23 +395,33 @@ export class TasksService {
     let beforeOrder: string | null = null;
 
     if (afterTaskId) {
-      const t = await this.prisma.task.findUnique({ where: { id: this.parseBigInt(afterTaskId, 'afterTaskId') } });
+      const t = await this.prisma.task.findUnique({
+        where: { id: this.parseBigInt(afterTaskId, 'afterTaskId') },
+      });
       if (!t || t.projectId !== projectId) {
-        throw new BadRequestException('afterTaskId must be a task in the same project');
+        throw new BadRequestException(
+          'afterTaskId must be a task in the same project',
+        );
       }
       afterOrder = t.order.toString();
     }
 
     if (beforeTaskId) {
-      const t = await this.prisma.task.findUnique({ where: { id: this.parseBigInt(beforeTaskId, 'beforeTaskId') } });
+      const t = await this.prisma.task.findUnique({
+        where: { id: this.parseBigInt(beforeTaskId, 'beforeTaskId') },
+      });
       if (!t || t.projectId !== projectId) {
-        throw new BadRequestException('beforeTaskId must be a task in the same project');
+        throw new BadRequestException(
+          'beforeTaskId must be a task in the same project',
+        );
       }
       beforeOrder = t.order.toString();
     }
 
     if (afterTaskId && beforeTaskId && afterTaskId === beforeTaskId) {
-      throw new BadRequestException('afterTaskId and beforeTaskId must be different tasks');
+      throw new BadRequestException(
+        'afterTaskId and beforeTaskId must be different tasks',
+      );
     }
 
     if (afterOrder === null && beforeOrder === null) {
@@ -352,11 +439,16 @@ export class TasksService {
     try {
       return between(afterOrder, beforeOrder);
     } catch (error) {
-      throw new BadRequestException(error instanceof Error ? error.message : 'invalid order bounds');
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'invalid order bounds',
+      );
     }
   }
 
-  private async recalculateProjectSummaries(projectId: bigint, client: DbClient = this.prisma): Promise<SummaryPatch[]> {
+  private async recalculateProjectSummaries(
+    projectId: bigint,
+    client: DbClient = this.prisma,
+  ): Promise<SummaryPatch[]> {
     const tasks = await client.task.findMany({
       where: { projectId },
       select: {
@@ -393,8 +485,10 @@ export class TasksService {
       let fallbackCount = 0;
 
       const includeBounds = (start: Date | null, end: Date | null) => {
-        if (start && (!startDate || start.getTime() < startDate.getTime())) startDate = start;
-        if (end && (!endDate || end.getTime() > endDate.getTime())) endDate = end;
+        if (start && (!startDate || start.getTime() < startDate.getTime()))
+          startDate = start;
+        if (end && (!endDate || end.getTime() > endDate.getTime()))
+          endDate = end;
       };
 
       if (children.length === 0) {
@@ -420,7 +514,14 @@ export class TasksService {
         }
       }
 
-      const result = { startDate, endDate, weightedProgress, progressWeight, fallbackProgress, fallbackCount };
+      const result = {
+        startDate,
+        endDate,
+        weightedProgress,
+        progressWeight,
+        fallbackProgress,
+        fallbackCount,
+      };
       memo.set(key, result);
       return result;
     };
@@ -429,11 +530,20 @@ export class TasksService {
     const summaryIds = tasks
       .filter((task) => task.type === 'summary')
       .map((task) => task.id);
-    const previousById = new Map<string, { startDate: Date; endDate: Date; duration: string; progress: number }>();
+    const previousById = new Map<
+      string,
+      { startDate: Date; endDate: Date; duration: string; progress: number }
+    >();
     if (summaryIds.length > 0) {
       const previous = await client.task.findMany({
         where: { id: { in: summaryIds } },
-        select: { id: true, startDate: true, endDate: true, duration: true, progress: true },
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          duration: true,
+          progress: true,
+        },
       });
       for (const p of previous) {
         previousById.set(p.id.toString(), {
@@ -447,7 +557,8 @@ export class TasksService {
 
     for (const summary of tasks.filter((task) => task.type === 'summary')) {
       const stats = collect(summary);
-      const hasChildren = (childrenByParent.get(summary.id.toString()) ?? []).length > 0;
+      const hasChildren =
+        (childrenByParent.get(summary.id.toString()) ?? []).length > 0;
       if (!hasChildren || !stats.startDate || !stats.endDate) continue;
 
       const progress =
@@ -459,7 +570,10 @@ export class TasksService {
       const clampedProgress = Math.max(0, Math.min(100, progress));
       const duration = Math.max(
         0,
-        Math.ceil((stats.endDate.getTime() - stats.startDate.getTime()) / (1000 * 60 * 60 * 24)),
+        Math.ceil(
+          (stats.endDate.getTime() - stats.startDate.getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
       ).toString();
 
       const prev = previousById.get(summary.id.toString());
@@ -480,7 +594,14 @@ export class TasksService {
           progress: clampedProgress,
           version: { increment: 1 },
         },
-        select: { id: true, startDate: true, endDate: true, duration: true, progress: true, version: true },
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          duration: true,
+          progress: true,
+          version: true,
+        },
       });
       patches.push({
         id: updated.id.toString(),
@@ -496,7 +617,10 @@ export class TasksService {
 
   async list(projectId: bigint): Promise<TaskResponse[]> {
     const [tasks, calendar] = await Promise.all([
-      this.prisma.task.findMany({ where: { projectId }, orderBy: { order: 'asc' } }),
+      this.prisma.task.findMany({
+        where: { projectId },
+        orderBy: { order: 'asc' },
+      }),
       this.calendarResolver.resolveForProject(projectId),
     ]);
     return tasks.map((t) => this.toResponse(t, calendar.hoursPerDay));
@@ -538,25 +662,44 @@ export class TasksService {
           },
         });
         if (schedule.workload.length > 0) {
-          await this.regenerateWorkload(tx, created.id, projectId, assigneeId ?? null, schedule.workload);
+          await this.regenerateWorkload(
+            tx,
+            created.id,
+            projectId,
+            assigneeId ?? null,
+            schedule.workload,
+          );
         }
         await this.recalculateProjectSummaries(projectId, tx);
         return tx.task.findUnique({ where: { id: created.id } }) ?? created;
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        timeout: 10000,
+      },
     );
 
-    this.logOp('create', { projectId: projectId.toString(), taskId: refreshed!.id.toString() }, Date.now() - startedAt);
+    this.logOp(
+      'create',
+      { projectId: projectId.toString(), taskId: refreshed!.id.toString() },
+      Date.now() - startedAt,
+    );
     return this.toResponse(refreshed!, schedule.hoursPerDay);
   }
 
   async getById(id: bigint, user: AuthUser): Promise<TaskResponse> {
     const task = await this.assertTaskAccess(id, user);
-    const calendar = await this.calendarResolver.resolveForProject(task.projectId);
+    const calendar = await this.calendarResolver.resolveForProject(
+      task.projectId,
+    );
     return this.toResponse(task, calendar.hoursPerDay);
   }
 
-  async update(id: bigint, dto: UpdateTaskDto, user: AuthUser): Promise<TaskResponse> {
+  async update(
+    id: bigint,
+    dto: UpdateTaskDto,
+    user: AuthUser,
+  ): Promise<TaskResponse> {
     const startedAt = Date.now();
     const existing = await this.assertTaskAccess(id, user);
     const nextType = dto.type ?? (existing.type as any);
@@ -569,17 +712,30 @@ export class TasksService {
     const schedule = await this.computeSchedule(
       existing.projectId,
       nextType,
-      dto.startDate ? this.parseDate(dto.startDate, 'startDate') : existing.startDate,
-      dto.endDate ? this.parseDate(dto.endDate, 'endDate') : (dto.estimatedHours ? undefined : existing.endDate),
+      dto.startDate
+        ? this.parseDate(dto.startDate, 'startDate')
+        : existing.startDate,
+      dto.endDate
+        ? this.parseDate(dto.endDate, 'endDate')
+        : dto.estimatedHours
+          ? undefined
+          : existing.endDate,
       dto.estimatedHours,
     );
 
-    const parentId = await this.validateParent(existing.projectId, id, dto.parentId);
+    const parentId = await this.validateParent(
+      existing.projectId,
+      id,
+      dto.parentId,
+    );
     const assigneeId = await this.resolveAssigneeId(dto.assigneeId);
     const finalAssigneeId =
       assigneeId !== undefined ? assigneeId : existing.assigneeId;
 
-    const where = dto.expectedVersion !== undefined ? { id, version: dto.expectedVersion } : { id };
+    const where =
+      dto.expectedVersion !== undefined
+        ? { id, version: dto.expectedVersion }
+        : { id };
 
     let refreshed;
     try {
@@ -589,7 +745,9 @@ export class TasksService {
             where,
             data: {
               ...(dto.name !== undefined && { name: dto.name }),
-              ...(dto.description !== undefined && { description: dto.description }),
+              ...(dto.description !== undefined && {
+                description: dto.description,
+              }),
               ...(scheduleInputsTouched && {
                 startDate: schedule.startDate,
                 endDate: schedule.endDate,
@@ -598,8 +756,12 @@ export class TasksService {
                   estimatedHours: new Prisma.Decimal(schedule.estimatedHours),
                 }),
               }),
-              ...(dto.priority !== undefined && { priority: priorityToPrisma(dto.priority) }),
-              ...(dto.status !== undefined && { status: statusToPrisma(dto.status) }),
+              ...(dto.priority !== undefined && {
+                priority: priorityToPrisma(dto.priority),
+              }),
+              ...(dto.status !== undefined && {
+                status: statusToPrisma(dto.status),
+              }),
               ...(dto.type !== undefined && { type: dto.type as any }),
               ...(dto.color !== undefined && { color: dto.color }),
               ...(assigneeId !== undefined && { assigneeId }),
@@ -609,14 +771,26 @@ export class TasksService {
             },
           });
           if (schedule.workload.length > 0) {
-            await this.regenerateWorkload(tx, id, existing.projectId, finalAssigneeId ?? null, schedule.workload);
-          } else if (dto.estimatedHours !== undefined || assigneeId !== undefined) {
+            await this.regenerateWorkload(
+              tx,
+              id,
+              existing.projectId,
+              finalAssigneeId ?? null,
+              schedule.workload,
+            );
+          } else if (
+            dto.estimatedHours !== undefined ||
+            assigneeId !== undefined
+          ) {
             await tx.workload.deleteMany({ where: { taskId: id } });
           }
           await this.recalculateProjectSummaries(existing.projectId, tx);
           return tx.task.findUnique({ where: { id } }) ?? updated;
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+          timeout: 10000,
+        },
       );
     } catch (err) {
       if (dto.expectedVersion !== undefined && this.isVersionConflict(err)) {
@@ -627,16 +801,27 @@ export class TasksService {
 
     this.logOp(
       'update',
-      { projectId: existing.projectId.toString(), taskId: id.toString(), fields: Object.keys(dto) },
+      {
+        projectId: existing.projectId.toString(),
+        taskId: id.toString(),
+        fields: Object.keys(dto),
+      },
       Date.now() - startedAt,
     );
     return this.toResponse(refreshed!, schedule.hoursPerDay);
   }
 
-  async updateProgress(id: bigint, dto: UpdateProgressDto, user: AuthUser): Promise<TaskResponse> {
+  async updateProgress(
+    id: bigint,
+    dto: UpdateProgressDto,
+    user: AuthUser,
+  ): Promise<TaskResponse> {
     const startedAt = Date.now();
     const existing = await this.assertTaskAccess(id, user);
-    const where = dto.expectedVersion !== undefined ? { id, version: dto.expectedVersion } : { id };
+    const where =
+      dto.expectedVersion !== undefined
+        ? { id, version: dto.expectedVersion }
+        : { id };
 
     let refreshed;
     try {
@@ -649,29 +834,53 @@ export class TasksService {
           await this.recalculateProjectSummaries(existing.projectId, tx);
           return tx.task.findUnique({ where: { id } }) ?? updated;
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+          timeout: 10000,
+        },
       );
     } catch (err) {
       if (dto.expectedVersion !== undefined && this.isVersionConflict(err)) {
-        return this.assertVersionConflict(id, dto.expectedVersion, 'updateProgress');
+        return this.assertVersionConflict(
+          id,
+          dto.expectedVersion,
+          'updateProgress',
+        );
       }
       throw err;
     }
 
     this.logOp(
       'updateProgress',
-      { projectId: existing.projectId.toString(), taskId: id.toString(), progress: dto.progress },
+      {
+        projectId: existing.projectId.toString(),
+        taskId: id.toString(),
+        progress: dto.progress,
+      },
       Date.now() - startedAt,
     );
-    const calendar = await this.calendarResolver.resolveForProject(existing.projectId);
+    const calendar = await this.calendarResolver.resolveForProject(
+      existing.projectId,
+    );
     return this.toResponse(refreshed!, calendar.hoursPerDay);
   }
 
-  async updateOrder(id: bigint, dto: UpdateOrderDto, user: AuthUser): Promise<TaskResponse> {
+  async updateOrder(
+    id: bigint,
+    dto: UpdateOrderDto,
+    user: AuthUser,
+  ): Promise<TaskResponse> {
     const startedAt = Date.now();
     const existing = await this.assertTaskAccess(id, user);
-    const order = await this.resolveNeighborOrders(existing.projectId, dto.afterTaskId, dto.beforeTaskId);
-    const where = dto.expectedVersion !== undefined ? { id, version: dto.expectedVersion } : { id };
+    const order = await this.resolveNeighborOrders(
+      existing.projectId,
+      dto.afterTaskId,
+      dto.beforeTaskId,
+    );
+    const where =
+      dto.expectedVersion !== undefined
+        ? { id, version: dto.expectedVersion }
+        : { id };
 
     let updated;
     try {
@@ -684,11 +893,18 @@ export class TasksService {
           await this.recalculateProjectSummaries(existing.projectId, tx);
           return task;
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+          timeout: 10000,
+        },
       );
     } catch (err) {
       if (dto.expectedVersion !== undefined && this.isVersionConflict(err)) {
-        return this.assertVersionConflict(id, dto.expectedVersion, 'updateOrder');
+        return this.assertVersionConflict(
+          id,
+          dto.expectedVersion,
+          'updateOrder',
+        );
       }
       throw err;
     }
@@ -698,7 +914,9 @@ export class TasksService {
       { projectId: existing.projectId.toString(), taskId: id.toString() },
       Date.now() - startedAt,
     );
-    const calendar = await this.calendarResolver.resolveForProject(existing.projectId);
+    const calendar = await this.calendarResolver.resolveForProject(
+      existing.projectId,
+    );
     return this.toResponse(updated, calendar.hoursPerDay);
   }
 
@@ -710,7 +928,10 @@ export class TasksService {
         await tx.task.delete({ where: { id } });
         await this.recalculateProjectSummaries(existing.projectId, tx);
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10000 },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        timeout: 10000,
+      },
     );
 
     this.logOp(
@@ -720,7 +941,10 @@ export class TasksService {
     );
   }
 
-  async previewPropagation(sourceTaskId: bigint, user: AuthUser): Promise<PropagationPreview> {
+  async previewPropagation(
+    sourceTaskId: bigint,
+    user: AuthUser,
+  ): Promise<PropagationPreview> {
     const source = await this.assertTaskAccess(sourceTaskId, user);
 
     const allLinks = await this.prisma.taskLink.findMany({
@@ -741,11 +965,25 @@ export class TasksService {
     allTaskIds.add(sourceTaskId.toString());
     const tasks = await this.prisma.task.findMany({
       where: { id: { in: Array.from(allTaskIds).map((id) => BigInt(id)) } },
-      select: { id: true, projectId: true, startDate: true, endDate: true, version: true },
+      select: {
+        id: true,
+        projectId: true,
+        startDate: true,
+        endDate: true,
+        version: true,
+      },
     });
     const taskById = new Map(tasks.map((t) => [t.id.toString(), t]));
 
-    const proposed = new Map<string, { startDate: Date; endDate: Date; via: PropagationChange['via']; fromTaskId: string }>();
+    const proposed = new Map<
+      string,
+      {
+        startDate: Date;
+        endDate: Date;
+        via: PropagationChange['via'];
+        fromTaskId: string;
+      }
+    >();
     const queue: string[] = [sourceTaskId.toString()];
     const visited = new Set<string>();
 
@@ -768,7 +1006,8 @@ export class TasksService {
         const targetTask = taskById.get(targetId);
         if (!targetTask) continue;
 
-        const targetStart = proposed.get(targetId)?.startDate ?? targetTask.startDate;
+        const targetStart =
+          proposed.get(targetId)?.startDate ?? targetTask.startDate;
         const targetEnd = proposed.get(targetId)?.endDate ?? targetTask.endDate;
         const durationMs = targetEnd.getTime() - targetStart.getTime();
 
@@ -793,7 +1032,10 @@ export class TasksService {
             break;
         }
 
-        if (newStart.getTime() === targetStart.getTime() && newEnd.getTime() === targetEnd.getTime()) {
+        if (
+          newStart.getTime() === targetStart.getTime() &&
+          newEnd.getTime() === targetEnd.getTime()
+        ) {
           continue;
         }
 
@@ -825,7 +1067,11 @@ export class TasksService {
     return { sourceTaskId: sourceTaskId.toString(), changes };
   }
 
-  async applyPropagation(sourceTaskId: bigint, dto: ApplyPropagationDto, user: AuthUser): Promise<BulkTaskUpdateResponse> {
+  async applyPropagation(
+    sourceTaskId: bigint,
+    dto: ApplyPropagationDto,
+    user: AuthUser,
+  ): Promise<BulkTaskUpdateResponse> {
     const source = await this.assertTaskAccess(sourceTaskId, user);
     return this.bulkUpdate(
       source.projectId,
@@ -840,7 +1086,11 @@ export class TasksService {
     );
   }
 
-  async bulkUpdate(projectId: bigint, dto: BulkTaskUpdateDto, user: AuthUser): Promise<BulkTaskUpdateResponse> {
+  async bulkUpdate(
+    projectId: bigint,
+    dto: BulkTaskUpdateDto,
+    user: AuthUser,
+  ): Promise<BulkTaskUpdateResponse> {
     const startedAt = Date.now();
     await this.assertProjectAccess(projectId, user);
 
@@ -850,7 +1100,9 @@ export class TasksService {
       select: { id: true },
     });
     if (owned.length !== ids.length) {
-      throw new BadRequestException('one or more tasks do not belong to this project');
+      throw new BadRequestException(
+        'one or more tasks do not belong to this project',
+      );
     }
 
     const result = await this.prisma.$transaction(
@@ -860,7 +1112,10 @@ export class TasksService {
           const itemId = this.parseBigInt(item.id, 'id');
           const data = item.data;
           const expectedVersion = item.expectedVersion ?? data.expectedVersion;
-          const where = expectedVersion !== undefined ? { id: itemId, version: expectedVersion } : { id: itemId };
+          const where =
+            expectedVersion !== undefined
+              ? { id: itemId, version: expectedVersion }
+              : { id: itemId };
           const existing = await tx.task.findUnique({ where: { id: itemId } });
           if (!existing) {
             throw new NotFoundException(`task ${item.id} not found`);
@@ -875,20 +1130,33 @@ export class TasksService {
           const schedule = await this.computeSchedule(
             existing.projectId,
             nextType,
-            data.startDate ? this.parseDate(data.startDate, 'startDate') : existing.startDate,
-            data.endDate ? this.parseDate(data.endDate, 'endDate') : (data.estimatedHours ? undefined : existing.endDate),
+            data.startDate
+              ? this.parseDate(data.startDate, 'startDate')
+              : existing.startDate,
+            data.endDate
+              ? this.parseDate(data.endDate, 'endDate')
+              : data.estimatedHours
+                ? undefined
+                : existing.endDate,
             data.estimatedHours,
           );
-          const parentId = await this.validateParent(existing.projectId, itemId, data.parentId);
+          const parentId = await this.validateParent(
+            existing.projectId,
+            itemId,
+            data.parentId,
+          );
           const assigneeId = await this.resolveAssigneeId(data.assigneeId);
-          const finalAssigneeId = assigneeId !== undefined ? assigneeId : existing.assigneeId;
+          const finalAssigneeId =
+            assigneeId !== undefined ? assigneeId : existing.assigneeId;
 
           try {
             const updated = await tx.task.update({
               where,
               data: {
                 ...(data.name !== undefined && { name: data.name }),
-                ...(data.description !== undefined && { description: data.description }),
+                ...(data.description !== undefined && {
+                  description: data.description,
+                }),
                 ...(scheduleTouched && {
                   startDate: schedule.startDate,
                   endDate: schedule.endDate,
@@ -897,8 +1165,12 @@ export class TasksService {
                     estimatedHours: new Prisma.Decimal(schedule.estimatedHours),
                   }),
                 }),
-                ...(data.priority !== undefined && { priority: priorityToPrisma(data.priority) }),
-                ...(data.status !== undefined && { status: statusToPrisma(data.status) }),
+                ...(data.priority !== undefined && {
+                  priority: priorityToPrisma(data.priority),
+                }),
+                ...(data.status !== undefined && {
+                  status: statusToPrisma(data.status),
+                }),
                 ...(data.type !== undefined && { type: data.type as any }),
                 ...(data.color !== undefined && { color: data.color }),
                 ...(assigneeId !== undefined && { assigneeId }),
@@ -908,8 +1180,17 @@ export class TasksService {
               },
             });
             if (schedule.workload.length > 0) {
-              await this.regenerateWorkload(tx, itemId, existing.projectId, finalAssigneeId ?? null, schedule.workload);
-            } else if (data.estimatedHours !== undefined || assigneeId !== undefined) {
+              await this.regenerateWorkload(
+                tx,
+                itemId,
+                existing.projectId,
+                finalAssigneeId ?? null,
+                schedule.workload,
+              );
+            } else if (
+              data.estimatedHours !== undefined ||
+              assigneeId !== undefined
+            ) {
               await tx.workload.deleteMany({ where: { taskId: itemId } });
             }
             updatedTasks.push(updated);
@@ -926,10 +1207,16 @@ export class TasksService {
           }
         }
 
-        const summariesPatched = await this.recalculateProjectSummaries(projectId, tx);
+        const summariesPatched = await this.recalculateProjectSummaries(
+          projectId,
+          tx,
+        );
         return { tasks: updatedTasks, summariesPatched };
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 30000 },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        timeout: 30000,
+      },
     );
 
     this.logOp(

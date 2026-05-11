@@ -3,8 +3,18 @@ import { TasksService } from './tasks.service';
 import { AuthUser } from '../auth/auth.guard';
 import { Prisma } from '../generated/prisma/client';
 
-const admin: AuthUser = { id: 1n, role: 'admin', firebaseUid: null, via: 'api_key' };
-const member: AuthUser = { id: 20n, role: 'member', firebaseUid: null, via: 'api_key' };
+const admin: AuthUser = {
+  id: 1n,
+  role: 'admin',
+  firebaseUid: null,
+  via: 'api_key',
+};
+const member: AuthUser = {
+  id: 20n,
+  role: 'member',
+  firebaseUid: null,
+  via: 'api_key',
+};
 
 const taskRow = (overrides: Partial<any> = {}) => ({
   id: 10n,
@@ -59,16 +69,26 @@ describe('TasksService', () => {
   });
 
   const makeScheduling = () => ({
-    scheduleTask: jest.fn(({ estimatedHours, startDate }: any) => ({
-      startDate,
-      endDate: startDate,
+    scheduleFromHours: jest.fn(({ estimatedHours, startDateTime }: any) => ({
+      startDate: startDateTime,
+      endDate: startDateTime,
       workload: estimatedHours
-        ? [{ date: startDate, allocatedHours: estimatedHours }]
+        ? [{ date: startDateTime, allocatedHours: estimatedHours }]
         : [],
     })),
-    workingDaysBetween: jest.fn().mockReturnValue(1),
+    scheduleFromRange: jest.fn(({ startDateTime, endDateTime }: any) => ({
+      startDate: startDateTime,
+      endDate: endDateTime,
+      estimatedHours: 8,
+      workload: [{ date: startDateTime, allocatedHours: 8 }],
+    })),
+    workingHoursInRange: jest.fn().mockReturnValue(8),
+    hoursAvailableOnDay: jest.fn().mockReturnValue(8),
+    workSlotsForDay: jest.fn().mockReturnValue([]),
     toUtcDateOnly: jest.fn((d: Date) => d),
-    addDays: jest.fn((d: Date, n: number) => new Date(d.getTime() + n * 86_400_000)),
+    addDays: jest.fn(
+      (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000),
+    ),
   });
 
   const makeService = (prisma: any) =>
@@ -109,7 +129,9 @@ describe('TasksService', () => {
     prisma.projectMember.findUnique.mockResolvedValue(null);
     const service = makeService(prisma);
 
-    await expect(service.getById(10n, member)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.getById(10n, member)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('normalizes milestones to zero duration with matching start/end dates', async () => {
@@ -135,19 +157,26 @@ describe('TasksService', () => {
       color: '#F59E0B',
     });
 
-    expect(prisma.task.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        startDate: new Date('2026-01-05'),
-        endDate: new Date('2026-01-05'),
-        duration: '0',
+    expect(prisma.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          startDate: new Date('2026-01-05'),
+          endDate: new Date('2026-01-05'),
+          duration: '0',
+        }),
       }),
-    }));
+    );
     expect(result.duration).toBe('0');
   });
 
   it('recalculates parent summaries after progress changes', async () => {
     const prisma = makePrisma();
-    const child = taskRow({ id: 11n, parentId: 10n, progress: 50, duration: { toString: () => '2' } });
+    const child = taskRow({
+      id: 11n,
+      parentId: 10n,
+      progress: 50,
+      duration: { toString: () => '2' },
+    });
     const summary = taskRow({ id: 10n, type: 'summary', progress: 0 });
     prisma.task.findUnique.mockResolvedValue(child);
     prisma.task.update.mockResolvedValue(child);
@@ -156,10 +185,12 @@ describe('TasksService', () => {
 
     await service.updateProgress(11n, { progress: 50 }, admin);
 
-    expect(prisma.task.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 10n },
-      data: expect.objectContaining({ progress: 50 }),
-    }));
+    expect(prisma.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10n },
+        data: expect.objectContaining({ progress: 50 }),
+      }),
+    );
   });
 
   it('rejects update when expectedVersion does not match current version', async () => {
@@ -194,15 +225,23 @@ describe('TasksService', () => {
     await expect(
       service.bulkUpdate(
         1n,
-        { updates: [{ id: '10', data: { name: 'A' } }, { id: '99', data: { name: 'B' } }] },
+        {
+          updates: [
+            { id: '10', data: { name: 'A' } },
+            { id: '99', data: { name: 'B' } },
+          ],
+        },
         admin,
       ),
     ).rejects.toThrow(/do not belong/);
   });
 
-  it('derives duration in working days and estimatedHours when only dates change (drag/resize)', async () => {
+  it('derives estimatedHours from the dragged range using scheduleFromRange', async () => {
     const prisma = makePrisma();
-    const before = taskRow({ version: 1, estimatedHours: { toString: () => '0' } });
+    const before = taskRow({
+      version: 1,
+      estimatedHours: { toString: () => '0' },
+    });
     const after = taskRow({
       version: 2,
       startDate: new Date('2026-01-05T00:00:00.000Z'),
@@ -210,16 +249,18 @@ describe('TasksService', () => {
       duration: { toString: () => '5.00' },
       estimatedHours: { toString: () => '40.00' },
     });
-    prisma.task.findUnique.mockResolvedValueOnce(before).mockResolvedValue(after);
+    prisma.task.findUnique
+      .mockResolvedValueOnce(before)
+      .mockResolvedValue(after);
     prisma.task.update.mockResolvedValue(after);
     prisma.task.findMany.mockResolvedValue([after]);
 
     const resolver = makeResolver();
     const scheduling = makeScheduling();
-    scheduling.workingDaysBetween.mockReturnValue(5);
-    scheduling.scheduleTask.mockReturnValue({
+    scheduling.scheduleFromRange.mockReturnValue({
       startDate: new Date('2026-01-05T00:00:00.000Z'),
       endDate: new Date('2026-01-09T00:00:00.000Z'),
+      estimatedHours: 40,
       workload: [
         { date: new Date('2026-01-05T00:00:00.000Z'), allocatedHours: 8 },
         { date: new Date('2026-01-06T00:00:00.000Z'), allocatedHours: 8 },
@@ -228,7 +269,11 @@ describe('TasksService', () => {
         { date: new Date('2026-01-09T00:00:00.000Z'), allocatedHours: 8 },
       ],
     });
-    const service = new TasksService(prisma, resolver as any, scheduling as any);
+    const service = new TasksService(
+      prisma,
+      resolver as any,
+      scheduling as any,
+    );
 
     await service.update(
       10n,
@@ -240,7 +285,7 @@ describe('TasksService', () => {
       admin,
     );
 
-    expect(scheduling.workingDaysBetween).toHaveBeenCalled();
+    expect(scheduling.scheduleFromRange).toHaveBeenCalled();
     expect(prisma.task.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -255,17 +300,26 @@ describe('TasksService', () => {
     const prisma = makePrisma();
     const before = taskRow({ version: 1 });
     const after = taskRow({ name: 'renamed', version: 2 });
-    prisma.task.findUnique.mockResolvedValueOnce(before).mockResolvedValue(after);
+    prisma.task.findUnique
+      .mockResolvedValueOnce(before)
+      .mockResolvedValue(after);
     prisma.task.update.mockResolvedValue(after);
     prisma.task.findMany.mockResolvedValue([after]);
     const service = makeService(prisma);
 
-    const result = await service.update(10n, { name: 'renamed', expectedVersion: 1 }, admin);
+    const result = await service.update(
+      10n,
+      { name: 'renamed', expectedVersion: 1 },
+      admin,
+    );
 
     expect(prisma.task.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 10n, version: 1 },
-        data: expect.objectContaining({ name: 'renamed', version: { increment: 1 } }),
+        data: expect.objectContaining({
+          name: 'renamed',
+          version: { increment: 1 },
+        }),
       }),
     );
     expect(result.version).toBe(2);

@@ -10,7 +10,9 @@ export function between(after: string | null, before: string | null): string {
   const b = before !== null ? parseFloat(before) : a + GAP * 2;
 
   if (b <= a) {
-    throw new Error(`Invalid bounds: after=${after} must be < before=${before}`);
+    throw new Error(
+      `Invalid bounds: after=${after} must be < before=${before}`,
+    );
   }
 
   const mid = (a + b) / 2;
