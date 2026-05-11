@@ -2,7 +2,10 @@ import { ConflictException, ExecutionContext } from '@nestjs/common';
 import { firstValueFrom, of } from 'rxjs';
 import { IdempotencyInterceptor } from './idempotency.interceptor';
 
-const makeContext = (req: any, res: any = { statusCode: 201, status: jest.fn() }): ExecutionContext =>
+const makeContext = (
+  req: any,
+  res: any = { statusCode: 201, status: jest.fn() },
+): ExecutionContext =>
   ({
     switchToHttp: () => ({
       getRequest: () => req,
@@ -21,8 +24,15 @@ describe('IdempotencyInterceptor', () => {
   it('passes through when no Idempotency-Key header is present', async () => {
     const prisma = makePrisma();
     const interceptor = new IdempotencyInterceptor(prisma as any);
-    const ctx = makeContext({ headers: {}, method: 'POST', user: { id: 1n }, body: {} });
-    const result$ = await interceptor.intercept(ctx, { handle: () => of('passthrough') } as any);
+    const ctx = makeContext({
+      headers: {},
+      method: 'POST',
+      user: { id: 1n },
+      body: {},
+    });
+    const result$ = await interceptor.intercept(ctx, {
+      handle: () => of('passthrough'),
+    } as any);
     await expect(firstValueFrom(result$)).resolves.toBe('passthrough');
     expect(prisma.idempotencyKey.findUnique).not.toHaveBeenCalled();
   });
@@ -30,8 +40,15 @@ describe('IdempotencyInterceptor', () => {
   it('passes through for non-POST methods even with header', async () => {
     const prisma = makePrisma();
     const interceptor = new IdempotencyInterceptor(prisma as any);
-    const ctx = makeContext({ headers: { 'idempotency-key': 'k1' }, method: 'GET', user: { id: 1n }, body: {} });
-    const result$ = await interceptor.intercept(ctx, { handle: () => of('ok') } as any);
+    const ctx = makeContext({
+      headers: { 'idempotency-key': 'k1' },
+      method: 'GET',
+      user: { id: 1n },
+      body: {},
+    });
+    const result$ = await interceptor.intercept(ctx, {
+      handle: () => of('ok'),
+    } as any);
     await expect(firstValueFrom(result$)).resolves.toBe('ok');
     expect(prisma.idempotencyKey.findUnique).not.toHaveBeenCalled();
   });
@@ -54,7 +71,9 @@ describe('IdempotencyInterceptor', () => {
     });
     (interceptor as any).hashRequest = () => 'sha-abc';
 
-    const result$ = await interceptor.intercept(ctx, { handle: () => of({ id: 'fresh' }) } as any);
+    const result$ = await interceptor.intercept(ctx, {
+      handle: () => of({ id: 'fresh' }),
+    } as any);
     await expect(firstValueFrom(result$)).resolves.toEqual({ id: 'cached' });
   });
 
@@ -77,9 +96,9 @@ describe('IdempotencyInterceptor', () => {
       body: { name: 'B' },
     });
 
-    await expect(interceptor.intercept(ctx, { handle: () => of('x') } as any)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      interceptor.intercept(ctx, { handle: () => of('x') } as any),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('persists response after handler completes when no prior key exists', async () => {
@@ -98,7 +117,9 @@ describe('IdempotencyInterceptor', () => {
       body: { name: 'C' },
     });
 
-    const result$ = await interceptor.intercept(ctx, { handle: () => of({ id: '42' }) } as any);
+    const result$ = await interceptor.intercept(ctx, {
+      handle: () => of({ id: '42' }),
+    } as any);
     await firstValueFrom(result$);
 
     expect(prisma.idempotencyKey.create).toHaveBeenCalledWith(
