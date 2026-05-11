@@ -9,7 +9,9 @@ async function main() {
   await app.close();
   const committed = readFileSync('openapi.json', 'utf8').trim();
   if (fresh.trim() !== committed) {
-    console.error('OpenAPI drift: run "npm run api:openapi:dump" and commit the result.');
+    console.error(
+      'OpenAPI drift: run "npm run api:openapi:dump" and commit the result.',
+    );
     process.exit(1);
   }
   console.log('OpenAPI in sync.');
