@@ -1,16 +1,16 @@
 import React, { useState, useCallback, memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useClickOutside } from '../../hooks/useClickOutside';
-import { ChevronDown, LogOut, User, Settings } from 'lucide-react';
+import { ChevronDown, LogOut, User, Settings, Moon, Sun } from 'lucide-react';
 import type { UserProfileProps } from '../../types/navigation';
 import { safeAsync } from '../../utils/errorHandling';
 
-/**
- * Componente de perfil de usuario con dropdown
- * Optimizado para performance con React.memo
- */
 const UserProfile: React.FC<UserProfileProps> = memo(({ className = '' }) => {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const closeDropdown = useCallback(() => {
@@ -21,118 +21,172 @@ const UserProfile: React.FC<UserProfileProps> = memo(({ className = '' }) => {
 
   const handleLogout = useCallback(async () => {
     closeDropdown();
-
-    const { error } = await safeAsync(
-      () => logout(),
-      'UserProfile.handleLogout'
-    );
-
+    const { error } = await safeAsync(() => logout(), 'UserProfile.handleLogout');
     if (error) {
-      // TODO: Integrar con sistema de notificaciones
       alert(`Error al cerrar sesión: ${error.message}`);
     }
   }, [logout, closeDropdown]);
 
-  const handleMenuAction = useCallback((action: string) => {
+  const handleOpenProfile = useCallback(() => {
     closeDropdown();
-    // TODO: Implementar navegación basada en la acción
-    console.log(`${action} clicked`);
-  }, [closeDropdown]);
+    navigate('/settings');
+  }, [closeDropdown, navigate]);
+
+  const handleOpenSettings = useCallback(() => {
+    closeDropdown();
+    navigate('/settings');
+  }, [closeDropdown, navigate]);
+
+  const handleToggleTheme = useCallback(() => {
+    toggleTheme();
+  }, [toggleTheme]);
 
   const userInitial = user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U';
   const userName = user?.displayName || user?.email?.split('@')[0] || 'Usuario';
   const userEmail = user?.email || '';
+  const isDark = theme === 'dark';
+
+  const menuItemStyle: React.CSSProperties = {
+    font: '400 var(--t-small)/1.2 var(--font-sans)',
+    color: 'var(--ink-1)',
+  };
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      {/* Boton usuario  */}
       <button
         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-        className="flex items-center space-x-3 text-sm rounded-lg p-2 hover:bg-gray-50/80 transition-colors duration-200 group"
+        className="btn btn-ghost"
+        style={{ paddingLeft: 6, paddingRight: 8, gap: 10 }}
       >
-        {/* Avatar */}
-        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-sm">
-          <span className="text-white text-sm font-semibold">
-            {userInitial.toUpperCase()}
-          </span>
-        </div>
+        <span
+          className="avatar av-3"
+          style={{ width: 26, height: 26, fontSize: 11, background: 'var(--p-500)', color: 'var(--ink-on-primary)' }}
+        >
+          {userInitial.toUpperCase()}
+        </span>
 
-        {/* User Info - Oculto en pantallas pequeñas */}
-        <div className="hidden md:block text-left min-w-0">
-          <p className="text-gray-900 font-medium truncate max-w-32">
+        <span className="hidden md:flex flex-col items-start text-left min-w-0">
+          <span
+            className="truncate max-w-32"
+            style={{ font: '500 12px/1.1 var(--font-sans)', color: 'var(--ink-1)' }}
+          >
             {userName}
-          </p>
-          <p className="text-gray-500 text-xs truncate max-w-32">
+          </span>
+          <span
+            className="truncate max-w-32"
+            style={{ font: '400 11px/1.1 var(--font-mono)', color: 'var(--ink-3)' }}
+          >
             {userEmail}
-          </p>
-        </div>
+          </span>
+        </span>
 
-        {/* Dropdown */}
         <ChevronDown
-          className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
-            isDropdownOpen ? 'rotate-180' : ''
-          } group-hover:text-gray-600`}
+          className={`w-4 h-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`}
+          style={{ color: 'var(--ink-3)' }}
         />
       </button>
 
-      {/*  Menu dropdown */}
       {isDropdownOpen && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200/60 py-2 z-50 backdrop-blur-sm">
-          {/* Sección información usuario */}
-          <div className="px-4 py-3 border-b border-gray-100">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-semibold">
-                  {userInitial.toUpperCase()}
-                </span>
-              </div>
+        <div
+          className="absolute right-0 mt-2 w-64 z-50"
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--line)',
+            borderRadius: 'var(--r-lg)',
+            boxShadow: 'var(--sh-3)',
+            padding: 'var(--s-2) 0',
+          }}
+        >
+          <div style={{ padding: 'var(--s-3) var(--s-4)', borderBottom: '1px solid var(--line)' }}>
+            <div className="flex items-center gap-3">
+              <span
+                className="avatar md"
+                style={{ background: 'var(--p-500)', color: 'var(--ink-on-primary)' }}
+              >
+                {userInitial.toUpperCase()}
+              </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 truncate">
+                <p
+                  className="truncate"
+                  style={{ font: '500 var(--t-small)/1.2 var(--font-sans)', color: 'var(--ink-1)', margin: 0 }}
+                >
                   {userName}
                 </p>
-                <p className="text-xs text-gray-500 truncate">
+                <p
+                  className="truncate"
+                  style={{ font: '400 var(--t-caption)/1.2 var(--font-mono)', color: 'var(--ink-3)', margin: '2px 0 0' }}
+                >
                   {userEmail}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Sección items menu */}
-          <div className="py-2">
-            <button
-              onClick={() => handleMenuAction('Profile settings')}
-              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
-              aria-label="Ver perfil de usuario"
-            >
-              <User className="w-4 h-4 mr-3 text-gray-400" />
+          <div style={{ padding: 'var(--s-2) 0' }}>
+            <MenuItem icon={<User className="w-4 h-4" />} onClick={handleOpenProfile} style={menuItemStyle}>
               Perfil
-            </button>
-
-            <button
-              onClick={() => handleMenuAction('Settings')}
-              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
-              aria-label="Abrir configuración"
-            >
-              <Settings className="w-4 h-4 mr-3 text-gray-400" />
+            </MenuItem>
+            <MenuItem icon={<Settings className="w-4 h-4" />} onClick={handleOpenSettings} style={menuItemStyle}>
               Configuración
-            </button>
-
-            <div className="border-t border-gray-100 my-2"></div>
-
-            <button
-              onClick={handleLogout}
-              className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors duration-150"
-              aria-label="Cerrar sesión"
+            </MenuItem>
+            <MenuItem
+              icon={isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              onClick={handleToggleTheme}
+              style={menuItemStyle}
             >
-              <LogOut className="w-4 h-4 mr-3" />
+              {isDark ? 'Modo claro' : 'Modo oscuro'}
+            </MenuItem>
+
+            <div style={{ height: 1, background: 'var(--line)', margin: 'var(--s-2) 0' }} />
+
+            <MenuItem
+              icon={<LogOut className="w-4 h-4" />}
+              onClick={handleLogout}
+              style={{ ...menuItemStyle, color: 'var(--err-fg)' }}
+              danger
+            >
               Cerrar Sesión
-            </button>
+            </MenuItem>
           </div>
         </div>
       )}
     </div>
   );
 });
+
+interface MenuItemProps {
+  icon: React.ReactNode;
+  onClick: () => void;
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+  danger?: boolean;
+}
+
+const MenuItem: React.FC<MenuItemProps> = ({ icon, onClick, children, style, danger }) => (
+  <button
+    onClick={onClick}
+    className="flex items-center w-full gap-3 transition-colors duration-150"
+    style={{
+      padding: 'var(--s-2) var(--s-4)',
+      background: 'transparent',
+      border: 0,
+      cursor: 'pointer',
+      textAlign: 'left',
+      ...style,
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.background = danger
+        ? 'var(--err-bg)'
+        : 'var(--surface-2)';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.background = 'transparent';
+    }}
+  >
+    <span style={{ color: danger ? 'var(--err-fg)' : 'var(--ink-3)' }}>{icon}</span>
+    <span>{children}</span>
+  </button>
+);
 
 UserProfile.displayName = 'UserProfile';
 

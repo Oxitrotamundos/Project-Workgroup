@@ -8,21 +8,15 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-/**
- * Layout principal de la aplicación con navegación persistente
- * Proporciona contexto de navegación y maneja transiciones entre rutas
- */
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigationContext = useNavigationState();
   const { navigationState, updateNavigation } = navigationContext;
 
-  // Maneja cambios de navegación basados en rutas
   useRouteNavigation(updateNavigation);
 
   return (
     <NavigationProvider value={navigationContext}>
-      <div className="min-h-screen bg-gray-50">
-        {/* Barra de navegación persistente */}
+      <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--ink-1)' }}>
         <TopNavigation
           title={navigationState.title}
           subtitle={navigationState.subtitle}
@@ -34,8 +28,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           logoAlt={navigationState.logoAlt}
         />
 
-        {/* Contenido de la página */}
-        <main className="transition-all duration-300 ease-in-out">
+        <main className="transition-all">
           {children}
         </main>
       </div>

@@ -7,10 +7,6 @@ interface PageLoaderProps {
   onAnimationComplete?: () => void;
 }
 
-/**
- * Componente de loader de página completa
- * Usa eventos reales de Rive para detectar final de animación
- */
 const PageLoader: React.FC<PageLoaderProps> = memo(({
   message = 'Cargando...',
   overlay = false,
@@ -21,25 +17,27 @@ const PageLoader: React.FC<PageLoaderProps> = memo(({
   const handleAnimationComplete = useCallback(() => {
     setShouldHide(true);
 
-    // Pequeño delay para la transición de salida
     setTimeout(() => {
       onAnimationComplete?.();
     }, 300);
   }, [onAnimationComplete]);
 
   const containerClasses = overlay
-    ? 'fixed inset-0 bg-white/90 backdrop-blur-sm z-50'
-    : 'min-h-screen bg-gray-50';
+    ? 'fixed inset-0 backdrop-blur-sm z-50'
+    : 'min-h-screen';
 
-  // Transición de salida suave
   const fadeClasses = shouldHide
     ? 'opacity-0 transform scale-95 transition-all duration-300 ease-out'
     : 'opacity-100 transform scale-100 transition-all duration-200 ease-in';
 
   return (
-    <div className={`${containerClasses} flex items-center justify-center ${fadeClasses}`}>
+    <div
+      className={`${containerClasses} flex items-center justify-center ${fadeClasses}`}
+      style={overlay
+        ? { background: 'color-mix(in oklab, var(--bg) 90%, transparent)' }
+        : { background: 'var(--bg)' }}
+    >
       <div className="text-center">
-        {/* Loader Rive con callback real */}
         <RiveLoader
           size="lg"
           message={message}
