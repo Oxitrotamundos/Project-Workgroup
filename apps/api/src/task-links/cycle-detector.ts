@@ -3,7 +3,11 @@ export interface Edge {
   targetTaskId: string;
 }
 
-export function wouldCreateCycle(edges: Edge[], from: string, to: string): boolean {
+export function wouldCreateCycle(
+  edges: Edge[],
+  from: string,
+  to: string,
+): boolean {
   const adj = new Map<string, Set<string>>();
 
   const addEdge = (src: string, dst: string) => {

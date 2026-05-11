@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateProjectDto, UpdateProjectDto, ProjectResponse } from '@project-workgroup/shared';
+import {
+  CreateProjectDto,
+  UpdateProjectDto,
+  ProjectResponse,
+} from '@project-workgroup/shared';
 import { toPrisma, toWire } from './status.mapper';
 
 @Injectable()
@@ -33,7 +37,10 @@ export class ProjectsService {
     };
   }
 
-  async create(dto: CreateProjectDto, ownerId: bigint): Promise<ProjectResponse> {
+  async create(
+    dto: CreateProjectDto,
+    ownerId: bigint,
+  ): Promise<ProjectResponse> {
     const project = await this.prisma.project.create({
       data: {
         name: dto.name,
@@ -51,10 +58,7 @@ export class ProjectsService {
   async listForUser(userId: bigint): Promise<ProjectResponse[]> {
     const projects = await this.prisma.project.findMany({
       where: {
-        OR: [
-          { ownerId: userId },
-          { members: { some: { userId } } },
-        ],
+        OR: [{ ownerId: userId }, { members: { some: { userId } } }],
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -73,7 +77,9 @@ export class ProjectsService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.startDate !== undefined && { startDate: new Date(dto.startDate) }),
+        ...(dto.startDate !== undefined && {
+          startDate: new Date(dto.startDate),
+        }),
         ...(dto.endDate !== undefined && { endDate: new Date(dto.endDate) }),
         ...(dto.status !== undefined && { status: toPrisma(dto.status) }),
         ...(dto.color !== undefined && { color: dto.color }),

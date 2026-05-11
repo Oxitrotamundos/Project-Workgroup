@@ -1,9 +1,23 @@
-import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { TaskLinksService } from './task-links.service';
 import { AuthUser } from '../auth/auth.guard';
 
-const admin: AuthUser = { id: 1n, role: 'admin', firebaseUid: null, via: 'api_key' };
-const member: AuthUser = { id: 20n, role: 'member', firebaseUid: null, via: 'api_key' };
+const admin: AuthUser = {
+  id: 1n,
+  role: 'admin',
+  firebaseUid: null,
+  via: 'api_key',
+};
+const member: AuthUser = {
+  id: 20n,
+  role: 'member',
+  firebaseUid: null,
+  via: 'api_key',
+};
 
 const linkRow = {
   id: 100n,
@@ -34,7 +48,9 @@ describe('TaskLinksService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
-      $transaction: jest.fn((cb: (tx: any) => Promise<unknown>): Promise<unknown> => cb(prisma)),
+      $transaction: jest.fn(
+        (cb: (tx: any) => Promise<unknown>): Promise<unknown> => cb(prisma),
+      ),
     };
     return prisma;
   };
@@ -44,7 +60,11 @@ describe('TaskLinksService', () => {
     const service = new TaskLinksService(prisma as any);
 
     await expect(
-      service.create(1n, { sourceTaskId: '10', targetTaskId: '10', type: 'e2s' }),
+      service.create(1n, {
+        sourceTaskId: '10',
+        targetTaskId: '10',
+        type: 'e2s',
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -57,7 +77,11 @@ describe('TaskLinksService', () => {
     const service = new TaskLinksService(prisma as any);
 
     await expect(
-      service.create(1n, { sourceTaskId: '10', targetTaskId: '11', type: 'e2s' }),
+      service.create(1n, {
+        sourceTaskId: '10',
+        targetTaskId: '11',
+        type: 'e2s',
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -68,7 +92,9 @@ describe('TaskLinksService', () => {
     prisma.projectMember.findUnique.mockResolvedValue(null);
     const service = new TaskLinksService(prisma as any);
 
-    await expect(service.getById(100n, member)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.getById(100n, member)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('detects duplicate link type updates', async () => {
@@ -78,6 +104,8 @@ describe('TaskLinksService', () => {
       .mockResolvedValueOnce({ ...linkRow, id: 101n, type: 's2s' });
     const service = new TaskLinksService(prisma as any);
 
-    await expect(service.update(100n, { type: 's2s' }, admin)).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.update(100n, { type: 's2s' }, admin),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

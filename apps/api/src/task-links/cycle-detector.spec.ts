@@ -15,9 +15,7 @@ describe('cycle-detector', () => {
   });
 
   it('detects direct cycle A→B then B→A', () => {
-    const edges: Edge[] = [
-      { sourceTaskId: 'A', targetTaskId: 'B' },
-    ];
+    const edges: Edge[] = [{ sourceTaskId: 'A', targetTaskId: 'B' }];
     expect(wouldCreateCycle(edges, 'B', 'A')).toBe(true);
   });
 

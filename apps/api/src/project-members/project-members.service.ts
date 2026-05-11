@@ -1,6 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AddProjectMemberDto, ProjectMemberResponse } from '@project-workgroup/shared';
+import {
+  AddProjectMemberDto,
+  ProjectMemberResponse,
+} from '@project-workgroup/shared';
 
 @Injectable()
 export class ProjectMembersService {
@@ -20,7 +27,10 @@ export class ProjectMembersService {
     };
   }
 
-  async add(projectId: bigint, dto: AddProjectMemberDto): Promise<ProjectMemberResponse> {
+  async add(
+    projectId: bigint,
+    dto: AddProjectMemberDto,
+  ): Promise<ProjectMemberResponse> {
     const userId = BigInt(dto.userId);
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('user not found');
@@ -28,7 +38,8 @@ export class ProjectMembersService {
     const existing = await this.prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId } },
     });
-    if (existing) throw new BadRequestException('user is already a member of this project');
+    if (existing)
+      throw new BadRequestException('user is already a member of this project');
 
     const member = await this.prisma.projectMember.create({
       data: { projectId, userId, projectRole: dto.projectRole },

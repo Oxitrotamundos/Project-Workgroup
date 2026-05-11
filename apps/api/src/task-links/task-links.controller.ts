@@ -1,6 +1,20 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { CreateTaskLinkDto, UpdateTaskLinkDto } from '@project-workgroup/shared';
+import {
+  CreateTaskLinkDto,
+  UpdateTaskLinkDto,
+} from '@project-workgroup/shared';
 import { AuthGuard, AuthUser } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ProjectMembershipGuard } from '../auth/project-membership.guard';
@@ -25,7 +39,10 @@ export class TaskLinksController {
   @Post('projects/:projectId/task-links')
   @UseGuards(ProjectMembershipGuard)
   @RequireProject('projectId')
-  async create(@Param('projectId') projectId: string, @Body() dto: CreateTaskLinkDto) {
+  async create(
+    @Param('projectId') projectId: string,
+    @Body() dto: CreateTaskLinkDto,
+  ) {
     return this.taskLinks.create(this.id(projectId, 'projectId'), dto);
   }
 
@@ -37,12 +54,18 @@ export class TaskLinksController {
   }
 
   @Get('tasks/:taskId/source-links')
-  async listSource(@Param('taskId') taskId: string, @CurrentUser() user: AuthUser) {
+  async listSource(
+    @Param('taskId') taskId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.taskLinks.listSource(this.id(taskId, 'taskId'), user);
   }
 
   @Get('tasks/:taskId/target-links')
-  async listTarget(@Param('taskId') taskId: string, @CurrentUser() user: AuthUser) {
+  async listTarget(
+    @Param('taskId') taskId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.taskLinks.listTarget(this.id(taskId, 'taskId'), user);
   }
 
@@ -52,7 +75,11 @@ export class TaskLinksController {
   }
 
   @Patch('task-links/:id')
-  async update(@Param('id') id: string, @Body() dto: UpdateTaskLinkDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskLinkDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.taskLinks.update(this.id(id), dto, user);
   }
 

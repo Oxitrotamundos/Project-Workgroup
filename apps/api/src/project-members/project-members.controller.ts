@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AddProjectMemberDto } from '@project-workgroup/shared';
 import { AuthGuard } from '../auth/auth.guard';
@@ -15,7 +24,10 @@ export class ProjectMembersController {
   constructor(private readonly members: ProjectMembersService) {}
 
   @Post()
-  async add(@Param('projectId') projectId: string, @Body() dto: AddProjectMemberDto) {
+  async add(
+    @Param('projectId') projectId: string,
+    @Body() dto: AddProjectMemberDto,
+  ) {
     return this.members.add(BigInt(projectId), dto);
   }
 
@@ -26,7 +38,10 @@ export class ProjectMembersController {
 
   @Delete(':userId')
   @HttpCode(204)
-  async remove(@Param('projectId') projectId: string, @Param('userId') userId: string) {
+  async remove(
+    @Param('projectId') projectId: string,
+    @Param('userId') userId: string,
+  ) {
     await this.members.remove(BigInt(projectId), BigInt(userId));
   }
 }

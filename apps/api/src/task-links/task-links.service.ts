@@ -1,8 +1,19 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../generated/prisma/client';
-import { CreateTaskLinkDto, TaskLinkResponse, UpdateTaskLinkDto } from '@project-workgroup/shared';
+import {
+  CreateTaskLinkDto,
+  TaskLinkResponse,
+  UpdateTaskLinkDto,
+} from '@project-workgroup/shared';
 import { AuthUser } from '../auth/auth.guard';
 import { wouldCreateCycle, Edge } from './cycle-detector';
 
@@ -21,7 +32,9 @@ type TaskLinkRow = {
 export class TaskLinksService {
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() @InjectPinoLogger(TaskLinksService.name) private readonly logger?: PinoLogger,
+    @Optional()
+    @InjectPinoLogger(TaskLinksService.name)
+    private readonly logger?: PinoLogger,
   ) {}
 
   private toResponse(l: TaskLinkRow): TaskLinkResponse {
@@ -45,7 +58,10 @@ export class TaskLinksService {
     }
   }
 
-  private async assertProjectAccess(projectId: bigint, user: AuthUser): Promise<void> {
+  private async assertProjectAccess(
+    projectId: bigint,
+    user: AuthUser,
+  ): Promise<void> {
     if (user.role === 'admin') return;
 
     const project = await this.prisma.project.findUnique({
@@ -61,7 +77,10 @@ export class TaskLinksService {
     if (!membership) throw new ForbiddenException('not a project member');
   }
 
-  private async assertTaskAccess(taskId: bigint, user: AuthUser): Promise<bigint> {
+  private async assertTaskAccess(
+    taskId: bigint,
+    user: AuthUser,
+  ): Promise<bigint> {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
       select: { projectId: true },
@@ -71,32 +90,50 @@ export class TaskLinksService {
     return task.projectId;
   }
 
-  private async assertLinkAccess(id: bigint, user: AuthUser): Promise<TaskLinkRow> {
+  private async assertLinkAccess(
+    id: bigint,
+    user: AuthUser,
+  ): Promise<TaskLinkRow> {
     const link = await this.prisma.taskLink.findUnique({ where: { id } });
     if (!link) throw new NotFoundException('task link not found');
     await this.assertProjectAccess(link.projectId, user);
     return link;
   }
 
-  async create(projectId: bigint, dto: CreateTaskLinkDto): Promise<TaskLinkResponse> {
+  async create(
+    projectId: bigint,
+    dto: CreateTaskLinkDto,
+  ): Promise<TaskLinkResponse> {
     const sourceId = this.parseBigInt(dto.sourceTaskId, 'sourceTaskId');
     const targetId = this.parseBigInt(dto.targetTaskId, 'targetTaskId');
 
     if (sourceId === targetId) {
-      throw new BadRequestException('sourceTaskId and targetTaskId must be different tasks');
+      throw new BadRequestException(
+        'sourceTaskId and targetTaskId must be different tasks',
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {
       const [source, target] = await Promise.all([
-        tx.task.findUnique({ where: { id: sourceId }, select: { projectId: true } }),
-        tx.task.findUnique({ where: { id: targetId }, select: { projectId: true } }),
+        tx.task.findUnique({
+          where: { id: sourceId },
+          select: { projectId: true },
+        }),
+        tx.task.findUnique({
+          where: { id: targetId },
+          select: { projectId: true },
+        }),
       ]);
 
       if (!source || source.projectId !== projectId) {
-        throw new BadRequestException('sourceTaskId must be a task in the same project');
+        throw new BadRequestException(
+          'sourceTaskId must be a task in the same project',
+        );
       }
       if (!target || target.projectId !== projectId) {
-        throw new BadRequestException('targetTaskId must be a task in the same project');
+        throw new BadRequestException(
+          'targetTaskId must be a task in the same project',
+        );
       }
 
       const existing = await tx.taskLink.findUnique({
@@ -121,7 +158,11 @@ export class TaskLinksService {
 
       if (wouldCreateCycle(edges, dto.sourceTaskId, dto.targetTaskId)) {
         this.logger?.warn(
-          { projectId: projectId.toString(), sourceTaskId: dto.sourceTaskId, targetTaskId: dto.targetTaskId },
+          {
+            projectId: projectId.toString(),
+            sourceTaskId: dto.sourceTaskId,
+            targetTaskId: dto.targetTaskId,
+          },
           'task link rejected: would create cycle',
         );
         throw new ConflictException('adding this link would create a cycle');
@@ -136,7 +177,11 @@ export class TaskLinksService {
         },
       });
       this.logger?.info(
-        { op: 'create-link', projectId: projectId.toString(), linkId: link.id.toString() },
+        {
+          op: 'create-link',
+          projectId: projectId.toString(),
+          linkId: link.id.toString(),
+        },
         'task link created',
       );
       return this.toResponse(link);
@@ -151,7 +196,10 @@ export class TaskLinksService {
     return links.map((l) => this.toResponse(l));
   }
 
-  async listSource(taskId: bigint, user: AuthUser): Promise<TaskLinkResponse[]> {
+  async listSource(
+    taskId: bigint,
+    user: AuthUser,
+  ): Promise<TaskLinkResponse[]> {
     await this.assertTaskAccess(taskId, user);
     const links = await this.prisma.taskLink.findMany({
       where: { sourceTaskId: taskId },
@@ -160,7 +208,10 @@ export class TaskLinksService {
     return links.map((l) => this.toResponse(l));
   }
 
-  async listTarget(taskId: bigint, user: AuthUser): Promise<TaskLinkResponse[]> {
+  async listTarget(
+    taskId: bigint,
+    user: AuthUser,
+  ): Promise<TaskLinkResponse[]> {
     await this.assertTaskAccess(taskId, user);
     const links = await this.prisma.taskLink.findMany({
       where: { targetTaskId: taskId },
@@ -173,7 +224,11 @@ export class TaskLinksService {
     return this.toResponse(await this.assertLinkAccess(id, user));
   }
 
-  async update(id: bigint, dto: UpdateTaskLinkDto, user: AuthUser): Promise<TaskLinkResponse> {
+  async update(
+    id: bigint,
+    dto: UpdateTaskLinkDto,
+    user: AuthUser,
+  ): Promise<TaskLinkResponse> {
     const existing = await this.assertLinkAccess(id, user);
     if (dto.type === undefined || dto.type === existing.type) {
       return this.toResponse(existing);
@@ -188,9 +243,13 @@ export class TaskLinksService {
         },
       },
     });
-    if (duplicate && duplicate.id !== id) throw new ConflictException('link already exists');
+    if (duplicate && duplicate.id !== id)
+      throw new ConflictException('link already exists');
 
-    const where = dto.expectedVersion !== undefined ? { id, version: dto.expectedVersion } : { id };
+    const where =
+      dto.expectedVersion !== undefined
+        ? { id, version: dto.expectedVersion }
+        : { id };
 
     let link;
     try {
@@ -204,9 +263,17 @@ export class TaskLinksService {
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2025'
       ) {
-        const current = await this.prisma.taskLink.findUnique({ where: { id }, select: { version: true } });
+        const current = await this.prisma.taskLink.findUnique({
+          where: { id },
+          select: { version: true },
+        });
         this.logger?.warn(
-          { op: 'update-link', linkId: id.toString(), expectedVersion: dto.expectedVersion, currentVersion: current?.version ?? null },
+          {
+            op: 'update-link',
+            linkId: id.toString(),
+            expectedVersion: dto.expectedVersion,
+            currentVersion: current?.version ?? null,
+          },
           'task link version conflict',
         );
         throw new ConflictException({
