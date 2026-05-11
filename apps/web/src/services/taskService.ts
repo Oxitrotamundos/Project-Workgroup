@@ -46,6 +46,7 @@ const toDomain = (r: any): Task => ({
   color: r.color ?? '#3B82F6',
   estimatedHours: toNumber(r.estimatedHours, 0),
   actualHours: r.actualHours === null || r.actualHours === undefined ? undefined : toNumber(r.actualHours, 0),
+  hoursPerDay: r.hoursPerDay !== undefined ? toNumber(r.hoursPerDay, 8) : undefined,
   status: r.status ?? 'not-started',
   type: r.type ?? 'task',
   order: toNumber(r.order, 0),
@@ -69,18 +70,23 @@ export class TaskService {
   }
 
   static async createTask(data: CreateTaskData): Promise<string> {
-    const result = await apiClient.post<any>(`/v1/projects/${data.projectId}/tasks`, {
+    const body: Record<string, unknown> = {
       name: data.name,
       description: data.description,
       startDate: data.startDate,
-      endDate: data.endDate,
       priority: data.priority,
       status: data.status,
       type: data.type,
       color: data.color,
-      ...(data.parentId ? { parentId: data.parentId } : {}),
-      ...(data.assigneeId ? { assigneeId: data.assigneeId } : {}),
-    });
+    };
+    if (data.endDate) body.endDate = data.endDate;
+    if (data.parentId) body.parentId = data.parentId;
+    if (data.assigneeId) body.assigneeId = data.assigneeId;
+    if (data.estimatedHours !== undefined && data.estimatedHours !== null && data.estimatedHours > 0) {
+      body.estimatedHours = String(data.estimatedHours);
+    }
+
+    const result = await apiClient.post<any>(`/v1/projects/${data.projectId}/tasks`, body);
     return result.id;
   }
 
@@ -137,17 +143,10 @@ export class TaskService {
     await apiClient.delete(`/v1/tasks/${id}`);
   }
 
-  /**
-   * Obtener tareas asignadas a un usuario
-   * TODO: backend endpoint pending
-   */
   static async getUserTasks(_userId: string, _filters?: TaskFilters): Promise<Task[]> {
     return [];
   }
 
-  /**
-   * Actualizar el progreso de una tarea
-   */
   static async updateTaskProgress(id: string, progress: number, expectedVersion?: number): Promise<Task> {
     const body: Record<string, unknown> = { progress };
     if (typeof expectedVersion === 'number') body.expectedVersion = expectedVersion;
@@ -155,10 +154,6 @@ export class TaskService {
     return toDomain(result);
   }
 
-  /**
-   * TODO: las dependencias viven en `task_links`, no en la tarea.
-   * Estos métodos están desactivados hasta migrar el flujo a TaskLinkService.
-   */
   static async addTaskDependency(_taskId: string, _dependencyId: string): Promise<void> {
     throw new Error('addTaskDependency: pendiente de migración a TaskLinkService');
   }
@@ -167,9 +162,6 @@ export class TaskService {
     throw new Error('removeTaskDependency: pendiente de migración a TaskLinkService');
   }
 
-  /**
-   * Obtener tareas por tipo
-   */
   static async getTasksByType(projectId: string, _type: TaskType): Promise<Task[]> {
     return this.getProjectTasks(projectId);
   }

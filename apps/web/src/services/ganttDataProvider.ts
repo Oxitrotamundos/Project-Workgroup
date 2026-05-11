@@ -15,14 +15,16 @@ import type {
   GanttTask,
 } from 'wx-react-gantt';
 
-const toIsoDate = (value: Date | string | undefined | null): string | undefined => {
+const toIsoDateTime = (value: Date | string | undefined | null): string | undefined => {
   if (value === undefined || value === null) return undefined;
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return undefined;
-    return value.toISOString().slice(0, 10);
+    return value.toISOString();
   }
   if (typeof value === 'string') {
-    return value.length >= 10 ? value.slice(0, 10) : value;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return undefined;
+    return d.toISOString();
   }
   return undefined;
 };
@@ -45,15 +47,26 @@ export interface GanttDataProviderData {
 
 export type GanttErrorCallback = (err: { message: string; cause?: unknown }) => void;
 
+export interface GanttDataChangePayload {
+  updated: Task[];
+  deleted: string[];
+}
+
+export type GanttDataChangeCallback = (payload: GanttDataChangePayload) => void;
+
 export class GanttDataProvider {
   private projectId: string;
   private listeners: Map<string, Array<(data: unknown) => void>> = new Map();
   private _ganttApi: GanttApi | null = null;
-  private _next: { send: (action: string, data: unknown) => unknown } | null = null;
   private tempIdMapping: Map<string, string> = new Map();
   private taskCache: Map<string, Task> = new Map();
   private linkCache: Map<string, TaskLink> = new Map();
   private onError: GanttErrorCallback | null = null;
+  private onDataChange: GanttDataChangeCallback | null = null;
+  private pendingUpdated: Map<string, Task> = new Map();
+  private pendingDeleted: Set<string> = new Set();
+  private dataChangeDebounceMs = 200;
+  private dataChangeTimer: ReturnType<typeof setTimeout> | null = null;
   private throttleMs = 150;
   private throttleTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
@@ -63,6 +76,87 @@ export class GanttDataProvider {
 
   setOnError(cb: GanttErrorCallback | null): void {
     this.onError = cb;
+  }
+
+  setOnDataChange(cb: GanttDataChangeCallback | null): void {
+    this.onDataChange = cb;
+  }
+
+  syncFromTasks(tasks: Task[]): void {
+    const incomingIds = new Set<string>();
+
+    for (const fresh of tasks) {
+      incomingIds.add(fresh.id);
+      const cached = this.taskCache.get(fresh.id);
+      const sameShape =
+        !!cached &&
+        cached.version === fresh.version &&
+        cached.duration === fresh.duration &&
+        cached.estimatedHours === fresh.estimatedHours &&
+        cached.startDate === fresh.startDate &&
+        cached.endDate === fresh.endDate &&
+        cached.status === fresh.status &&
+        cached.progress === fresh.progress &&
+        cached.name === fresh.name &&
+        cached.type === fresh.type &&
+        cached.parentId === fresh.parentId;
+      if (sameShape) continue;
+
+      this.taskCache.set(fresh.id, fresh);
+      const ganttTask = this.toGanttTask(fresh);
+      if (ganttTask && this._ganttApi && ganttTask.id !== undefined) {
+        try {
+          this._ganttApi.exec('update-task', {
+            id: ganttTask.id,
+            task: ganttTask,
+            _silent: true,
+          });
+        } catch (e) {
+          console.warn('GanttDataProvider: syncFromTasks update-task falló', e);
+        }
+      }
+    }
+
+    for (const cachedId of Array.from(this.taskCache.keys())) {
+      if (incomingIds.has(cachedId)) continue;
+      this.taskCache.delete(cachedId);
+      const ganttId = toGanttId(cachedId);
+      if (ganttId !== undefined && this._ganttApi) {
+        try {
+          this._ganttApi.exec('delete-task', { id: ganttId, _silent: true });
+        } catch (e) {
+          console.warn('GanttDataProvider: syncFromTasks delete-task falló', e);
+        }
+      }
+    }
+  }
+
+  private markTaskUpdated(task: Task): void {
+    this.pendingDeleted.delete(task.id);
+    this.pendingUpdated.set(task.id, task);
+    this.scheduleDataChange();
+  }
+
+  private markTaskDeleted(taskId: string): void {
+    this.pendingUpdated.delete(taskId);
+    this.pendingDeleted.add(taskId);
+    this.scheduleDataChange();
+  }
+
+  private scheduleDataChange(): void {
+    if (!this.onDataChange) return;
+    if (this.dataChangeTimer !== null) clearTimeout(this.dataChangeTimer);
+    this.dataChangeTimer = setTimeout(() => {
+      this.dataChangeTimer = null;
+      if (this.pendingUpdated.size === 0 && this.pendingDeleted.size === 0) return;
+      const payload: GanttDataChangePayload = {
+        updated: Array.from(this.pendingUpdated.values()),
+        deleted: Array.from(this.pendingDeleted),
+      };
+      this.pendingUpdated.clear();
+      this.pendingDeleted.clear();
+      this.onDataChange?.(payload);
+    }, this.dataChangeDebounceMs);
   }
 
   getTaskIdFromGanttId(ganttId: GanttId): string | undefined {
@@ -100,8 +194,7 @@ export class GanttDataProvider {
     this._ganttApi = api;
   }
 
-  setNext(next: { send: (action: string, data: unknown) => unknown }): void {
-    this._next = next;
+  setNext(): void {
   }
 
   private isUiOnlyEvent(data: unknown): boolean {
@@ -158,9 +251,11 @@ export class GanttDataProvider {
       endDate = new Date(Date.now() + 86_400_000);
     }
 
-    const durationInDays = Number.isFinite(task.duration)
-      ? task.duration
-      : Math.ceil((endDate.getTime() - startDate.getTime()) / 86_400_000);
+    if (task.type !== 'milestone' && endDate.getTime() <= startDate.getTime()) {
+      endDate = new Date(startDate.getTime() + 86_400_000);
+    }
+
+    const durationInDays = Number.isFinite(task.duration) ? task.duration : 0;
 
     const ganttId = toGanttId(task.id);
     if (ganttId === undefined) return null;
@@ -174,6 +269,8 @@ export class GanttDataProvider {
       progress: task.progress || 0,
       type: task.type || 'task',
       parent: toGanttId(task.parentId) ?? 0,
+      estimatedHours: Number.isFinite(task.estimatedHours) ? task.estimatedHours : undefined,
+      hoursPerDay: Number.isFinite(task.hoursPerDay) ? task.hoursPerDay : undefined,
     };
 
     if (allTasks) {
@@ -231,7 +328,7 @@ export class GanttDataProvider {
         case 'delete-link':
           return await this.handleDeleteLink(data as GanttActionPayloadMap['delete-link']);
         default:
-          return this._next ? this._next.send(action, data) : { success: true };
+          return { success: true };
       }
     } catch (error) {
       console.error('GanttDataProvider: error procesando acción', action, error);
@@ -241,6 +338,7 @@ export class GanttDataProvider {
 
   private applyEntityUpdate(taskId: string, fresh: Task, descendants?: Task[]): void {
     this.taskCache.set(taskId, fresh);
+    this.markTaskUpdated(fresh);
     const ganttTask = this.toGanttTask(fresh);
     if (ganttTask && this._ganttApi && ganttTask.id !== undefined) {
       this._ganttApi.exec('update-task', {
@@ -251,6 +349,7 @@ export class GanttDataProvider {
     }
     descendants?.forEach((d) => {
       this.taskCache.set(d.id, d);
+      this.markTaskUpdated(d);
       const gd = this.toGanttTask(d);
       if (gd && this._ganttApi && gd.id !== undefined) {
         this._ganttApi.exec('update-task', {
@@ -276,9 +375,10 @@ export class GanttDataProvider {
         projectId: this.projectId,
         name: data.text || 'Nueva Subtarea',
         description: data.details || '',
+        startDate: data.start,
+        endDate: data.end,
         priority: 'medium',
         type: data.type || 'task',
-        estimatedHours: (data.duration || 1) * 8,
         skipEvent: true,
       });
     } else {
@@ -288,10 +388,8 @@ export class GanttDataProvider {
         description: data.details || '',
         startDate: data.start,
         endDate: data.end,
-        duration: data.duration,
         priority: 'medium',
         type: data.type || 'task',
-        estimatedHours: (data.duration || 7) * 8,
         skipEvent: true,
       });
     }
@@ -303,6 +401,7 @@ export class GanttDataProvider {
     const created = await TaskService.getTask(taskId);
     if (created) {
       this.taskCache.set(taskId, created);
+      this.markTaskUpdated(created);
       const ganttTask = this.toGanttTask(created);
       if (ganttTask && this._ganttApi && data.id !== undefined && ganttTask.id !== undefined) {
         this._ganttApi.exec('update-task', {
@@ -337,12 +436,14 @@ export class GanttDataProvider {
     }
 
     if (!isSummary) {
-      const nextStart = toIsoDate(taskData.start);
-      if (nextStart !== undefined && nextStart !== cachedForVersion?.startDate) {
+      const nextStart = toIsoDateTime(taskData.start);
+      const cachedStart = toIsoDateTime(cachedForVersion?.startDate);
+      if (nextStart !== undefined && nextStart !== cachedStart) {
         updateData.startDate = nextStart;
       }
-      const nextEnd = toIsoDate(taskData.end);
-      if (nextEnd !== undefined && nextEnd !== cachedForVersion?.endDate) {
+      const nextEnd = toIsoDateTime(taskData.end);
+      const cachedEnd = toIsoDateTime(cachedForVersion?.endDate);
+      if (nextEnd !== undefined && nextEnd !== cachedEnd) {
         updateData.endDate = nextEnd;
       }
     }
@@ -416,6 +517,7 @@ export class GanttDataProvider {
 
     await TaskService.deleteTask(taskId);
     this.taskCache.delete(taskId);
+    this.markTaskDeleted(taskId);
     return { success: true };
   }
 
@@ -557,8 +659,6 @@ export class GanttDataProvider {
     }
   }
 
-  // Expand/collapse — listeners nativos + reconciliación de fallback
-
   async handleExpandCollapseState(args: { id: GanttId; isOpen: boolean }): Promise<void> {
     const taskId = String(args.id);
     const cached = this.taskCache.get(taskId);
@@ -587,8 +687,6 @@ export class GanttDataProvider {
     }
   }
 
-  // Utilidades internas
-
   private resolveTaskId(rawId: GanttId | undefined): string | undefined {
     if (rawId === undefined || rawId === null) return undefined;
     if (typeof rawId === 'string' && rawId.startsWith('temp://')) {
@@ -610,7 +708,11 @@ export class GanttDataProvider {
     this.linkCache.clear();
     this.throttleTimers.forEach((t) => clearTimeout(t));
     this.throttleTimers.clear();
+    if (this.dataChangeTimer !== null) {
+      clearTimeout(this.dataChangeTimer);
+      this.dataChangeTimer = null;
+    }
+    this.onDataChange = null;
     this._ganttApi = null;
-    this._next = null;
   }
 }

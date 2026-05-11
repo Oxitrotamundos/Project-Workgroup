@@ -1,6 +1,7 @@
 import { TaskService } from './taskService';
 import { TaskLinkService } from './taskLinkService';
-import type { CreateTaskData, Task, CreateTaskLinkData } from '../types/domain';
+import { TASK_TYPE_COLORS } from '../types/domain';
+import type { CreateTaskData, Task, CreateTaskLinkData, TaskType } from '../types/domain';
 
 export interface TaskCreationOptions {
   projectId: string;
@@ -9,12 +10,13 @@ export interface TaskCreationOptions {
   parentId?: string;
   assigneeId?: string;
   priority?: 'low' | 'medium' | 'high' | 'critical';
+  status?: 'not-started' | 'in-progress' | 'completed' | 'blocked';
   type?: 'task' | 'summary' | 'milestone';
   estimatedHours?: number;
   startDate?: Date;
   endDate?: Date;
   duration?: number;
-  skipEvent?: boolean; // Flag para evitar emitir eventos
+  skipEvent?: boolean;
 }
 
 export interface TaskManagerEventData {
@@ -74,7 +76,7 @@ export class TaskManager {
 
     const now = new Date();
     const defaultEndDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 días por defecto
-    
+
     const startDateObj = options.startDate || now;
     const endDateObj = options.endDate || defaultEndDate;
 
@@ -84,7 +86,7 @@ export class TaskManager {
       description: options.description || '',
       startDate: startDateObj.toISOString(),
       endDate: endDateObj.toISOString(),
-      duration: options.duration || this.calculateDuration(startDateObj, endDateObj),
+      duration: 0,
       progress: 0,
       assigneeId: options.assigneeId || '',
       parentId: options.parentId || '',
@@ -93,8 +95,8 @@ export class TaskManager {
       priority: options.priority || 'medium',
       type: options.type || 'task',
       color: this.getColorForTaskType(options.type || 'task'),
-      estimatedHours: options.estimatedHours || (options.duration || 7) * 8,
-      status: 'not-started'
+      estimatedHours: options.estimatedHours ?? 0,
+      status: options.status ?? 'not-started'
     };
 
     try {
@@ -150,12 +152,10 @@ export class TaskManager {
       description: ganttTaskData.description || '',
       startDate: ganttTaskData.start || new Date(),
       endDate: ganttTaskData.end || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      duration: ganttTaskData.duration || 7,
       parentId: parentId || ganttTaskData.parent,
       assigneeId: ganttTaskData.assignee || '',
       priority: ganttTaskData.priority || 'medium',
       type: ganttTaskData.type || 'task',
-      estimatedHours: ganttTaskData.duration * 8 || 56
     };
 
     return this.createTask(options);
@@ -226,32 +226,17 @@ export class TaskManager {
   }
 
 
-  /**
-   * Obtener color basado en tipo de tarea
-   */
-  private getColorForTaskType(type: 'task' | 'summary' | 'milestone'): string {
-    const colors = {
-      task: '#3B82F6',     // Azul para tareas normales
-      summary: '#8B5CF6',  // Púrpura para tareas resumen
-      milestone: '#F59E0B' // Amarillo/Naranja para milestones
-    };
-    return colors[type];
+  private getColorForTaskType(type: TaskType): string {
+    return TASK_TYPE_COLORS[type];
   }
 
-  /**
-   * ========================================
-   * MÉTODOS DE ENLACES - OPCIONAL
-   * ========================================
-   */
 
-  /**
-   * Crear enlace entre tareas con validación
-   */
+  //MÉTODOS DE ENLACES - OPCIONAL
+
   async createTaskLink(data: CreateTaskLinkData): Promise<string> {
     try {
       console.log('TaskManager: Creando enlace de tarea:', data);
 
-      // Validar que ambas tareas existen
       const sourceTask = await TaskService.getTask(data.sourceTaskId);
       const targetTask = await TaskService.getTask(data.targetTaskId);
 
@@ -259,15 +244,12 @@ export class TaskManager {
         throw new Error('Una o ambas tareas no existen');
       }
 
-      // Validar que ambas tareas pertenecen al mismo proyecto
       if (sourceTask.projectId !== targetTask.projectId || sourceTask.projectId !== data.projectId) {
         throw new Error('Las tareas deben pertenecer al mismo proyecto');
       }
 
-      // Crear enlace usando TaskLinkService
       const linkId = await TaskLinkService.createLink(data);
 
-      // Emitir evento
       this.emit({
         action: 'link-created',
         projectId: data.projectId,
@@ -284,23 +266,17 @@ export class TaskManager {
     }
   }
 
-  /**
-   * Eliminar enlace de tarea
-   */
   async deleteTaskLink(linkId: string): Promise<void> {
     try {
       console.log('TaskManager: Eliminando enlace de tarea:', linkId);
 
-      // Obtener datos del enlace antes de eliminarlo
       const link = await TaskLinkService.getLink(linkId);
       if (!link) {
         throw new Error('Enlace no encontrado');
       }
 
-      // Eliminar enlace
       await TaskLinkService.deleteLink(linkId);
 
-      // Emitir evento
       this.emit({
         action: 'link-deleted',
         projectId: link.projectId,
@@ -315,9 +291,6 @@ export class TaskManager {
     }
   }
 
-  /**
-   * Validar creación de enlace
-   */
   async validateLinkCreation(sourceTaskId: string, targetTaskId: string, projectId: string): Promise<{
     valid: boolean;
     error?: string;
@@ -330,16 +303,7 @@ export class TaskManager {
     }
   }
 
-  /**
-   * Calcular duración en días entre dos fechas
-   */
-  private calculateDuration(startDate: Date, endDate: Date): number {
-    const diffTime = endDate.getTime() - startDate.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return Math.max(1, diffDays); // Mínimo 1 día
-  }
 }
 
-// Export singleton instance
 export const taskManager = TaskManager.getInstance();
 export default taskManager;
