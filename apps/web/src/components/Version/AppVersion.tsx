@@ -7,9 +7,6 @@ export interface AppVersionProps {
   showAppName?: boolean;
 }
 
-/**
- * Componente para mostrar la versión de la aplicación
- */
 export function AppVersion({
   showPrefix = true,
   className = '',
@@ -23,11 +20,7 @@ export function AppVersion({
 
   if (badge) {
     return (
-      <span
-        className={`inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200 ${className}`}
-      >
-        {displayText}
-      </span>
+      <span className={`badge info ${className}`}>{displayText}</span>
     );
   }
 

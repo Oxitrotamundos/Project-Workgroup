@@ -6,9 +6,6 @@ export interface VersionBadgeProps {
   showTooltip?: boolean;
 }
 
-/**
- * Componente de insignia de versión en posición fija
- */
 export function VersionBadge({
   position = 'bottom-right',
   className = '',
@@ -32,7 +29,17 @@ export function VersionBadge({
       className={`fixed ${positionClasses[position]} z-50 ${className}`}
       title={tooltipText}
     >
-      <span className="inline-flex items-center rounded-md bg-gray-800/80 px-2 py-1 text-xs font-medium text-white shadow-lg backdrop-blur-sm dark:bg-gray-700/80">
+      <span
+        className="inline-flex items-center backdrop-blur-sm"
+        style={{
+          background: 'color-mix(in oklab, var(--ink-1) 80%, transparent)',
+          color: 'var(--surface)',
+          font: '500 var(--t-caption)/1 var(--font-mono)',
+          padding: '4px 8px',
+          borderRadius: 'var(--r-sm)',
+          boxShadow: 'var(--sh-2)',
+        }}
+      >
         {versionWithPrefix}
       </span>
     </div>
