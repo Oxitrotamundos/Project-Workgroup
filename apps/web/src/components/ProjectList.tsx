@@ -3,16 +3,16 @@ import type { Project, ProjectStatus } from '../types/domain';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserRole } from '../hooks/useUserRole';
 import MemberModal from './MemberModal';
-import { 
-  Eye, 
-  Users, 
-  Edit3, 
-  Trash2, 
-  Calendar, 
-  Plus, 
-  FolderOpen, 
+import {
+  Eye,
+  Users,
+  Edit3,
+  Trash2,
+  Calendar,
+  Plus,
+  FolderOpen,
   AlertCircle,
-  Clock
+  Clock,
 } from 'lucide-react';
 
 interface ProjectCardProps {
@@ -23,168 +23,157 @@ interface ProjectCardProps {
   onManageMembers: (project: Project) => void;
 }
 
+const STATUS_VARIANT: Record<ProjectStatus, 'warn' | 'ok' | 'info' | 'err' | 'outline'> = {
+  planning: 'warn',
+  active: 'ok',
+  completed: 'info',
+  'on-hold': 'err',
+};
+
+const STATUS_LABEL: Record<ProjectStatus, string> = {
+  planning: 'Planificación',
+  active: 'Activo',
+  completed: 'Completado',
+  'on-hold': 'En Pausa',
+};
+
+const formatDate = (date: string) =>
+  new Intl.DateTimeFormat('es-ES', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(date));
+
 const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDelete, onView, onManageMembers }) => {
   const { user } = useAuth();
   const { isAdmin, isPM } = useUserRole();
   const isOwner = user?.uid === project.ownerId;
   const isMember = project.members.includes(user?.uid || '');
-  
-  // Permisos según rol
+
   const canEdit = isAdmin || isOwner || (isPM && isMember);
   const canDelete = isAdmin || isOwner;
   const canView = isAdmin || isOwner || isMember;
   const canManageMembers = isAdmin || isPM;
 
-  const getStatusColor = (status: ProjectStatus) => {
-    switch (status) {
-      case 'planning':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'completed':
-        return 'bg-blue-100 text-blue-800';
-      case 'on-hold':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusText = (status: ProjectStatus) => {
-    switch (status) {
-      case 'planning':
-        return 'Planificación';
-      case 'active':
-        return 'Activo';
-      case 'completed':
-        return 'Completado';
-      case 'on-hold':
-        return 'En Pausa';
-      default:
-        return status;
-    }
-  };
-
-  const formatDate = (date: string) => {
-    const dateObj = new Date(date);
-    return new Intl.DateTimeFormat('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    }).format(dateObj);
-  };
+  const variant = STATUS_VARIANT[project.status] ?? 'outline';
 
   return (
-    <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100 hover:border-gray-200 h-full flex flex-col">
-      <div className="p-5 flex-1 flex flex-col">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-3">
-              <div 
-                className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: project.color }}
-              />
-              <h3 className="text-lg font-semibold text-gray-900 truncate">
-                {project.name}
-              </h3>
-            </div>
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
-              {getStatusText(project.status)}
-            </span>
+    <div
+      className="card h-full flex flex-col"
+      style={{
+        boxShadow: 'var(--sh-1)',
+        transition: 'box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = 'var(--sh-2)';
+        e.currentTarget.style.borderColor = 'var(--line-2)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = 'var(--sh-1)';
+        e.currentTarget.style.borderColor = 'var(--line)';
+      }}
+    >
+      <div className="flex items-start justify-between mb-3 gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 mb-2">
+            <span
+              className="w-3 h-3 rounded-sm shrink-0"
+              style={{ backgroundColor: project.color }}
+            />
+            <h3
+              className="truncate"
+              style={{
+                font: '500 var(--t-h3)/var(--lh-h3) var(--font-sans)',
+                letterSpacing: 'var(--tr-h3)',
+                color: 'var(--ink)',
+                margin: 0,
+              }}
+            >
+              {project.name}
+            </h3>
           </div>
-          
-          {/* Menu de acciones */}
-          <div className="flex items-center gap-1 ml-3">
-            {canView && (
-              <button
-                onClick={() => onView(project.id)}
-                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
-                title="Ver proyecto"
-                aria-label="Ver proyecto"
-              >
-                <Eye className="w-4 h-4" />
-              </button>
-            )}
-            
-            {canManageMembers && (
-              <button
-                onClick={() => onManageMembers(project)}
-                className="p-2 text-gray-400 hover:text-purple-600 rounded-lg hover:bg-purple-50 transition-colors"
-                title="Gestionar miembros"
-                aria-label="Gestionar miembros"
-              >
-                <Users className="w-4 h-4" />
-              </button>
-            )}
-            
-            {canEdit && (
-              <button
-                onClick={() => onEdit(project)}
-                className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
-                title="Editar proyecto"
-                aria-label="Editar proyecto"
-              >
-                <Edit3 className="w-4 h-4" />
-              </button>
-            )}
-            
-            {canDelete && (
-              <button
-                onClick={() => onDelete(project.id)}
-                className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                title="Eliminar proyecto"
-                aria-label="Eliminar proyecto"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          <span className={`badge ${variant} dot`}>{STATUS_LABEL[project.status]}</span>
         </div>
 
-        {/* Indicador de rol para administradores */}
-        {isAdmin && (
-          <div className="mb-4">
-            <span className="inline-flex items-center px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full font-medium">
-              Admin
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-0.5 shrink-0">
+          {canView && (
+            <button
+              onClick={() => onView(project.id)}
+              className="btn btn-ghost btn-icon btn-sm"
+              title="Ver proyecto"
+              aria-label="Ver proyecto"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          )}
+          {canManageMembers && (
+            <button
+              onClick={() => onManageMembers(project)}
+              className="btn btn-ghost btn-icon btn-sm"
+              title="Gestionar miembros"
+              aria-label="Gestionar miembros"
+            >
+              <Users className="w-4 h-4" />
+            </button>
+          )}
+          {canEdit && (
+            <button
+              onClick={() => onEdit(project)}
+              className="btn btn-ghost btn-icon btn-sm"
+              title="Editar proyecto"
+              aria-label="Editar proyecto"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => onDelete(project.id)}
+              className="btn btn-ghost btn-icon btn-sm"
+              title="Eliminar proyecto"
+              aria-label="Eliminar proyecto"
+              style={{ color: 'var(--err-fg)' }}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
 
-        {/* Descripción */}
-        {project.description && (
-          <div className="mb-4 flex-1">
-            <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
-              {project.description}
-            </p>
-          </div>
-        )}
+      {isAdmin && (
+        <div className="mb-3">
+          <span className="badge info">Admin</span>
+        </div>
+      )}
 
-        {/* Contenido inferior */}
-        <div className="mt-auto space-y-4">
-          {/* Fechas */}
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Calendar className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">
-              {formatDate(project.startDate)} - {formatDate(project.endDate)}
-            </span>
-          </div>
+      {project.description && (
+        <p
+          className="line-clamp-3 mb-4"
+          style={{
+            font: '400 var(--t-small)/var(--lh-small) var(--font-sans)',
+            color: 'var(--ink-2)',
+            margin: '0 0 var(--s-4)',
+          }}
+        >
+          {project.description}
+        </p>
+      )}
 
-          {/* Footer */}
-          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
-              <span className="text-sm text-gray-600">
-                {project.members.length} miembro{project.members.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            
-            <div className="flex items-center gap-1 text-xs text-gray-400">
-              <Clock className="w-3 h-3" />
-              <span className="truncate">
-                {formatDate(project.updatedAt)}
-              </span>
-            </div>
+      <div className="mt-auto" style={{ paddingTop: 'var(--s-3)', borderTop: '1px solid var(--line)' }}>
+        <div
+          className="flex items-center gap-2 mb-2"
+          style={{ font: '400 var(--t-caption)/1.3 var(--font-mono)', color: 'var(--ink-3)' }}
+        >
+          <Calendar className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">
+            {formatDate(project.startDate)} — {formatDate(project.endDate)}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5" style={{ font: '400 var(--t-small)/1 var(--font-sans)', color: 'var(--ink-2)' }}>
+            <Users className="w-3.5 h-3.5" style={{ color: 'var(--ink-3)' }} />
+            <span>{project.members.length} miembro{project.members.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="flex items-center gap-1" style={{ font: '400 var(--t-caption)/1 var(--font-mono)', color: 'var(--ink-4)' }}>
+            <Clock className="w-3 h-3" />
+            <span className="truncate">{formatDate(project.updatedAt)}</span>
           </div>
         </div>
       </div>
@@ -204,23 +193,22 @@ interface ProjectListProps {
   onLoadMore: () => Promise<void>;
 }
 
-const ProjectList: React.FC<ProjectListProps> = ({ 
+const ProjectList: React.FC<ProjectListProps> = ({
   projects,
   loading,
   error,
   hasMore,
-  onCreateProject, 
-  onEditProject, 
+  onCreateProject,
+  onEditProject,
   onViewProject,
   onDeleteProject,
-  onLoadMore
+  onLoadMore,
 }) => {
   const { isAdmin, isPM } = useUserRole();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  
-  // Solo administradores y PMs pueden crear proyectos
+
   const canCreateProject = isAdmin || isPM;
 
   const handleManageMembers = (project: Project) => {
@@ -237,7 +225,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
     if (!confirm('¿Estás seguro de que quieres eliminar este proyecto? Esta acción no se puede deshacer.')) {
       return;
     }
-
     try {
       setDeletingId(projectId);
       await onDeleteProject(projectId);
@@ -252,26 +239,23 @@ const ProjectList: React.FC<ProjectListProps> = ({
   if (loading && projects.length === 0) {
     return (
       <div className="space-y-4">
-        {/* Header skeleton */}
         <div className="flex justify-between items-center">
-          <div className="h-8 bg-gray-200 rounded w-48 animate-pulse"></div>
-          <div className="h-10 bg-gray-200 rounded w-32 animate-pulse"></div>
+          <div className="h-8 rounded w-48 animate-pulse" style={{ background: 'var(--surface-3)' }} />
+          <div className="h-10 rounded w-32 animate-pulse" style={{ background: 'var(--surface-3)' }} />
         </div>
-        
-        {/* Cards skeleton */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
           {[...Array(8)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl shadow-sm p-5 h-64" data-testid="project-skeleton">
+            <div key={i} className="card h-64" data-testid="project-skeleton">
               <div className="space-y-4 h-full flex flex-col">
                 <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-gray-200 rounded-full animate-pulse"></div>
-                  <div className="h-5 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                  <div className="w-3 h-3 rounded-full animate-pulse" style={{ background: 'var(--surface-3)' }} />
+                  <div className="h-5 rounded w-3/4 animate-pulse" style={{ background: 'var(--surface-3)' }} />
                 </div>
-                <div className="h-4 bg-gray-200 rounded w-1/3 animate-pulse"></div>
-                <div className="flex-1 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 rounded w-1/3 animate-pulse" style={{ background: 'var(--surface-3)' }} />
+                <div className="flex-1 rounded animate-pulse" style={{ background: 'var(--surface-3)' }} />
                 <div className="space-y-2">
-                  <div className="h-3 bg-gray-200 rounded w-2/3 animate-pulse"></div>
-                  <div className="h-3 bg-gray-200 rounded w-1/2 animate-pulse"></div>
+                  <div className="h-3 rounded w-2/3 animate-pulse" style={{ background: 'var(--surface-3)' }} />
+                  <div className="h-3 rounded w-1/2 animate-pulse" style={{ background: 'var(--surface-3)' }} />
                 </div>
               </div>
             </div>
@@ -283,16 +267,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <div className="text-red-600 mb-4">
-          <AlertCircle className="w-12 h-12 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold">Error al cargar proyectos</h3>
-          <p className="text-gray-600 mt-2">{error}</p>
+      <div className="empty" role="alert">
+        <div className="glyph">
+          <AlertCircle className="w-6 h-6" />
         </div>
-        <button
-          onClick={() => window.location.reload()}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-        >
+        <h3 style={{ font: '500 var(--t-h3)/var(--lh-h3) var(--font-sans)', color: 'var(--ink)', margin: 0 }}>
+          Error al cargar proyectos
+        </h3>
+        <p style={{ font: '400 var(--t-small)/var(--lh-small) var(--font-sans)', color: 'var(--ink-2)', margin: 'var(--s-2) 0 var(--s-5)' }}>
+          {error}
+        </p>
+        <button onClick={() => window.location.reload()} className="btn btn-primary">
           <Plus className="w-4 h-4" />
           Reintentar
         </button>
@@ -302,58 +287,72 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2
+            style={{
+              font: '500 var(--t-h2)/var(--lh-h2) var(--font-sans)',
+              letterSpacing: 'var(--tr-h2)',
+              color: 'var(--ink)',
+              margin: 0,
+            }}
+          >
             {isAdmin ? 'Todos los Proyectos' : 'Mis Proyectos'}
           </h2>
-          <p className="text-gray-600 mt-1">
+          <p
+            style={{
+              font: '400 var(--t-small)/var(--lh-small) var(--font-sans)',
+              color: 'var(--ink-2)',
+              margin: 'var(--s-1) 0 0',
+            }}
+          >
             {projects.length} proyecto{projects.length !== 1 ? 's' : ''} encontrado{projects.length !== 1 ? 's' : ''}
-            {isAdmin && <span className="ml-2 px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">Vista de Administrador</span>}
+            {isAdmin && <span className="badge info ml-2">Vista de Administrador</span>}
           </p>
         </div>
-        
+
         {canCreateProject && (
-          <button
-            onClick={onCreateProject}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
-          >
-            <Plus className="w-5 h-5" />
+          <button onClick={onCreateProject} className="btn btn-primary">
+            <Plus className="w-4 h-4" />
             Nuevo Proyecto
           </button>
         )}
       </div>
 
-      {/* Lista de proyectos */}
       {projects.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="text-gray-400 mb-4">
-            <FolderOpen className="w-16 h-16 mx-auto mb-6 text-gray-300" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-3">No hay proyectos</h3>
-            <p className="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
-              {canCreateProject 
-                ? 'Comienza creando tu primer proyecto para gestionar tareas y equipos de manera eficiente.'
-                : 'No tienes acceso a ningún proyecto. Contacta con un administrador o PM para que te agregue a un proyecto.'
-              }
-            </p>
-            {canCreateProject && (
-              <button
-                onClick={onCreateProject}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2 shadow-sm"
-              >
-                <Plus className="w-5 h-5" />
-                Crear Primer Proyecto
-              </button>
-            )}
+        <div className="empty">
+          <div className="glyph">
+            <FolderOpen className="w-7 h-7" />
           </div>
+          <h3 style={{ font: '500 var(--t-h3)/var(--lh-h3) var(--font-sans)', color: 'var(--ink)', margin: '0 0 var(--s-2)' }}>
+            No hay proyectos
+          </h3>
+          <p
+            className="mx-auto"
+            style={{
+              font: '400 var(--t-small)/var(--lh-small) var(--font-sans)',
+              color: 'var(--ink-2)',
+              maxWidth: '52ch',
+              margin: '0 auto var(--s-5)',
+            }}
+          >
+            {canCreateProject
+              ? 'Comienza creando tu primer proyecto para gestionar tareas y equipos de manera eficiente.'
+              : 'No tienes acceso a ningún proyecto. Contacta con un administrador o PM para que te agregue a un proyecto.'}
+          </p>
+          {canCreateProject && (
+            <button onClick={onCreateProject} className="btn btn-primary btn-lg">
+              <Plus className="w-5 h-5" />
+              Crear Primer Proyecto
+            </button>
+          )}
         </div>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6" data-testid="projects-grid">
             {projects.map((project) => (
-              <div 
-                key={project.id} 
+              <div
+                key={project.id}
                 className={`transition-opacity duration-200 ${deletingId === project.id ? 'opacity-50 pointer-events-none' : ''}`}
               >
                 <ProjectCard
@@ -367,22 +366,16 @@ const ProjectList: React.FC<ProjectListProps> = ({
             ))}
           </div>
 
-          {/* Botón cargar más */}
           {hasMore && (
             <div className="text-center pt-4">
-              <button
-                onClick={onLoadMore}
-                disabled={loading}
-                className="bg-gray-50 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200 shadow-sm"
-              >
+              <button onClick={onLoadMore} disabled={loading} className="btn btn-secondary">
                 {loading ? 'Cargando...' : 'Cargar Más Proyectos'}
               </button>
             </div>
           )}
         </>
       )}
-      
-      {/* Modal de gestión de miembros */}
+
       {selectedProject && (
         <MemberModal
           isOpen={memberModalOpen}

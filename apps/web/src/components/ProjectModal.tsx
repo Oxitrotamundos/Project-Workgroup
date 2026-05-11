@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { X, Loader2 } from 'lucide-react';
 import type { Project, CreateProjectData, UpdateProjectData, ProjectStatus } from '../types/domain';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -10,13 +11,13 @@ interface ProjectModalProps {
   mode: 'create' | 'edit';
 }
 
-const ProjectModal: React.FC<ProjectModalProps> = ({
-  isOpen,
-  onClose,
-  onSubmit,
-  project,
-  mode
-}) => {
+const PROJECT_COLORS = [
+  '#059669', '#10B981', '#F59E0B', '#EF4444',
+  '#8B5CF6', '#F97316', '#06B6D4', '#84CC16',
+  '#EC4899', '#6B7280',
+];
+
+const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, project, mode }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -25,25 +26,10 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
     startDate: '',
     endDate: '',
     status: 'planning' as ProjectStatus,
-    color: '#3B82F6'
+    color: '#059669',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Colores predefinidos para proyectos
-  const projectColors = [
-    '#3B82F6', // Blue
-    '#10B981', // Green
-    '#F59E0B', // Yellow
-    '#EF4444', // Red
-    '#8B5CF6', // Purple
-    '#F97316', // Orange
-    '#06B6D4', // Cyan
-    '#84CC16', // Lime
-    '#EC4899', // Pink
-    '#6B7280'  // Gray
-  ];
-
-  // Inicializar formulario cuando cambia el proyecto
   useEffect(() => {
     if (mode === 'edit' && project) {
       setFormData({
@@ -52,21 +38,19 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
         startDate: new Date(project.startDate).toISOString().split('T')[0],
         endDate: new Date(project.endDate).toISOString().split('T')[0],
         status: project.status,
-        color: project.color
+        color: project.color,
       });
     } else {
-      // Resetear formulario para modo crear
       const today = new Date();
       const nextMonth = new Date(today);
       nextMonth.setMonth(today.getMonth() + 1);
-      
       setFormData({
         name: '',
         description: '',
         startDate: today.toISOString().split('T')[0],
         endDate: nextMonth.toISOString().split('T')[0],
         status: 'planning',
-        color: '#3B82F6'
+        color: '#059669',
       });
     }
     setErrors({});
@@ -74,43 +58,23 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'El nombre del proyecto es requerido';
-    } else if (formData.name.trim().length < 3) {
-      newErrors.name = 'El nombre debe tener al menos 3 caracteres';
-    }
-
-    if (!formData.startDate) {
-      newErrors.startDate = 'La fecha de inicio es requerida';
-    }
-
-    if (!formData.endDate) {
-      newErrors.endDate = 'La fecha de fin es requerida';
-    }
-
+    if (!formData.name.trim()) newErrors.name = 'El nombre del proyecto es requerido';
+    else if (formData.name.trim().length < 3) newErrors.name = 'El nombre debe tener al menos 3 caracteres';
+    if (!formData.startDate) newErrors.startDate = 'La fecha de inicio es requerida';
+    if (!formData.endDate) newErrors.endDate = 'La fecha de fin es requerida';
     if (formData.startDate && formData.endDate) {
       const startDate = new Date(formData.startDate);
       const endDate = new Date(formData.endDate);
-      
-      if (endDate <= startDate) {
-        newErrors.endDate = 'La fecha de fin debe ser posterior a la fecha de inicio';
-      }
+      if (endDate <= startDate) newErrors.endDate = 'La fecha de fin debe ser posterior a la fecha de inicio';
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm() || !user) {
-      return;
-    }
-
+    if (!validateForm() || !user) return;
     setLoading(true);
-    
     try {
       const projectData = {
         name: formData.name.trim(),
@@ -121,10 +85,9 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
         color: formData.color,
         ...(mode === 'create' && {
           ownerId: user.uid,
-          members: [user.uid]
-        })
+          members: [user.uid],
+        }),
       };
-
       await onSubmit(projectData);
       onClose();
     } catch (error) {
@@ -136,186 +99,149 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Limpiar error del campo cuando el usuario empiece a escribir
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }));
   };
 
   if (!isOpen) return null;
 
+  const inputClass = (field: string) => `input ${errors[field] ? 'border-err-line' : ''}`;
+  const errorStyle: React.CSSProperties = {
+    color: 'var(--err-fg)',
+    font: '400 var(--t-caption)/1.3 var(--font-sans)',
+    margin: '4px 0 0',
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">
-            {mode === 'create' ? 'Crear Nuevo Proyecto' : 'Editar Proyecto'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-            disabled={loading}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2 className="ttl">{mode === 'create' ? 'Crear Nuevo Proyecto' : 'Editar Proyecto'}</h2>
+          <button onClick={onClose} className="btn btn-ghost btn-icon btn-sm" disabled={loading} aria-label="Cerrar">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Nombre del proyecto */}
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre del Proyecto *
-            </label>
-            <input
-              type="text"
-              id="name"
-              value={formData.name}
-              onChange={(e) => handleInputChange('name', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                errors.name ? 'border-red-300' : 'border-gray-300'
-              }`}
-              placeholder="Ej: Desarrollo de aplicación móvil"
-              disabled={loading}
-            />
-            {errors.name && (
-              <p className="text-red-600 text-sm mt-1">{errors.name}</p>
+        <form onSubmit={handleSubmit} className="contents">
+          <div className="modal-body space-y-4">
+            <div className="field">
+              <label htmlFor="name" className="field-label">Nombre del Proyecto *</label>
+              <input
+                type="text"
+                id="name"
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                className={inputClass('name')}
+                placeholder="Ej: Desarrollo de aplicación móvil"
+                disabled={loading}
+              />
+              {errors.name && <p style={errorStyle}>{errors.name}</p>}
+            </div>
+
+            <div className="field">
+              <label htmlFor="description" className="field-label">Descripción</label>
+              <textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                rows={3}
+                className="textarea"
+                placeholder="Describe brevemente el proyecto..."
+                disabled={loading}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="field">
+                <label htmlFor="startDate" className="field-label">Fecha de Inicio *</label>
+                <input
+                  type="date"
+                  id="startDate"
+                  value={formData.startDate}
+                  onChange={(e) => handleInputChange('startDate', e.target.value)}
+                  className={inputClass('startDate')}
+                  disabled={loading}
+                />
+                {errors.startDate && <p style={errorStyle}>{errors.startDate}</p>}
+              </div>
+
+              <div className="field">
+                <label htmlFor="endDate" className="field-label">Fecha de Fin *</label>
+                <input
+                  type="date"
+                  id="endDate"
+                  value={formData.endDate}
+                  onChange={(e) => handleInputChange('endDate', e.target.value)}
+                  className={inputClass('endDate')}
+                  disabled={loading}
+                />
+                {errors.endDate && <p style={errorStyle}>{errors.endDate}</p>}
+              </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="status" className="field-label">Estado</label>
+              <select
+                id="status"
+                value={formData.status}
+                onChange={(e) => handleInputChange('status', e.target.value)}
+                className="select"
+                disabled={loading}
+              >
+                <option value="planning">Planificación</option>
+                <option value="active">Activo</option>
+                <option value="on-hold">En Pausa</option>
+                <option value="completed">Completado</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <span className="field-label">Color del Proyecto</span>
+              <div className="flex flex-wrap gap-2">
+                {PROJECT_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => handleInputChange('color', color)}
+                    className="transition-transform"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '999px',
+                      backgroundColor: color,
+                      border: formData.color === color ? '2px solid var(--ink-1)' : '2px solid var(--line)',
+                      transform: formData.color === color ? 'scale(1.1)' : 'scale(1)',
+                      cursor: 'pointer',
+                    }}
+                    disabled={loading}
+                    title={color}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {errors.submit && (
+              <div
+                style={{
+                  background: 'var(--err-bg)',
+                  border: '1px solid var(--err-line)',
+                  color: 'var(--err-fg)',
+                  borderRadius: 'var(--r-md)',
+                  padding: 'var(--s-3) var(--s-4)',
+                  font: '400 var(--t-small)/var(--lh-small) var(--font-sans)',
+                }}
+              >
+                {errors.submit}
+              </div>
             )}
           </div>
 
-          {/* Descripción */}
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-              Descripción
-            </label>
-            <textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => handleInputChange('description', e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Describe brevemente el proyecto..."
-              disabled={loading}
-            />
-          </div>
-
-          {/* Fechas */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
-                Fecha de Inicio *
-              </label>
-              <input
-                type="date"
-                id="startDate"
-                value={formData.startDate}
-                onChange={(e) => handleInputChange('startDate', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.startDate ? 'border-red-300' : 'border-gray-300'
-                }`}
-                disabled={loading}
-              />
-              {errors.startDate && (
-                <p className="text-red-600 text-sm mt-1">{errors.startDate}</p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">
-                Fecha de Fin *
-              </label>
-              <input
-                type="date"
-                id="endDate"
-                value={formData.endDate}
-                onChange={(e) => handleInputChange('endDate', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  errors.endDate ? 'border-red-300' : 'border-gray-300'
-                }`}
-                disabled={loading}
-              />
-              {errors.endDate && (
-                <p className="text-red-600 text-sm mt-1">{errors.endDate}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Estado */}
-          <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
-              Estado
-            </label>
-            <select
-              id="status"
-              value={formData.status}
-              onChange={(e) => handleInputChange('status', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              disabled={loading}
-            >
-              <option value="planning">Planificación</option>
-              <option value="active">Activo</option>
-              <option value="on-hold">En Pausa</option>
-              <option value="completed">Completado</option>
-            </select>
-          </div>
-
-          {/* Color */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Color del Proyecto
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {projectColors.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => handleInputChange('color', color)}
-                  className={`w-8 h-8 rounded-full border-2 transition-all ${
-                    formData.color === color
-                      ? 'border-gray-400 scale-110'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  style={{ backgroundColor: color }}
-                  disabled={loading}
-                  title={color}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Error general */}
-          {errors.submit && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-red-600 text-sm">{errors.submit}</p>
-            </div>
-          )}
-
-          {/* Botones */}
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-              disabled={loading}
-            >
+          <div className="modal-foot">
+            <button type="button" onClick={onClose} className="btn btn-secondary" disabled={loading}>
               Cancelar
             </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              disabled={loading}
-            >
-              {loading && (
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              )}
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {mode === 'create' ? 'Crear Proyecto' : 'Guardar Cambios'}
             </button>
           </div>

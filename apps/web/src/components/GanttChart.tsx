@@ -14,10 +14,14 @@ import type {
   ToolbarItem,
 } from 'wx-react-gantt';
 import type { Task } from '../types/domain';
-import { GanttDataProvider } from '../services/ganttDataProvider';
+import type { WorkingCalendarResponse } from '@project-workgroup/shared';
+import { GanttDataProvider, type GanttDataChangePayload } from '../services/ganttDataProvider';
 import { taskManager } from '../services/taskManager';
+import { calendarService } from '../services/calendarService';
+import { createHighlightTime } from '../services/workingCalendarMarkers';
 import { LocaleProvider } from './LocaleProvider';
 import { setupAutoLocalization } from '../utils/ganttLocalizer';
+import { applyBarTooltips } from '../utils/ganttBarTooltips';
 import { GanttTimeline } from './GanttTimeline';
 
 import coreLocaleEs from 'wx-core-locales/locales/es';
@@ -50,17 +54,21 @@ interface GanttChartProps {
   error?: string | null;
   apiRef?: React.RefObject<GanttApi | null>;
   onAddTask?: () => void;
+  onTasksChanged?: (payload: GanttDataChangePayload) => void;
 }
 
 const GanttChart: React.FC<GanttChartProps> = ({
+  tasks,
   projectId,
   loading = false,
   error = null,
   apiRef: externalApiRef,
   onAddTask,
+  onTasksChanged,
 }) => {
   const internalApiRef = useRef<GanttApi | null>(null);
   const apiRef = externalApiRef ?? internalApiRef;
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [pxPerDay, setPxPerDay] = useState(30);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [toolbarApi, setToolbarApi] = useState<GanttApi | null>(null);
@@ -70,6 +78,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
     links: [],
   });
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [calendar, setCalendar] = useState<WorkingCalendarResponse | null>(null);
   const errorBannerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localizationCleanupRef = useRef<(() => void) | null>(null);
   const initListenersInstalledRef = useRef(false);
@@ -139,6 +148,35 @@ const GanttChart: React.FC<GanttChartProps> = ({
     );
   }, [dataProvider, loadGanttData]);
 
+  useEffect(() => {
+    if (!dataProvider) return;
+    dataProvider.setOnDataChange(onTasksChanged ? (payload) => onTasksChanged(payload) : null);
+    return () => {
+      dataProvider.setOnDataChange(null);
+    };
+  }, [dataProvider, onTasksChanged]);
+
+  useEffect(() => {
+    if (!dataProvider || !tasks) return;
+    dataProvider.syncFromTasks(tasks);
+  }, [dataProvider, tasks]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    calendarService
+      .getForProject(projectId)
+      .then((cal) => {
+        if (!cancelled) setCalendar(cal);
+      })
+      .catch((e) => console.error('GanttChart: error cargando calendario', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const highlightTime = React.useMemo(() => createHighlightTime(calendar), [calendar]);
+
   const { scales, cellWidth, zoomLevel, zoomLabel } = React.useMemo(() => {
     const tiers = [
       { level: 0, label: 'Año',         max: 0.5,      factor: 365,    scales: [{ unit: 'year', step: 1, format: 'yyyy' }] },
@@ -166,11 +204,72 @@ const GanttChart: React.FC<GanttChartProps> = ({
     return [{ start: today, text: 'Hoy', css: 'current-day-marker' }];
   }, []);
 
-  const columns: GanttColumn[] = React.useMemo(
-    () => [
-      { id: 'text', header: 'Nombre de la tarea', flexGrow: 2 },
-      { id: 'start', header: 'Fecha de inicio', align: 'center', flexGrow: 1 },
-      { id: 'duration', header: 'Duración', align: 'center', flexGrow: 1 },
+  const columns: GanttColumn[] = React.useMemo(() => {
+    const STATUS_LABEL: Record<string, string> = {
+      'not-started': 'No iniciada',
+      'in-progress': 'En curso',
+      completed: 'Completada',
+      blocked: 'Bloqueada',
+    };
+
+    return [
+      { id: 'text', header: 'Nombre', flexGrow: 2 },
+      {
+        id: 'status',
+        header: 'Estado',
+        align: 'center',
+        flexGrow: 1,
+        template: (task: GanttTask) => {
+          try {
+            if (!task) return '—';
+            const full = dataProvider?.getFullTaskDataByGanttId(task.id);
+            const status = full?.status ?? '';
+            return STATUS_LABEL[status] ?? '—';
+          } catch {
+            return '';
+          }
+        },
+      },
+      {
+        id: 'estimatedHours',
+        header: 'Esfuerzo',
+        align: 'center',
+        flexGrow: 1,
+        template: (task: GanttTask) => {
+          try {
+            if (!task || task.type === 'milestone') return '—';
+            const full = dataProvider?.getFullTaskDataByGanttId(task.id);
+            const hours = Number(full?.estimatedHours ?? task.estimatedHours ?? 0);
+            if (!Number.isFinite(hours) || hours <= 0) return '—';
+            return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h`;
+          } catch {
+            return '';
+          }
+        },
+      },
+      {
+        id: 'duration',
+        header: 'Duración',
+        align: 'center',
+        flexGrow: 1,
+        template: (task: GanttTask) => {
+          try {
+            if (!task || task.type === 'milestone') return '—';
+            const full = dataProvider?.getFullTaskDataByGanttId(task.id);
+            const labDays = Number(full?.duration ?? task.duration ?? 0);
+            const labText = !Number.isFinite(labDays) || labDays <= 0
+              ? '0'
+              : Number.isInteger(labDays) ? `${labDays}` : labDays.toFixed(1);
+            const start = task.start instanceof Date ? task.start : null;
+            const end = task.end instanceof Date ? task.end : null;
+            if (!start || !end) return `${labText}d lab`;
+            const natDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86_400_000));
+            return `${labText}d lab / ${natDays}d nat`;
+          } catch {
+            return '';
+          }
+        },
+      },
       { id: 'progress', header: 'Progreso', align: 'center', flexGrow: 1 },
       {
         id: 'action',
@@ -189,9 +288,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
           </div>
         `,
       },
-    ],
-    [],
-  );
+    ];
+  }, [dataProvider]);
 
   const dayDiff = (next: Date, prev: Date): number => {
     const d = (next.getTime() - prev.getTime()) / 1000 / 60 / 60 / 24;
@@ -307,7 +405,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
   useEffect(() => {
     const MIN_PX = 0.05;
     const MAX_PX = 2400;
-    const SENSITIVITY = 0.0035; // ajuste por unidad de deltaY (multiplicativo)
+    const SENSITIVITY = 0.0035;
 
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
@@ -346,13 +444,13 @@ const GanttChart: React.FC<GanttChartProps> = ({
         console.warn('GanttChart: no se pudo configurar la localización', e);
       }
 
+      if (initListenersInstalledRef.current) return;
+      initListenersInstalledRef.current = true;
+
       if (dataProvider) {
         if (typeof api.setNext === 'function') api.setNext(dataProvider);
         dataProvider.setGanttApi(api);
       }
-
-      if (initListenersInstalledRef.current) return;
-      initListenersInstalledRef.current = true;
 
       api.on('update-task', ({ id }) => recalcSummaryProgress(id));
       api.on('delete-task', ({ source }) => {
@@ -404,12 +502,55 @@ const GanttChart: React.FC<GanttChartProps> = ({
     return () => clearInterval(interval);
   }, [apiRef, dataProvider]);
 
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const container = containerRef.current;
+    const THROTTLE_MS = 200;
+    let scheduled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const apply = () => {
+      scheduled = false;
+      applyBarTooltips(apiRef.current, container);
+    };
+
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      timeoutId = setTimeout(apply, THROTTLE_MS);
+    };
+
+    schedule();
+    const observer = new MutationObserver(schedule);
+    const barsArea = container.querySelector('.wx-bars');
+    if (barsArea) {
+      observer.observe(barsArea, { childList: true, subtree: false });
+    }
+
+    return () => {
+      scheduled = false;
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      observer.disconnect();
+    };
+  }, [apiRef, ganttData.tasks]);
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full" style={{ background: 'var(--surface)' }}>
         <div className="text-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent mx-auto"></div>
-          <p className="mt-3 text-sm text-gray-500">Cargando...</p>
+          <div
+            className="animate-spin rounded-full h-6 w-6 mx-auto"
+            style={{ border: '2px solid var(--p-500)', borderTopColor: 'transparent' }}
+          />
+          <p
+            style={{
+              font: '400 var(--t-small)/var(--lh-small) var(--font-sans)',
+              color: 'var(--ink-3)',
+              margin: 'var(--s-3) 0 0',
+            }}
+          >
+            Cargando...
+          </p>
         </div>
       </div>
     );
@@ -417,13 +558,32 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center max-w-md">
-          <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
-            <span className="text-red-500 text-xl">⚠</span>
+      <div className="flex items-center justify-center h-full" style={{ background: 'var(--surface)' }}>
+        <div className="text-center max-w-md p-6">
+          <div
+            className="mx-auto mb-3 flex items-center justify-center"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: '999px',
+              background: 'var(--err-bg)',
+              color: 'var(--err-fg)',
+            }}
+          >
+            <span style={{ fontSize: 20 }}>⚠</span>
           </div>
-          <p className="text-red-600 font-medium mb-1">Error al cargar</p>
-          <p className="text-gray-500 text-sm">{error}</p>
+          <p
+            style={{
+              font: '500 var(--t-small)/1.3 var(--font-sans)',
+              color: 'var(--err-fg)',
+              margin: '0 0 4px',
+            }}
+          >
+            Error al cargar
+          </p>
+          <p style={{ font: '400 var(--t-small)/var(--lh-small) var(--font-sans)', color: 'var(--ink-2)', margin: 0 }}>
+            {error}
+          </p>
         </div>
       </div>
     );
@@ -431,19 +591,39 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
   if (!loading && ganttData.tasks.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-blue-500 text-2xl">📋</span>
+      <div className="flex items-center justify-center h-full" style={{ background: 'var(--surface)' }}>
+        <div className="text-center max-w-md p-6">
+          <div
+            className="mx-auto mb-4 flex items-center justify-center"
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: '999px',
+              background: 'var(--p-50)',
+              color: 'var(--p-600)',
+            }}
+          >
+            <span style={{ fontSize: 24 }}>📋</span>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay tareas en este proyecto</h3>
-          <p className="text-gray-500 text-sm mb-4">
+          <h3
+            style={{
+              font: '500 var(--t-h3)/var(--lh-h3) var(--font-sans)',
+              color: 'var(--ink)',
+              margin: '0 0 var(--s-2)',
+            }}
+          >
+            No hay tareas en este proyecto
+          </h3>
+          <p
+            style={{
+              font: '400 var(--t-small)/var(--lh-small) var(--font-sans)',
+              color: 'var(--ink-2)',
+              margin: '0 0 var(--s-4)',
+            }}
+          >
             Comienza agregando tu primera tarea para ver el diagrama de Gantt.
           </p>
-          <button
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            onClick={onAddTask}
-          >
+          <button className="btn btn-primary" onClick={onAddTask}>
             Agregar primera tarea
           </button>
         </div>
@@ -453,9 +633,20 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
   return (
     <LocaleProvider>
-      <div className="h-full gantt-container relative flex flex-col">
+      <div ref={containerRef} className="h-full gantt-container relative flex flex-col">
         {errorBanner && (
-          <div className="absolute top-2 right-2 z-50 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded shadow text-sm">
+          <div
+            className="absolute top-2 right-2 z-50"
+            style={{
+              background: 'var(--err-bg)',
+              border: '1px solid var(--err-line)',
+              color: 'var(--err-fg)',
+              padding: 'var(--s-2) var(--s-3)',
+              borderRadius: 'var(--r-md)',
+              boxShadow: 'var(--sh-2)',
+              font: '400 var(--t-small)/var(--lh-small) var(--font-sans)',
+            }}
+          >
             {errorBanner}
           </div>
         )}
@@ -470,6 +661,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
               columns={columns}
               markers={markers}
               cellWidth={cellWidth}
+              highlightTime={highlightTime}
+              {...({ lengthUnit: 'hour' } as { lengthUnit: 'hour' })}
             />
           </Willow>
         </div>
