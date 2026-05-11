@@ -12,11 +12,15 @@ export class FirebaseService implements OnModuleInit {
   onModuleInit() {
     const raw = this.config.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON');
     if (!raw) {
-      this.logger.warn('FIREBASE_SERVICE_ACCOUNT_JSON not set; Firebase auth disabled');
+      this.logger.warn(
+        'FIREBASE_SERVICE_ACCOUNT_JSON not set; Firebase auth disabled',
+      );
       return;
     }
     const creds = JSON.parse(raw) as admin.ServiceAccount;
-    this.app = admin.initializeApp({ credential: admin.credential.cert(creds) });
+    this.app = admin.initializeApp({
+      credential: admin.credential.cert(creds),
+    });
   }
 
   async verifyIdToken(token: string): Promise<admin.auth.DecodedIdToken> {
