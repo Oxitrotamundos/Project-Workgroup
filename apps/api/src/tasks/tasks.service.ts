@@ -70,7 +70,7 @@ type TaskRow = {
 
 type SummaryCalcRow = Pick<
   TaskRow,
-  'id' | 'parentId' | 'startDate' | 'endDate' | 'duration' | 'progress' | 'type'
+  'id' | 'parentId' | 'startDate' | 'endDate' | 'duration' | 'progress' | 'type' | 'estimatedHours'
 >;
 type SummaryStats = {
   startDate: Date | null;
@@ -79,6 +79,7 @@ type SummaryStats = {
   progressWeight: number;
   fallbackProgress: number;
   fallbackCount: number;
+  estimatedHours: number;
 };
 
 @Injectable()
@@ -459,6 +460,7 @@ export class TasksService {
         duration: true,
         progress: true,
         type: true,
+        estimatedHours: true,
       },
     });
 
@@ -483,6 +485,7 @@ export class TasksService {
       let progressWeight = 0;
       let fallbackProgress = 0;
       let fallbackCount = 0;
+      let estimatedHours = 0;
 
       const includeBounds = (start: Date | null, end: Date | null) => {
         if (start && (!startDate || start.getTime() < startDate.getTime()))
@@ -502,6 +505,8 @@ export class TasksService {
             fallbackProgress += task.progress;
             fallbackCount++;
           }
+          const ownHours = Number(task.estimatedHours.toString());
+          if (Number.isFinite(ownHours) && ownHours > 0) estimatedHours += ownHours;
         }
       } else {
         for (const child of children) {
@@ -511,6 +516,7 @@ export class TasksService {
           progressWeight += childStats.progressWeight;
           fallbackProgress += childStats.fallbackProgress;
           fallbackCount += childStats.fallbackCount;
+          estimatedHours += childStats.estimatedHours;
         }
       }
 
@@ -521,6 +527,7 @@ export class TasksService {
         progressWeight,
         fallbackProgress,
         fallbackCount,
+        estimatedHours,
       };
       memo.set(key, result);
       return result;
@@ -532,7 +539,7 @@ export class TasksService {
       .map((task) => task.id);
     const previousById = new Map<
       string,
-      { startDate: Date; endDate: Date; duration: string; progress: number }
+      { startDate: Date; endDate: Date; duration: string; progress: number; estimatedHours: string }
     >();
     if (summaryIds.length > 0) {
       const previous = await client.task.findMany({
@@ -543,6 +550,7 @@ export class TasksService {
           endDate: true,
           duration: true,
           progress: true,
+          estimatedHours: true,
         },
       });
       for (const p of previous) {
@@ -551,6 +559,7 @@ export class TasksService {
           endDate: p.endDate,
           duration: p.duration.toString(),
           progress: p.progress,
+          estimatedHours: p.estimatedHours.toString(),
         });
       }
     }
@@ -576,13 +585,15 @@ export class TasksService {
         ),
       ).toString();
 
+      const aggregatedHours = stats.estimatedHours.toFixed(2);
       const prev = previousById.get(summary.id.toString());
       const unchanged =
         prev &&
         prev.startDate.getTime() === stats.startDate.getTime() &&
         prev.endDate.getTime() === stats.endDate.getTime() &&
         prev.duration === duration &&
-        prev.progress === clampedProgress;
+        prev.progress === clampedProgress &&
+        Number(prev.estimatedHours) === Number(aggregatedHours);
       if (unchanged) continue;
 
       const updated = await client.task.update({
@@ -592,6 +603,7 @@ export class TasksService {
           endDate: stats.endDate,
           duration,
           progress: clampedProgress,
+          estimatedHours: new Prisma.Decimal(aggregatedHours),
           version: { increment: 1 },
         },
         select: {
@@ -600,6 +612,7 @@ export class TasksService {
           endDate: true,
           duration: true,
           progress: true,
+          estimatedHours: true,
           version: true,
         },
       });
@@ -609,6 +622,7 @@ export class TasksService {
         endDate: updated.endDate.toISOString().slice(0, 10),
         duration: updated.duration.toString(),
         progress: updated.progress,
+        estimatedHours: updated.estimatedHours.toString(),
         version: updated.version,
       });
     }
