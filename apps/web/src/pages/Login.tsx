@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const mapAuthError = (err: unknown): string => {
@@ -58,9 +59,7 @@ const Login: React.FC = () => {
       await signInWithGoogle();
     } catch (err) {
       const code = (err as { code?: string } | null)?.code ?? '';
-      if (code === 'auth/popup-closed-by-user') {
-        return;
-      }
+      if (code === 'auth/popup-closed-by-user') return;
       console.error('Google login error:', err);
       setError(mapAuthError(err));
     } finally {
@@ -68,36 +67,73 @@ const Login: React.FC = () => {
     }
   };
 
+  const alertStyle = (variant: 'warn' | 'err'): React.CSSProperties => ({
+    background: `var(--${variant}-bg)`,
+    border: `1px solid var(--${variant}-line)`,
+    color: `var(--${variant}-fg)`,
+    borderRadius: 'var(--r-md)',
+    padding: 'var(--s-3) var(--s-4)',
+    font: '400 var(--t-small)/var(--lh-small) var(--font-sans)',
+  });
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <div className="flex justify-center mb-6">
-            <img
-              src="/vite.svg"
-              alt="Project Workgroup Logo"
-              className="w-16 h-16 object-contain"
-            />
+    <div
+      className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8"
+      style={{ background: 'var(--bg)' }}
+    >
+      <div
+        className="max-w-md w-full"
+        style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--line)',
+          borderRadius: 'var(--r-xl)',
+          boxShadow: 'var(--sh-2)',
+          padding: 'var(--s-8)',
+        }}
+      >
+        <div className="text-center mb-6">
+          <div className="flex justify-center mb-4">
+            <div className="logo-mark" style={{ width: 48, height: 48 }} />
           </div>
-          <h2 className="text-3xl font-extrabold text-gray-900">Project Workgroup</h2>
-          <p className="mt-2 text-sm text-gray-600">Inicia sesión para continuar</p>
+          <p className="eyebrow" style={{ marginBottom: 'var(--s-2)' }}>
+            Project Workgroup
+          </p>
+          <h2
+            style={{
+              font: '500 var(--t-h2)/var(--lh-h2) var(--font-sans)',
+              letterSpacing: 'var(--tr-h2)',
+              color: 'var(--ink)',
+              margin: 0,
+            }}
+          >
+            Iniciar sesión
+          </h2>
+          <p
+            style={{
+              font: '400 var(--t-small)/var(--lh-small) var(--font-sans)',
+              color: 'var(--ink-2)',
+              margin: 'var(--s-2) 0 0',
+            }}
+          >
+            Bienvenido de vuelta
+          </p>
         </div>
 
         {signupDisabled && (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md text-sm">
+          <div style={{ ...alertStyle('warn'), marginBottom: 'var(--s-4)' }}>
             El registro de nuevas cuentas está deshabilitado. Contacta al administrador.
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
+          <div style={{ ...alertStyle('err'), marginBottom: 'var(--s-4)' }}>
             {error}
           </div>
         )}
 
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+          <div className="field">
+            <label htmlFor="email" className="field-label">
               Correo electrónico
             </label>
             <input
@@ -107,12 +143,12 @@ const Login: React.FC = () => {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+              className="input"
               placeholder="tu@email.com"
             />
           </div>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+          <div className="field">
+            <label htmlFor="password" className="field-label">
               Contraseña
             </label>
             <input
@@ -122,28 +158,25 @@ const Login: React.FC = () => {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+              className="input"
               placeholder="Tu contraseña"
             />
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+          <button type="submit" disabled={loading} className="btn btn-primary btn-lg w-full justify-center">
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+            {loading ? 'Iniciando sesión…' : 'Iniciar sesión'}
           </button>
         </form>
 
-        <div className="border-t border-gray-200 pt-4">
+        <div style={{ borderTop: '1px solid var(--line)', marginTop: 'var(--s-6)', paddingTop: 'var(--s-4)' }}>
           <button
             type="button"
             onClick={() => setOtherMethodsOpen((v) => !v)}
             aria-expanded={otherMethodsOpen}
-            className="w-full flex items-center justify-between text-sm font-medium text-gray-600 hover:text-gray-900"
+            className="btn btn-ghost btn-sm w-full justify-between"
           >
             <span>Otros métodos de inicio de sesión</span>
-            <span aria-hidden="true">{otherMethodsOpen ? '▼' : '▸'}</span>
+            {otherMethodsOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
 
           {otherMethodsOpen && (
@@ -152,9 +185,9 @@ const Login: React.FC = () => {
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="group relative w-full flex justify-center py-3 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-secondary w-full justify-center"
               >
-                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
