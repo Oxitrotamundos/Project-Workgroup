@@ -11,11 +11,16 @@ import { UsersService } from './users.service';
 @UseGuards(AuthGuard)
 @Controller({ path: 'users', version: '1' })
 export class UsersController {
-  constructor(private readonly prisma: PrismaService, private readonly users: UsersService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly users: UsersService,
+  ) {}
 
   @Get('me')
   async me(@CurrentUser() user: AuthUser) {
-    const full = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const full = await this.prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
     return {
       id: full.id.toString(),
       email: full.email,

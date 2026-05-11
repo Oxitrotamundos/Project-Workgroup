@@ -8,10 +8,19 @@ export class UsersService {
   async search(params: { search?: string; limit?: number; cursor?: string }) {
     const take = Math.min(params.limit ?? 25, 100);
     const where = params.search
-      ? { OR: [
-          { email: { contains: params.search, mode: 'insensitive' as const } },
-          { displayName: { contains: params.search, mode: 'insensitive' as const } },
-        ] }
+      ? {
+          OR: [
+            {
+              email: { contains: params.search, mode: 'insensitive' as const },
+            },
+            {
+              displayName: {
+                contains: params.search,
+                mode: 'insensitive' as const,
+              },
+            },
+          ],
+        }
       : {};
     const cursor = params.cursor ? { id: BigInt(params.cursor) } : undefined;
     const rows = await this.prisma.user.findMany({
