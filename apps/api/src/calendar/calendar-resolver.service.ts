@@ -1,13 +1,6 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-// Invariante del módulo:
-//   Los campos DATE (start_date, end_date, holiday.date) se interpretan como
-//   "ese día del calendario", independiente del huso del proceso. Trabajamos
-//   en UTC al iterar fechas para que getUTCDay() y comparaciones por
-//   (year, month, day) sean consistentes. La tz del calendar solo se usa
-//   para formatear/exponer al cliente, no para math interno.
-
 export type ResolvedWorkingDayPattern = {
   weekday: number;
   enabled: boolean;
@@ -39,6 +32,7 @@ export type ResolvedCalendar = {
 type CacheEntry = { value: ResolvedCalendar; expiresAt: number };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_MAX_ENTRIES = 200;
 const GLOBAL_KEY = 'GLOBAL';
 
 @Injectable()
@@ -47,15 +41,12 @@ export class CalendarResolverService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  invalidate(projectId?: bigint | null): void {
-    if (projectId === undefined) {
-      this.cache.clear();
-      return;
-    }
-    this.cache.delete(projectId === null ? GLOBAL_KEY : projectId.toString());
-    // Tasks de cualquier proyecto resuelven a GLOBAL si no tienen override:
-    // si toca GLOBAL invalidamos también el resto para que se vuelvan a cargar.
-    if (projectId === null) this.cache.clear();
+  invalidateAll(): void {
+    this.cache.clear();
+  }
+
+  invalidateProject(projectId: bigint): void {
+    this.cache.delete(projectId.toString());
   }
 
   hoursForWeekday(calendar: ResolvedCalendar, weekday: number): number {
@@ -90,17 +81,8 @@ export class CalendarResolverService {
 
   isHoliday(calendar: ResolvedCalendar, date: Date): boolean {
     for (const h of calendar.holidays) {
-      if (h.recurringYearly) {
-        if (h.date.getUTCMonth() === date.getUTCMonth() && h.date.getUTCDate() === date.getUTCDate()) {
-          return true;
-        }
-      } else if (
-        h.date.getUTCFullYear() === date.getUTCFullYear() &&
-        h.date.getUTCMonth() === date.getUTCMonth() &&
-        h.date.getUTCDate() === date.getUTCDate()
-      ) {
-        return true;
-      }
+      const match = h.recurringYearly ? sameMonthDay(h.date, date) : sameYmd(h.date, date);
+      if (match) return true;
     }
     return false;
   }
@@ -122,7 +104,7 @@ export class CalendarResolverService {
       return resolved;
     }
     const global = await this.loadGlobal();
-    // Mismo valor cacheado bajo la key del proyecto para ahorrar lookups.
+
     this.setCached(projectId.toString(), global);
     return global;
   }
@@ -196,6 +178,18 @@ export class CalendarResolverService {
   }
 
   private setCached(key: string, value: ResolvedCalendar): void {
+    if (!this.cache.has(key) && this.cache.size >= CACHE_MAX_ENTRIES) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest !== undefined) this.cache.delete(oldest);
+    }
     this.cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
   }
+}
+
+function sameMonthDay(a: Date, b: Date): boolean {
+  return a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
+}
+
+function sameYmd(a: Date, b: Date): boolean {
+  return a.getUTCFullYear() === b.getUTCFullYear() && sameMonthDay(a, b);
 }

@@ -86,7 +86,7 @@ export class CalendarService implements OnApplicationBootstrap {
       return calendar.id;
     });
 
-    this.resolver.invalidate(null);
+    this.resolver.invalidateAll();
     await this.rescheduler.rescheduleAllInheriting();
     return this.toResponse(await this.resolver.loadGlobal());
   }
@@ -129,7 +129,7 @@ export class CalendarService implements OnApplicationBootstrap {
       }
     });
 
-    this.resolver.invalidate(projectId);
+    this.resolver.invalidateProject(projectId);
     await this.rescheduler.rescheduleProject(projectId);
     const resolved = (await this.resolver.loadForProjectStrict(projectId))!;
     return this.toResponse(resolved);
@@ -141,7 +141,7 @@ export class CalendarService implements OnApplicationBootstrap {
       throw new NotFoundException('project does not have a calendar override');
     }
     await this.prisma.workingCalendar.delete({ where: { id: existing.id } });
-    this.resolver.invalidate(projectId);
+    this.resolver.invalidateProject(projectId);
     await this.rescheduler.rescheduleProject(projectId);
   }
 

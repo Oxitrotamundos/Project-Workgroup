@@ -2,7 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../generated/prisma/client';
-import { CalendarResolverService } from './calendar-resolver.service';
+import { CalendarResolverService, ResolvedCalendar } from './calendar-resolver.service';
 import { SchedulingService } from './scheduling.service';
 
 export type RescheduleSummary = {
@@ -19,42 +19,32 @@ export class TaskReschedulerService {
     @Optional() @InjectPinoLogger(TaskReschedulerService.name) private readonly logger?: PinoLogger,
   ) {}
 
-  async rescheduleProject(projectId: bigint): Promise<number> {
-    this.resolver.invalidate(projectId);
-    const calendar = await this.resolver.resolveForProject(projectId);
+  async rescheduleProject(projectId: bigint, calendarOverride?: ResolvedCalendar): Promise<number> {
+    if (!calendarOverride) this.resolver.invalidateProject(projectId);
+    const calendar = calendarOverride ?? (await this.resolver.resolveForProject(projectId));
     if (!(calendar.hoursPerDay > 0)) {
       this.logger?.warn({ projectId: projectId.toString() }, 'calendar has zero working hours; skipping reschedule');
       return 0;
     }
 
     const tasks = await this.prisma.task.findMany({
-      where: {
-        projectId,
-        estimatedHours: { gt: 0 },
-        type: { not: 'milestone' },
-      },
-      select: {
-        id: true,
-        startDate: true,
-        estimatedHours: true,
-        assigneeId: true,
-      },
+      where: { projectId, estimatedHours: { gt: 0 }, type: { not: 'milestone' } },
+      select: { id: true, startDate: true, estimatedHours: true, assigneeId: true },
     });
+    if (!tasks.length) return 0;
 
-    let rescheduled = 0;
-    for (const t of tasks) {
-      const hours = Number(t.estimatedHours.toString());
-      if (!Number.isFinite(hours) || hours <= 0) continue;
+    await this.prisma.$transaction(async (tx) => {
+      for (const t of tasks) {
+        const hours = Number(t.estimatedHours.toString());
+        if (!Number.isFinite(hours) || hours <= 0) continue;
 
-      const result = this.scheduling.scheduleTask({
-        estimatedHours: hours,
-        startDate: t.startDate,
-        calendar,
-      });
+        const result = this.scheduling.scheduleTask({
+          estimatedHours: hours,
+          startDate: t.startDate,
+          calendar,
+        });
+        const durationDays = hours / calendar.hoursPerDay;
 
-      const durationDays = hours / calendar.hoursPerDay;
-
-      await this.prisma.$transaction(async (tx) => {
         await tx.task.update({
           where: { id: t.id },
           data: {
@@ -77,15 +67,14 @@ export class TaskReschedulerService {
             skipDuplicates: true,
           });
         }
-      });
-      rescheduled += 1;
-    }
+      }
+    });
 
     this.logger?.info(
-      { projectId: projectId.toString(), rescheduled, totalCandidates: tasks.length },
+      { projectId: projectId.toString(), rescheduled: tasks.length },
       'project tasks rescheduled',
     );
-    return rescheduled;
+    return tasks.length;
   }
 
   async rescheduleAllInheriting(): Promise<RescheduleSummary> {
@@ -93,9 +82,12 @@ export class TaskReschedulerService {
       where: { calendar: { is: null } },
       select: { id: true },
     });
+    if (!projects.length) return { projects: 0, tasksRescheduled: 0 };
+
+    const global = await this.resolver.loadGlobal();
     let tasks = 0;
     for (const p of projects) {
-      tasks += await this.rescheduleProject(p.id);
+      tasks += await this.rescheduleProject(p.id, global);
     }
     this.logger?.info(
       { projects: projects.length, tasksRescheduled: tasks },
