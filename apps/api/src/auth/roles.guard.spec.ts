@@ -4,7 +4,9 @@ import { RolesGuard } from './roles.guard';
 
 describe('RolesGuard', () => {
   const ctxFor = (user: any, roles: string[] | undefined) => {
-    const reflector = { getAllAndOverride: jest.fn().mockReturnValue(roles) } as unknown as Reflector;
+    const reflector = {
+      getAllAndOverride: jest.fn().mockReturnValue(roles),
+    } as unknown as Reflector;
     const context = {
       getHandler: () => ({}),
       getClass: () => ({}),
@@ -20,7 +22,9 @@ describe('RolesGuard', () => {
 
   it('rejects when role not in allowed list', async () => {
     const { guard, context } = ctxFor({ role: 'member' }, ['admin']);
-    await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('allows when role in allowed list', async () => {

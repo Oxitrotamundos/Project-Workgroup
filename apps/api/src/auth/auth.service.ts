@@ -4,7 +4,10 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly firebase: FirebaseService, private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly firebase: FirebaseService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async syncFromToken(token: string) {
     const decoded = await this.firebase.verifyIdToken(token).catch(() => {

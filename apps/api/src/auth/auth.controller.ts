@@ -1,4 +1,9 @@
-import { Controller, Headers, Post, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Headers,
+  Post,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 
@@ -9,7 +14,8 @@ export class AuthController {
 
   @Post('sync')
   async sync(@Headers('authorization') authHeader?: string) {
-    if (!authHeader?.startsWith('Bearer ')) throw new UnauthorizedException('missing bearer token');
+    if (!authHeader?.startsWith('Bearer '))
+      throw new UnauthorizedException('missing bearer token');
     const token = authHeader.slice('Bearer '.length).trim();
     const user = await this.auth.syncFromToken(token);
     return {
