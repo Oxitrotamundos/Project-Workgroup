@@ -6,6 +6,8 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ProjectView from './pages/ProjectView';
 import AccountApiKeys from './pages/AccountApiKeys';
+import CalendarSettingsPage from './pages/CalendarSettingsPage';
+import SettingsPage from './pages/SettingsPage';
 
 const LoginWrapper = () => {
   const { user, loading } = useAuth();
@@ -32,14 +34,12 @@ function App() {
       <Router>
         <div className="App">
           <Routes>
-            {/* Rutas públicas */}
             <Route path="/login" element={<LoginWrapper />} />
             <Route
               path="/signup"
               element={<Navigate to="/login" state={{ signupDisabled: true }} replace />}
             />
 
-            {/* Rutas protegidas con layout persistente */}
             <Route
               path="/dashboard"
               element={
@@ -71,11 +71,39 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/project/:projectId/settings/calendar"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <CalendarSettingsPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <SettingsPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings/calendar"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <CalendarSettingsPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
 
-            {/* Redirección por defecto */}
             <Route path="/" element={<Navigate to="/login" replace />} />
 
-            {/* Ruta general */}
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </div>
