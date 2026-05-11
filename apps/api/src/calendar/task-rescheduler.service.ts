@@ -2,7 +2,10 @@ import { Injectable, Optional } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '../generated/prisma/client';
-import { CalendarResolverService, ResolvedCalendar } from './calendar-resolver.service';
+import {
+  CalendarResolverService,
+  ResolvedCalendar,
+} from './calendar-resolver.service';
 import { SchedulingService } from './scheduling.service';
 
 export type RescheduleSummary = {
@@ -16,20 +19,38 @@ export class TaskReschedulerService {
     private readonly prisma: PrismaService,
     private readonly resolver: CalendarResolverService,
     private readonly scheduling: SchedulingService,
-    @Optional() @InjectPinoLogger(TaskReschedulerService.name) private readonly logger?: PinoLogger,
+    @Optional()
+    @InjectPinoLogger(TaskReschedulerService.name)
+    private readonly logger?: PinoLogger,
   ) {}
 
-  async rescheduleProject(projectId: bigint, calendarOverride?: ResolvedCalendar): Promise<number> {
+  async rescheduleProject(
+    projectId: bigint,
+    calendarOverride?: ResolvedCalendar,
+  ): Promise<number> {
     if (!calendarOverride) this.resolver.invalidateProject(projectId);
-    const calendar = calendarOverride ?? (await this.resolver.resolveForProject(projectId));
+    const calendar =
+      calendarOverride ?? (await this.resolver.resolveForProject(projectId));
     if (!(calendar.hoursPerDay > 0)) {
-      this.logger?.warn({ projectId: projectId.toString() }, 'calendar has zero working hours; skipping reschedule');
+      this.logger?.warn(
+        { projectId: projectId.toString() },
+        'calendar has zero working hours; skipping reschedule',
+      );
       return 0;
     }
 
     const tasks = await this.prisma.task.findMany({
-      where: { projectId, estimatedHours: { gt: 0 }, type: { not: 'milestone' } },
-      select: { id: true, startDate: true, estimatedHours: true, assigneeId: true },
+      where: {
+        projectId,
+        estimatedHours: { gt: 0 },
+        type: { not: 'milestone' },
+      },
+      select: {
+        id: true,
+        startDate: true,
+        estimatedHours: true,
+        assigneeId: true,
+      },
     });
     if (!tasks.length) return 0;
 
@@ -38,9 +59,9 @@ export class TaskReschedulerService {
         const hours = Number(t.estimatedHours.toString());
         if (!Number.isFinite(hours) || hours <= 0) continue;
 
-        const result = this.scheduling.scheduleTask({
+        const result = this.scheduling.scheduleFromHours({
           estimatedHours: hours,
-          startDate: t.startDate,
+          startDateTime: t.startDate,
           calendar,
         });
         const durationDays = hours / calendar.hoursPerDay;
@@ -62,7 +83,9 @@ export class TaskReschedulerService {
               taskId: t.id,
               projectId,
               date: slot.date,
-              allocatedHours: new Prisma.Decimal(slot.allocatedHours.toFixed(2)),
+              allocatedHours: new Prisma.Decimal(
+                slot.allocatedHours.toFixed(2),
+              ),
             })),
             skipDuplicates: true,
           });

@@ -8,7 +8,10 @@ import {
 } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
-import { CalendarResolverService, ResolvedCalendar } from './calendar-resolver.service';
+import {
+  CalendarResolverService,
+  ResolvedCalendar,
+} from './calendar-resolver.service';
 import { TaskReschedulerService } from './task-rescheduler.service';
 import {
   HolidayDto,
@@ -27,11 +30,15 @@ export class CalendarService implements OnApplicationBootstrap {
     private readonly prisma: PrismaService,
     private readonly resolver: CalendarResolverService,
     private readonly rescheduler: TaskReschedulerService,
-    @Optional() @InjectPinoLogger(CalendarService.name) private readonly logger?: PinoLogger,
+    @Optional()
+    @InjectPinoLogger(CalendarService.name)
+    private readonly logger?: PinoLogger,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    const exists = await this.prisma.workingCalendar.findFirst({ where: { scope: 'global' } });
+    const exists = await this.prisma.workingCalendar.findFirst({
+      where: { scope: 'global' },
+    });
     if (exists) return;
     this.logger?.warn('GLOBAL working calendar missing; creating default');
     await this.createDefaultGlobal();
@@ -52,7 +59,9 @@ export class CalendarService implements OnApplicationBootstrap {
   async upsertGlobal(dto: UpsertCalendarDto): Promise<WorkingCalendarResponse> {
     this.assertValidTimezone(dto.timezone);
     this.validatePatterns(dto.patterns);
-    const existing = await this.prisma.workingCalendar.findFirst({ where: { scope: 'global' } });
+    const existing = await this.prisma.workingCalendar.findFirst({
+      where: { scope: 'global' },
+    });
 
     const result = await this.prisma.$transaction(async (tx) => {
       const calendar = existing
@@ -72,7 +81,9 @@ export class CalendarService implements OnApplicationBootstrap {
             },
           });
 
-      await tx.workingDayPattern.deleteMany({ where: { calendarId: calendar.id } });
+      await tx.workingDayPattern.deleteMany({
+        where: { calendarId: calendar.id },
+      });
       await tx.workingDayPattern.createMany({
         data: dto.patterns.map((p) => this.patternToRow(calendar.id, p)),
       });
@@ -91,13 +102,21 @@ export class CalendarService implements OnApplicationBootstrap {
     return this.toResponse(await this.resolver.loadGlobal());
   }
 
-  async upsertForProject(projectId: bigint, dto: UpsertCalendarDto): Promise<WorkingCalendarResponse> {
+  async upsertForProject(
+    projectId: bigint,
+    dto: UpsertCalendarDto,
+  ): Promise<WorkingCalendarResponse> {
     this.assertValidTimezone(dto.timezone);
     this.validatePatterns(dto.patterns);
-    const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true },
+    });
     if (!project) throw new NotFoundException('project not found');
 
-    const existing = await this.prisma.workingCalendar.findUnique({ where: { projectId } });
+    const existing = await this.prisma.workingCalendar.findUnique({
+      where: { projectId },
+    });
     await this.prisma.$transaction(async (tx) => {
       const calendar = existing
         ? await tx.workingCalendar.update({
@@ -116,7 +135,9 @@ export class CalendarService implements OnApplicationBootstrap {
             },
           });
 
-      await tx.workingDayPattern.deleteMany({ where: { calendarId: calendar.id } });
+      await tx.workingDayPattern.deleteMany({
+        where: { calendarId: calendar.id },
+      });
       await tx.workingDayPattern.createMany({
         data: dto.patterns.map((p) => this.patternToRow(calendar.id, p)),
       });
@@ -136,7 +157,9 @@ export class CalendarService implements OnApplicationBootstrap {
   }
 
   async deleteProjectOverride(projectId: bigint): Promise<void> {
-    const existing = await this.prisma.workingCalendar.findUnique({ where: { projectId } });
+    const existing = await this.prisma.workingCalendar.findUnique({
+      where: { projectId },
+    });
     if (!existing) {
       throw new NotFoundException('project does not have a calendar override');
     }
@@ -158,7 +181,15 @@ export class CalendarService implements OnApplicationBootstrap {
         });
         await tx.workingDayPattern.createMany({
           data: [
-            { calendarId: cal.id, weekday: 0, enabled: false, dayStart: null, breakStart: null, breakEnd: null, dayEnd: null },
+            {
+              calendarId: cal.id,
+              weekday: 0,
+              enabled: false,
+              dayStart: null,
+              breakStart: null,
+              breakEnd: null,
+              dayEnd: null,
+            },
             ...[1, 2, 3, 4, 5].map((w) => ({
               calendarId: cal.id,
               weekday: w,
@@ -168,7 +199,15 @@ export class CalendarService implements OnApplicationBootstrap {
               breakEnd: timeOf('14:00:00'),
               dayEnd: timeOf('18:00:00'),
             })),
-            { calendarId: cal.id, weekday: 6, enabled: false, dayStart: null, breakStart: null, breakEnd: null, dayEnd: null },
+            {
+              calendarId: cal.id,
+              weekday: 6,
+              enabled: false,
+              dayStart: null,
+              breakStart: null,
+              breakEnd: null,
+              dayEnd: null,
+            },
           ],
         });
       });
@@ -196,7 +235,9 @@ export class CalendarService implements OnApplicationBootstrap {
   private holidayToRow(calendarId: bigint, h: HolidayDto) {
     return {
       calendarId,
-      date: new Date(h.date.length >= 10 ? `${h.date.slice(0, 10)}T00:00:00Z` : h.date),
+      date: new Date(
+        h.date.length >= 10 ? `${h.date.slice(0, 10)}T00:00:00Z` : h.date,
+      ),
       label: h.label,
       recurringYearly: h.recurringYearly ?? false,
     };
@@ -206,7 +247,9 @@ export class CalendarService implements OnApplicationBootstrap {
     try {
       new Intl.DateTimeFormat('en-US', { timeZone: tz });
     } catch {
-      throw new BadRequestException(`timezone "${tz}" is not a valid IANA timezone`);
+      throw new BadRequestException(
+        `timezone "${tz}" is not a valid IANA timezone`,
+      );
     }
   }
 
@@ -214,26 +257,36 @@ export class CalendarService implements OnApplicationBootstrap {
     const seen = new Set<number>();
     for (const p of patterns) {
       if (seen.has(p.weekday)) {
-        throw new BadRequestException(`duplicate pattern for weekday ${p.weekday}`);
+        throw new BadRequestException(
+          `duplicate pattern for weekday ${p.weekday}`,
+        );
       }
       seen.add(p.weekday);
       if (!p.enabled) continue;
       if (!p.dayStart || !p.dayEnd) {
-        throw new BadRequestException(`enabled weekday ${p.weekday} requires dayStart and dayEnd`);
+        throw new BadRequestException(
+          `enabled weekday ${p.weekday} requires dayStart and dayEnd`,
+        );
       }
       const ds = timeToMinutes(p.dayStart);
       const de = timeToMinutes(p.dayEnd);
       if (de <= ds) {
-        throw new BadRequestException(`weekday ${p.weekday}: dayEnd must be after dayStart`);
+        throw new BadRequestException(
+          `weekday ${p.weekday}: dayEnd must be after dayStart`,
+        );
       }
       if ((p.breakStart && !p.breakEnd) || (!p.breakStart && p.breakEnd)) {
-        throw new BadRequestException(`weekday ${p.weekday}: breakStart and breakEnd must come together`);
+        throw new BadRequestException(
+          `weekday ${p.weekday}: breakStart and breakEnd must come together`,
+        );
       }
       if (p.breakStart && p.breakEnd) {
         const bs = timeToMinutes(p.breakStart);
         const be = timeToMinutes(p.breakEnd);
         if (bs < ds || be > de || be <= bs) {
-          throw new BadRequestException(`weekday ${p.weekday}: break must fit within the day range`);
+          throw new BadRequestException(
+            `weekday ${p.weekday}: break must fit within the day range`,
+          );
         }
       }
     }
@@ -255,7 +308,15 @@ export class CalendarService implements OnApplicationBootstrap {
     for (let w = 0; w < 7; w += 1) {
       const p = patternsByDay.get(w);
       if (p) orderedPatterns.push(p);
-      else orderedPatterns.push({ weekday: w, enabled: false, dayStart: null, breakStart: null, breakEnd: null, dayEnd: null });
+      else
+        orderedPatterns.push({
+          weekday: w,
+          enabled: false,
+          dayStart: null,
+          breakStart: null,
+          breakEnd: null,
+          dayEnd: null,
+        });
     }
     return {
       id: calendar.id.toString(),
@@ -277,7 +338,8 @@ export class CalendarService implements OnApplicationBootstrap {
 }
 
 function timeOf(value: string | null | undefined): Date {
-  const normalized = value && value.length === 5 ? `${value}:00` : value ?? '00:00:00';
+  const normalized =
+    value && value.length === 5 ? `${value}:00` : (value ?? '00:00:00');
   return new Date(`1970-01-01T${normalized}Z`);
 }
 

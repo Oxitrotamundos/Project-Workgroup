@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type ResolvedWorkingDayPattern = {
@@ -51,8 +55,10 @@ export class CalendarResolverService {
 
   hoursForWeekday(calendar: ResolvedCalendar, weekday: number): number {
     const pattern = calendar.patterns.find((p) => p.weekday === weekday);
-    if (!pattern || !pattern.enabled || !pattern.dayStart || !pattern.dayEnd) return 0;
-    const dayMs = this.timeToMs(pattern.dayEnd) - this.timeToMs(pattern.dayStart);
+    if (!pattern || !pattern.enabled || !pattern.dayStart || !pattern.dayEnd)
+      return 0;
+    const dayMs =
+      this.timeToMs(pattern.dayEnd) - this.timeToMs(pattern.dayStart);
     const breakMs =
       pattern.breakStart && pattern.breakEnd
         ? this.timeToMs(pattern.breakEnd) - this.timeToMs(pattern.breakStart)
@@ -81,13 +87,17 @@ export class CalendarResolverService {
 
   isHoliday(calendar: ResolvedCalendar, date: Date): boolean {
     for (const h of calendar.holidays) {
-      const match = h.recurringYearly ? sameMonthDay(h.date, date) : sameYmd(h.date, date);
+      const match = h.recurringYearly
+        ? sameMonthDay(h.date, date)
+        : sameYmd(h.date, date);
       if (match) return true;
     }
     return false;
   }
 
-  async resolveForProject(projectId: bigint | null | undefined): Promise<ResolvedCalendar> {
+  async resolveForProject(
+    projectId: bigint | null | undefined,
+  ): Promise<ResolvedCalendar> {
     if (projectId === null || projectId === undefined) {
       return this.loadGlobal();
     }
@@ -127,7 +137,9 @@ export class CalendarResolverService {
     return resolved;
   }
 
-  async loadForProjectStrict(projectId: bigint): Promise<ResolvedCalendar | null> {
+  async loadForProjectStrict(
+    projectId: bigint,
+  ): Promise<ResolvedCalendar | null> {
     const row = await this.prisma.workingCalendar.findUnique({
       where: { projectId },
       include: { patterns: { orderBy: { weekday: 'asc' } }, holidays: true },
@@ -163,8 +175,12 @@ export class CalendarResolverService {
     return calendar;
   }
 
-  private timeToMs(d: Date): number {
-    return d.getUTCHours() * 3_600_000 + d.getUTCMinutes() * 60_000 + d.getUTCSeconds() * 1000;
+  timeToMs(d: Date): number {
+    return (
+      d.getUTCHours() * 3_600_000 +
+      d.getUTCMinutes() * 60_000 +
+      d.getUTCSeconds() * 1000
+    );
   }
 
   private getCached(key: string): ResolvedCalendar | null {
@@ -187,7 +203,9 @@ export class CalendarResolverService {
 }
 
 function sameMonthDay(a: Date, b: Date): boolean {
-  return a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
+  return (
+    a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate()
+  );
 }
 
 function sameYmd(a: Date, b: Date): boolean {

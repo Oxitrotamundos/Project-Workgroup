@@ -9,7 +9,17 @@ import { TaskReschedulerService } from './task-rescheduler.service';
 @Module({
   imports: [AuthModule],
   controllers: [CalendarController],
-  providers: [CalendarService, CalendarResolverService, SchedulingService, TaskReschedulerService],
-  exports: [CalendarResolverService, SchedulingService, CalendarService, TaskReschedulerService],
+  providers: [
+    CalendarService,
+    CalendarResolverService,
+    SchedulingService,
+    TaskReschedulerService,
+  ],
+  exports: [
+    CalendarResolverService,
+    SchedulingService,
+    CalendarService,
+    TaskReschedulerService,
+  ],
 })
 export class CalendarModule {}

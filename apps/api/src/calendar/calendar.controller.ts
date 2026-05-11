@@ -9,7 +9,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UpsertCalendarDto, WorkingCalendarResponse } from '@project-workgroup/shared';
+import {
+  UpsertCalendarDto,
+  WorkingCalendarResponse,
+} from '@project-workgroup/shared';
 import { AuthGuard } from '../auth/auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -32,14 +35,18 @@ export class CalendarController {
   @Patch('calendar/global')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  async upsertGlobal(@Body() dto: UpsertCalendarDto): Promise<WorkingCalendarResponse> {
+  async upsertGlobal(
+    @Body() dto: UpsertCalendarDto,
+  ): Promise<WorkingCalendarResponse> {
     return this.calendar.upsertGlobal(dto);
   }
 
   @Get('projects/:id/calendar')
   @UseGuards(ProjectMembershipGuard)
   @RequireProject('id')
-  async getForProject(@Param('id') id: string): Promise<WorkingCalendarResponse> {
+  async getForProject(
+    @Param('id') id: string,
+  ): Promise<WorkingCalendarResponse> {
     return this.calendar.getForProject(BigInt(id));
   }
 
