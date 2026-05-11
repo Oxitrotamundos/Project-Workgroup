@@ -113,8 +113,6 @@ export class TasksService {
     return n;
   }
 
-  // Resuelve schedule + workload usando el calendario del proyecto cuando viene
-  // `estimatedHours`; si no, conserva el comportamiento legacy basado en fechas.
   private async computeSchedule(
     projectId: bigint,
     type: string,
@@ -168,13 +166,22 @@ export class TasksService {
     if (endDate.getTime() < rawStart.getTime()) {
       throw new BadRequestException('endDate must be greater than or equal to startDate');
     }
-    return {
+
+    const workingDays = this.scheduling.workingDaysBetween(calendar, rawStart, endDate);
+    const effectiveWorkingDays = Math.max(workingDays, 1);
+    const derivedEstimatedHours = effectiveWorkingDays * hoursPerDay;
+    const scheduleResult = this.scheduling.scheduleTask({
+      estimatedHours: derivedEstimatedHours,
       startDate: rawStart,
-      endDate,
-      duration: this.durationDays(rawStart, endDate).toString(),
-      estimatedHours: undefined,
+      calendar,
+    });
+    return {
+      startDate: scheduleResult.startDate,
+      endDate: scheduleResult.endDate,
+      duration: effectiveWorkingDays.toFixed(2),
+      estimatedHours: derivedEstimatedHours.toFixed(2),
       hoursPerDay,
-      workload: [],
+      workload: scheduleResult.workload,
       calendar,
     };
   }
@@ -258,13 +265,6 @@ export class TasksService {
     } catch {
       throw new BadRequestException(`${field} must be a valid id`);
     }
-  }
-
-  private durationDays(startDate: Date, endDate: Date): number {
-    return Math.max(
-      1,
-      Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
-    );
   }
 
   private async resolveAssigneeId(assigneeId?: string): Promise<bigint | null | undefined> {

@@ -66,7 +66,7 @@ describe('TasksService', () => {
         ? [{ date: startDate, allocatedHours: estimatedHours }]
         : [],
     })),
-    workingDaysBetween: jest.fn(),
+    workingDaysBetween: jest.fn().mockReturnValue(1),
     toUtcDateOnly: jest.fn((d: Date) => d),
     addDays: jest.fn((d: Date, n: number) => new Date(d.getTime() + n * 86_400_000)),
   });
@@ -198,6 +198,57 @@ describe('TasksService', () => {
         admin,
       ),
     ).rejects.toThrow(/do not belong/);
+  });
+
+  it('derives duration in working days and estimatedHours when only dates change (drag/resize)', async () => {
+    const prisma = makePrisma();
+    const before = taskRow({ version: 1, estimatedHours: { toString: () => '0' } });
+    const after = taskRow({
+      version: 2,
+      startDate: new Date('2026-01-05T00:00:00.000Z'),
+      endDate: new Date('2026-01-09T00:00:00.000Z'),
+      duration: { toString: () => '5.00' },
+      estimatedHours: { toString: () => '40.00' },
+    });
+    prisma.task.findUnique.mockResolvedValueOnce(before).mockResolvedValue(after);
+    prisma.task.update.mockResolvedValue(after);
+    prisma.task.findMany.mockResolvedValue([after]);
+
+    const resolver = makeResolver();
+    const scheduling = makeScheduling();
+    scheduling.workingDaysBetween.mockReturnValue(5);
+    scheduling.scheduleTask.mockReturnValue({
+      startDate: new Date('2026-01-05T00:00:00.000Z'),
+      endDate: new Date('2026-01-09T00:00:00.000Z'),
+      workload: [
+        { date: new Date('2026-01-05T00:00:00.000Z'), allocatedHours: 8 },
+        { date: new Date('2026-01-06T00:00:00.000Z'), allocatedHours: 8 },
+        { date: new Date('2026-01-07T00:00:00.000Z'), allocatedHours: 8 },
+        { date: new Date('2026-01-08T00:00:00.000Z'), allocatedHours: 8 },
+        { date: new Date('2026-01-09T00:00:00.000Z'), allocatedHours: 8 },
+      ],
+    });
+    const service = new TasksService(prisma, resolver as any, scheduling as any);
+
+    await service.update(
+      10n,
+      {
+        startDate: '2026-01-05T00:00:00.000Z',
+        endDate: '2026-01-09T00:00:00.000Z',
+        expectedVersion: 1,
+      },
+      admin,
+    );
+
+    expect(scheduling.workingDaysBetween).toHaveBeenCalled();
+    expect(prisma.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          duration: '5.00',
+          estimatedHours: new Prisma.Decimal('40.00'),
+        }),
+      }),
+    );
   });
 
   it('increments version on successful update', async () => {
