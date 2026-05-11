@@ -185,6 +185,7 @@ export interface SummaryPatch {
   endDate: string;
   duration: string;
   progress: number;
+  estimatedHours: string;
   version: number;
 }
 
