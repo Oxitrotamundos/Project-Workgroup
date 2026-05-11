@@ -9,6 +9,7 @@ import {
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { CalendarResolverService, ResolvedCalendar } from './calendar-resolver.service';
+import { TaskReschedulerService } from './task-rescheduler.service';
 import {
   HolidayDto,
   UpsertCalendarDto,
@@ -25,12 +26,11 @@ export class CalendarService implements OnApplicationBootstrap {
   constructor(
     private readonly prisma: PrismaService,
     private readonly resolver: CalendarResolverService,
+    private readonly rescheduler: TaskReschedulerService,
     @Optional() @InjectPinoLogger(CalendarService.name) private readonly logger?: PinoLogger,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    // Defensa en profundidad: el seed SQL ya crea el GLOBAL, pero si la
-    // migración no corrió todavía o se borró por error, creamos uno default.
     const exists = await this.prisma.workingCalendar.findFirst({ where: { scope: 'global' } });
     if (exists) return;
     this.logger?.warn('GLOBAL working calendar missing; creating default');
@@ -87,6 +87,7 @@ export class CalendarService implements OnApplicationBootstrap {
     });
 
     this.resolver.invalidate(null);
+    await this.rescheduler.rescheduleAllInheriting();
     return this.toResponse(await this.resolver.loadGlobal());
   }
 
@@ -129,6 +130,7 @@ export class CalendarService implements OnApplicationBootstrap {
     });
 
     this.resolver.invalidate(projectId);
+    await this.rescheduler.rescheduleProject(projectId);
     const resolved = (await this.resolver.loadForProjectStrict(projectId))!;
     return this.toResponse(resolved);
   }
@@ -140,6 +142,7 @@ export class CalendarService implements OnApplicationBootstrap {
     }
     await this.prisma.workingCalendar.delete({ where: { id: existing.id } });
     this.resolver.invalidate(projectId);
+    await this.rescheduler.rescheduleProject(projectId);
   }
 
   private async createDefaultGlobal(): Promise<void> {
@@ -170,7 +173,6 @@ export class CalendarService implements OnApplicationBootstrap {
         });
       });
     } catch (err) {
-      // Race con seed SQL u otro nodo: si ya existe, ignoramos.
       const isUnique =
         err instanceof Error &&
         typeof (err as { code?: string }).code === 'string' &&
