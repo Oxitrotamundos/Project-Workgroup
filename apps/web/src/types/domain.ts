@@ -87,6 +87,7 @@ export interface Task extends BaseDocument {
   color: string;
   estimatedHours: number;
   actualHours?: number;
+  hoursPerDay?: number;
   status: TaskStatus;
   type: TaskType;
   order: number;

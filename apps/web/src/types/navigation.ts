@@ -2,9 +2,15 @@
  * Tipos TypeScript para el sistema de navegación
  */
 
+export interface Crumb {
+  label: string;
+  to?: string;
+}
+
 export interface NavigationState {
   title: string;
   subtitle?: string;
+  crumbs?: Crumb[];
   showLogo: boolean;
   showBackButton: boolean;
   backTo: string;
@@ -22,6 +28,7 @@ export interface NavigationContextType {
 export interface TopNavigationProps {
   title?: string;
   subtitle?: string;
+  crumbs?: Crumb[];
   showBackButton?: boolean;
   backTo?: string;
   actions?: React.ReactNode;
@@ -35,11 +42,7 @@ export interface UserProfileProps {
 }
 
 export interface ProjectActionsProps {
-  onViewTeam?: () => void;
-  onChangeView?: () => void;
-  onFilter?: () => void;
-  onMore?: () => void;
-  showFilter?: boolean;
+  onOpenCalendar?: () => void;
   className?: string;
 }
 

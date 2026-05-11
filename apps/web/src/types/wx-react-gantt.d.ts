@@ -18,6 +18,8 @@ declare module 'wx-react-gantt' {
     lazy?: boolean;
     data?: GanttTask[];
     details?: string;
+    estimatedHours?: number;
+    hoursPerDay?: number;
     [key: string]: unknown;
   }
 
@@ -165,6 +167,7 @@ declare module 'wx-react-gantt' {
     cellWidth?: number;
     cellHeight?: number;
     readonly?: boolean;
+    highlightTime?: (date: Date, unit: string) => string;
     init?: (api: GanttApi) => void;
     api?: GanttApi;
     apiRef?: { current: GanttApi | null };
