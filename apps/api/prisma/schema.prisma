@@ -96,7 +96,7 @@ model Project {
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
-  owner     User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  owner     User             @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   members   ProjectMember[]
   tasks     Task[]
   taskLinks TaskLink[]
@@ -129,8 +129,8 @@ model Task {
   assigneeId     BigInt?      @map("assignee_id")
   name           String
   description    String?
-  startDate      DateTime     @map("start_date") @db.Date
-  endDate        DateTime     @map("end_date") @db.Date
+  startDate      DateTime     @map("start_date") @db.Timestamptz(0)
+  endDate        DateTime     @map("end_date") @db.Timestamptz(0)
   duration       Decimal      @db.Decimal(10, 2)
   progress       Int          @default(0)
   priority       TaskPriority @default(medium)
