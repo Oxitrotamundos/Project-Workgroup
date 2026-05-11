@@ -15,7 +15,12 @@ describe('Projects (e2e)', () => {
         value: {
           canActivate: (ctx: any) => {
             const req = ctx.switchToHttp().getRequest();
-            req.user = { id: ownerId, role: 'admin', firebaseUid: null, via: 'api_key' };
+            req.user = {
+              id: ownerId,
+              role: 'admin',
+              firebaseUid: null,
+              via: 'api_key',
+            };
             return true;
           },
         },

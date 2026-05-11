@@ -11,8 +11,18 @@ describe('Users (e2e)', () => {
     prisma = handle.app.get(PrismaService);
     await prisma.user.createMany({
       data: [
-        { firebaseUid: 'uid-a', email: 'alice@example.com', displayName: 'Alice', role: 'member' },
-        { firebaseUid: 'uid-b', email: 'bob@example.com', displayName: 'Bob', role: 'member' },
+        {
+          firebaseUid: 'uid-a',
+          email: 'alice@example.com',
+          displayName: 'Alice',
+          role: 'member',
+        },
+        {
+          firebaseUid: 'uid-b',
+          email: 'bob@example.com',
+          displayName: 'Bob',
+          role: 'member',
+        },
       ],
     });
   }, 180_000);

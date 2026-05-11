@@ -1,8 +1,15 @@
-import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import {
+  PostgreSqlContainer,
+  StartedPostgreSqlContainer,
+} from '@testcontainers/postgresql';
 import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import { Test } from '@nestjs/testing';
-import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  VersioningType,
+} from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AppModule } from '../src/app.module';
 import { BigIntSerializerInterceptor } from '../src/common/bigint-serializer.interceptor';
@@ -48,13 +55,25 @@ export async function bootE2E(opts?: {
   const builder = Test.createTestingModule({ imports: [AppModule] });
   builder.overrideProvider(PrismaService).useValue(testPrisma);
   if (opts?.overrideGuard) {
-    builder.overrideGuard(opts.overrideGuard.guard).useValue(opts.overrideGuard.value);
+    builder
+      .overrideGuard(opts.overrideGuard.guard)
+      .useValue(opts.overrideGuard.value);
   }
   const moduleRef = await builder.compile();
 
   const app = moduleRef.createNestApplication();
-  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1', prefix: 'v' });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+    prefix: 'v',
+  });
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());
   await app.init();
 
