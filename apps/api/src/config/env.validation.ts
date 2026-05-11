@@ -22,7 +22,9 @@ export class EnvVars {
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvVars {
-  const validated = plainToInstance(EnvVars, config, { enableImplicitConversion: true });
+  const validated = plainToInstance(EnvVars, config, {
+    enableImplicitConversion: true,
+  });
   const errors = validateSync(validated, { skipMissingProperties: false });
   if (errors.length) {
     throw new Error(`Invalid env: ${errors.toString()}`);
