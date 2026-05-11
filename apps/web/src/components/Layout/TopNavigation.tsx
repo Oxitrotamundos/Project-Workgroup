@@ -12,24 +12,13 @@ const TopNavigation: React.FC<TopNavigationProps> = memo(({
   showBackButton = false,
   backTo = ROUTES.DASHBOARD,
   actions,
-  showLogo = false,
 }) => {
   const hasCrumbs = Array.isArray(crumbs) && crumbs.length > 0;
 
   return (
     <nav className="topbar" role="navigation" aria-label="Navegación principal">
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        {showLogo && (
-          <div className="flex items-center gap-3">
-            <div className="logo-mark" />
-            <div className="logo-text hidden sm:flex">
-              <span className="logo-name">{DEFAULT_TITLES.APP_NAME}</span>
-              <span className="logo-sub">Workgroup</span>
-            </div>
-          </div>
-        )}
-
-        {showBackButton && !hasCrumbs && (
+{showBackButton && !hasCrumbs && (
           <Link
             to={backTo}
             className="btn btn-ghost btn-sm"

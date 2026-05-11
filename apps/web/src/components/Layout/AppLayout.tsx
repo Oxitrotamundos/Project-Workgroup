@@ -23,9 +23,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           showBackButton={navigationState.showBackButton}
           backTo={navigationState.backTo}
           actions={navigationState.actions}
-          showLogo={navigationState.showLogo}
-          logoSrc={navigationState.logoSrc}
-          logoAlt={navigationState.logoAlt}
         />
 
         <main className="transition-all">

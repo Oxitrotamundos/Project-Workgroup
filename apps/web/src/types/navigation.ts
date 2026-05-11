@@ -11,12 +11,9 @@ export interface NavigationState {
   title: string;
   subtitle?: string;
   crumbs?: Crumb[];
-  showLogo: boolean;
   showBackButton: boolean;
   backTo: string;
   actions?: React.ReactNode;
-  logoSrc?: string;
-  logoAlt?: string;
 }
 
 export interface NavigationContextType {
@@ -32,9 +29,6 @@ export interface TopNavigationProps {
   showBackButton?: boolean;
   backTo?: string;
   actions?: React.ReactNode;
-  showLogo?: boolean;
-  logoSrc?: string;
-  logoAlt?: string;
 }
 
 export interface UserProfileProps {
@@ -56,7 +50,6 @@ export type AppRoute = '/dashboard' | '/project' | '/login' | '/signup';
 export interface RouteConfig {
   title?: string;
   subtitle?: string;
-  showLogo?: boolean;
   showBackButton?: boolean;
   backTo?: string;
   requiresAuth?: boolean;

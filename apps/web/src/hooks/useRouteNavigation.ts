@@ -11,17 +11,13 @@ const ROUTE_CONFIGS: RouteNavigationConfig = {
     title: 'Project Workgroup',
     subtitle: undefined,
     crumbs: undefined,
-    showLogo: true,
     showBackButton: false,
     actions: undefined,
-    logoSrc: '/vite.svg',
-    logoAlt: 'Project Workgroup Logo'
   },
   '/project': {
     title: undefined,
     subtitle: undefined,
     crumbs: undefined,
-    showLogo: false,
     showBackButton: true,
     backTo: '/dashboard',
     actions: undefined

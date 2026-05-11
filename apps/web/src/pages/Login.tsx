@@ -92,10 +92,7 @@ const Login: React.FC = () => {
         }}
       >
         <div className="text-center mb-6">
-          <div className="flex justify-center mb-4">
-            <div className="logo-mark" style={{ width: 48, height: 48 }} />
-          </div>
-          <p className="eyebrow" style={{ marginBottom: 'var(--s-2)' }}>
+<p className="eyebrow" style={{ marginBottom: 'var(--s-2)' }}>
             Project Workgroup
           </p>
           <h2

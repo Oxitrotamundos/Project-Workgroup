@@ -10,16 +10,6 @@ export const ROUTES = {
   SIGNUP: '/signup'
 } as const;
 
-// Configuración de logos
-export const LOGO_CONFIG = {
-  DEFAULT_SRC: '/vite.svg',
-  DEFAULT_ALT: 'Project Workgroup Logo',
-  SIZES: {
-    SMALL: 'w-8 h-8',
-    MEDIUM: 'w-10 h-10'
-  }
-} as const;
-
 // Duraciones de animación
 export const ANIMATION_DURATIONS = {
   FAST: 200,
