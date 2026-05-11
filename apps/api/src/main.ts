@@ -14,10 +14,22 @@ async function bootstrap() {
 
   const config = app.get(ConfigService);
 
-  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1', prefix: 'v' });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+    prefix: 'v',
+  });
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
   app.enableCors({
-    origin: (config.get<string>('ALLOWED_ORIGINS') ?? '').split(',').filter(Boolean),
+    origin: (config.get<string>('ALLOWED_ORIGINS') ?? '')
+      .split(',')
+      .filter(Boolean),
     credentials: true,
   });
 

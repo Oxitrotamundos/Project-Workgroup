@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateWorkloadDto, WorkloadQueryDto, WorkloadResponse } from '@project-workgroup/shared';
+import {
+  CreateWorkloadDto,
+  WorkloadQueryDto,
+  WorkloadResponse,
+} from '@project-workgroup/shared';
 
 @Injectable()
 export class WorkloadService {
@@ -30,8 +34,13 @@ export class WorkloadService {
     };
   }
 
-  async create(projectId: bigint, dto: CreateWorkloadDto): Promise<WorkloadResponse> {
-    const task = await this.prisma.task.findUnique({ where: { id: BigInt(dto.taskId) } });
+  async create(
+    projectId: bigint,
+    dto: CreateWorkloadDto,
+  ): Promise<WorkloadResponse> {
+    const task = await this.prisma.task.findUnique({
+      where: { id: BigInt(dto.taskId) },
+    });
     if (!task) throw new NotFoundException('task not found');
 
     const workload = await this.prisma.workload.create({
@@ -47,7 +56,10 @@ export class WorkloadService {
     return this.toResponse(workload);
   }
 
-  async query(projectId: bigint, q: WorkloadQueryDto): Promise<WorkloadResponse[]> {
+  async query(
+    projectId: bigint,
+    q: WorkloadQueryDto,
+  ): Promise<WorkloadResponse[]> {
     const where: any = { projectId };
     if (q.userId) where.userId = BigInt(q.userId);
     if (q.dateFrom || q.dateTo) {

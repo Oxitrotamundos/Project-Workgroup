@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CreateWorkloadDto, WorkloadQueryDto } from '@project-workgroup/shared';
 import { AuthGuard } from '../auth/auth.guard';
@@ -16,14 +26,20 @@ export class WorkloadController {
   @Post('projects/:projectId/workload')
   @UseGuards(ProjectMembershipGuard)
   @RequireProject('projectId')
-  async create(@Param('projectId') projectId: string, @Body() dto: CreateWorkloadDto) {
+  async create(
+    @Param('projectId') projectId: string,
+    @Body() dto: CreateWorkloadDto,
+  ) {
     return this.workload.create(BigInt(projectId), dto);
   }
 
   @Get('projects/:projectId/workload')
   @UseGuards(ProjectMembershipGuard)
   @RequireProject('projectId')
-  async query(@Param('projectId') projectId: string, @Query() q: WorkloadQueryDto) {
+  async query(
+    @Param('projectId') projectId: string,
+    @Query() q: WorkloadQueryDto,
+  ) {
     return this.workload.query(BigInt(projectId), q);
   }
 

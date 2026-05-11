@@ -21,18 +21,35 @@ const isProd = process.env.NODE_ENV === 'production';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv, envFilePath: '.env' }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: validateEnv,
+      envFilePath: '.env',
+    }),
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL ?? (isProd ? 'info' : 'debug'),
-        genReqId: (req) => (req.headers['x-request-id'] as string) ?? randomUUID(),
+        genReqId: (req) =>
+          (req.headers['x-request-id'] as string) ?? randomUUID(),
         customProps: (req) => ({ requestId: (req as any).id }),
-        autoLogging: { ignore: (req) => req.url === '/v1/health' || req.url === '/v1/metrics' },
+        autoLogging: {
+          ignore: (req) =>
+            req.url === '/v1/health' || req.url === '/v1/metrics',
+        },
         redact: {
-          paths: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-api-key"]'],
+          paths: [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'req.headers["x-api-key"]',
+          ],
           remove: true,
         },
-        transport: isProd ? undefined : { target: 'pino-pretty', options: { singleLine: true, colorize: true } },
+        transport: isProd
+          ? undefined
+          : {
+              target: 'pino-pretty',
+              options: { singleLine: true, colorize: true },
+            },
       },
     }),
     FirebaseModule,
