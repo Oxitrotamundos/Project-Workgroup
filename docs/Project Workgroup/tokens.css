@@ -1,0 +1,175 @@
+/* ───────────────────────────────────────────────────────────────
+   Project Workgroup — Design Tokens
+   Humanist + technical. Warm light, warm dark. Tweakable.
+   ─────────────────────────────────────────────────────────────── */
+
+:root{
+  /* Type families ─ overridden by Tweak "Typography" */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  /* Display = sans-serif humanista en light italic; sin serifas. */
+  --font-display: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* Type scale */
+  --t-display: 56px;   --lh-display: 1.05; --tr-display: -0.02em;
+  --t-h1: 40px;        --lh-h1: 1.1;       --tr-h1: -0.018em;
+  --t-h2: 28px;        --lh-h2: 1.18;      --tr-h2: -0.012em;
+  --t-h3: 20px;        --lh-h3: 1.25;      --tr-h3: -0.008em;
+  --t-h4: 16px;        --lh-h4: 1.35;      --tr-h4: -0.004em;
+  --t-body: 14px;      --lh-body: 1.55;    --tr-body: 0;
+  --t-small: 13px;     --lh-small: 1.5;
+  --t-caption: 12px;   --lh-caption: 1.4;
+  --t-eyebrow: 11px;   --tr-eyebrow: 0.08em;
+  --t-mono: 13px;      --lh-mono: 1.5;
+
+  /* Spacing (4pt) */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px;
+  --s-6: 24px; --s-7: 32px; --s-8: 40px; --s-9: 48px; --s-10: 64px;
+  --s-11: 80px; --s-12: 96px;
+
+  /* Radius ─ multiplied by --r-scale via Tweak "Radio" */
+  --r-scale: 1;
+  --r-xs: calc(2px * var(--r-scale));
+  --r-sm: calc(4px * var(--r-scale));
+  --r-md: calc(6px * var(--r-scale));
+  --r-lg: calc(10px * var(--r-scale));
+  --r-xl: calc(14px * var(--r-scale));
+  --r-2xl: calc(20px * var(--r-scale));
+  --r-pill: 999px;
+
+  /* Density (row heights, paddings) ─ Tweak "Densidad" */
+  --d-row: 44px;
+  --d-control: 34px;
+  --d-cell-y: 10px;
+  --d-cell-x: 14px;
+  --d-card-p: 20px;
+
+  /* Primary accent ─ Tweak "Color primario" */
+  --p-50: #FFF3EA;
+  --p-100:#FFE2CC;
+  --p-200:#FFC79C;
+  --p-300:#FDA46B;
+  --p-400:#F9803D;
+  --p-500:#EA580C;
+  --p-600:#C2410C;
+  --p-700:#9A3412;
+  --p-800:#7C2D12;
+  --p-fg-on: #FFFFFF;
+
+  /* Motion */
+  --ease: cubic-bezier(.2,.7,.2,1);
+  --ease-out: cubic-bezier(.16,1,.3,1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 320ms;
+
+  /* Elevation (light) */
+  --sh-1: 0 1px 0 rgba(28,22,14,.04), 0 1px 2px rgba(28,22,14,.05);
+  --sh-2: 0 1px 0 rgba(28,22,14,.04), 0 4px 12px rgba(28,22,14,.06);
+  --sh-3: 0 2px 0 rgba(28,22,14,.04), 0 12px 28px rgba(28,22,14,.08);
+  --sh-4: 0 24px 60px -16px rgba(28,22,14,.18), 0 8px 24px rgba(28,22,14,.06);
+  --ring: 0 0 0 3px color-mix(in oklch, var(--p-500) 28%, transparent);
+}
+
+/* ── Light (default) ─ humanista neutro, mínima temperatura ─── */
+:root, [data-theme="light"]{
+  --bg: #F8F8F6;
+  --bg-subtle: #F1F1EE;
+  --surface: #FFFFFF;
+  --surface-2: #F4F4F1;
+  --surface-3: #ECECE8;
+  --overlay: rgba(20,20,18,.55);
+
+  --line: #E7E7E2;
+  --line-2: #D4D4CE;
+  --line-strong: #B8B7B0;
+
+  --ink: #1A1A18;
+  --ink-1: #26261F;
+  --ink-2: #545349;
+  --ink-3: #7C7B6F;
+  --ink-4: #A6A59A;
+  --ink-on-primary: var(--p-fg-on);
+
+  --ok-bg: #E5F3E8;   --ok-fg: #166534;   --ok-line: #BBD9C0;
+  --warn-bg: #FBEFD3; --warn-fg: #92400E; --warn-line: #ECD49A;
+  --err-bg: #FBE2DC;  --err-fg: #991B1B;  --err-line: #ECC2B8;
+  --info-bg: #DDE7F7; --info-fg: #1D4ED8; --info-line: #B7CAEC;
+  --neutral-bg: #EDE7D6; --neutral-fg: #4B4332;
+
+  --grid-line: rgba(28,22,14,.06);
+  --grid-line-strong: rgba(28,22,14,.12);
+
+  color-scheme: light;
+}
+
+/* ── Dark ─ humanista neutro ────────────────────────────────── */
+[data-theme="dark"]{
+  --bg: #131312;
+  --bg-subtle: #181816;
+  --surface: #1C1C1A;
+  --surface-2: #232321;
+  --surface-3: #2B2B28;
+  --overlay: rgba(0,0,0,.6);
+
+  --line: #2A2A27;
+  --line-2: #383834;
+  --line-strong: #4E4E48;
+
+  --ink: #F2F2EE;
+  --ink-1: #E4E4DE;
+  --ink-2: #ACACA1;
+  --ink-3: #82827A;
+  --ink-4: #5A5A53;
+  --ink-on-primary: #14110A;
+
+  --p-500: #FB923C;
+  --p-600: #F97316;
+  --p-400: #FDBA74;
+  --p-300: #FED7AA;
+  --p-100: #4A2511;
+  --p-50:  #2A170A;
+
+  --ok-bg: #1B2C20;   --ok-fg: #86EFAC;   --ok-line: #2E4A36;
+  --warn-bg: #2E2410; --warn-fg: #FCD34D; --warn-line: #4A3A1A;
+  --err-bg: #2E1815;  --err-fg: #FCA5A5;  --err-line: #4A2622;
+  --info-bg: #18233A; --info-fg: #93C5FD; --info-line: #2A3A5C;
+  --neutral-bg: #28241B; --neutral-fg: #C9BFA6;
+
+  --grid-line: rgba(244,236,218,.05);
+  --grid-line-strong: rgba(244,236,218,.12);
+
+  --sh-1: 0 1px 0 rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.4);
+  --sh-2: 0 1px 0 rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.45);
+  --sh-3: 0 2px 0 rgba(0,0,0,.4), 0 14px 32px rgba(0,0,0,.5);
+  --sh-4: 0 24px 60px -16px rgba(0,0,0,.7), 0 8px 24px rgba(0,0,0,.4);
+
+  color-scheme: dark;
+}
+
+/* ── Density variants ────────────────────────────────────────── */
+[data-density="compact"]{
+  --d-row: 36px; --d-control: 28px; --d-cell-y: 6px; --d-cell-x: 10px; --d-card-p: 14px;
+  --t-body: 13px; --lh-body: 1.5;
+}
+[data-density="comfy"]{
+  --d-row: 52px; --d-control: 40px; --d-cell-y: 14px; --d-cell-x: 18px; --d-card-p: 24px;
+  --t-body: 15px;
+}
+
+/* ── Type family variants ────────────────────────────────────── */
+[data-type="plex"]{
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+}
+[data-type="grotesk"]{
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+[data-type="humanist"]{
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+}

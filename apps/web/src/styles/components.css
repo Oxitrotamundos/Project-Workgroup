@@ -280,32 +280,6 @@
 }
 .topbar .actions{ display: flex; gap: 8px; align-items: center; }
 
-/* ─── Logo mark (conic, primary-tinted) ──────────────────── */
-.logo-mark{
-  width: 32px; height: 32px;
-  border-radius: var(--r-md);
-  background:
-    conic-gradient(from 220deg at 60% 40%,
-      var(--p-500), var(--p-700) 40%, var(--ink-1) 70%, var(--p-500));
-  position: relative;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), var(--sh-1);
-  flex-shrink: 0;
-}
-.logo-mark::after{
-  content:""; position:absolute; inset: 6px;
-  background: var(--bg-subtle);
-  border-radius: calc(var(--r-md) - 3px);
-  clip-path: polygon(0 0, 100% 0, 100% 35%, 35% 35%, 35% 100%, 0 100%);
-}
-.logo-mark::before{
-  content:""; position:absolute; right: 6px; bottom: 6px;
-  width: 7px; height: 7px; border-radius: 999px;
-  background: var(--p-500);
-  box-shadow: 0 0 0 2px var(--bg-subtle);
-}
-.logo-text{ display: flex; flex-direction: column; line-height: 1; }
-.logo-name{ font: 600 14px/1 var(--font-sans); letter-spacing: -0.01em; color: var(--ink); }
-.logo-sub{ font: 500 11px/1 var(--font-mono); color: var(--ink-3); letter-spacing: 0.04em; margin-top: 4px; text-transform: uppercase; }
 
 /* ─── Notifications / toast ───────────────────────────────── */
 .toast{

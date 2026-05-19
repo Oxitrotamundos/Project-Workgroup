@@ -18,9 +18,6 @@ import type { GanttDataChangePayload } from '../services/ganttDataProvider';
 import { taskKeys } from '../hooks/queries/taskQueryKeys';
 import type { Task, TaskPriority, TaskStatus } from '../types/domain';
 
-
-
-
 const ProjectView: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -105,28 +102,16 @@ const ProjectView: React.FC = () => {
 
   const handleAddTask = async () => {
     if (!projectId || !user) return;
-
-    try {
-      const taskId = await taskManager.createTask({
-        projectId,
-        name: 'Nueva Tarea Principal',
-        description: 'Descripción de la nueva tarea',
-        priority: 'medium',
-        type: 'task',
-        estimatedHours: 8,
-      });
-
-      const fresh = await TaskService.getTask(taskId);
-      if (fresh) applyTasksPayload({ updated: [fresh], deleted: [] });
-    } catch (error) {
-      console.error('Error creando tarea:', error);
-
-      if (error instanceof Error && error.message.includes('Firebase')) {
-        alert('Error: Firebase no está configurado. Por favor, configura el archivo .env con las credenciales de Firebase.');
-      } else {
-        alert('Error al crear la tarea. Revisa la consola para más detalles.');
-      }
-    }
+    const taskId = await taskManager.createTask({
+      projectId,
+      name: 'Nueva Tarea Principal',
+      description: 'Descripción de la nueva tarea',
+      priority: 'medium',
+      type: 'task',
+      estimatedHours: 8,
+    });
+    const fresh = await TaskService.getTask(taskId);
+    if (fresh) applyTasksPayload({ updated: [fresh], deleted: [] });
   };
 
   const handleCreateTaskInline = React.useCallback(
@@ -195,7 +180,6 @@ const ProjectView: React.FC = () => {
         }
         if (latest) applyTasksPayload({ updated: [latest], deleted: [] });
       } catch (e) {
-        console.error('handleUpdateTaskInline: error, refetching tasks', e);
         await refetchTasks();
         throw e;
       }
@@ -210,32 +194,30 @@ const ProjectView: React.FC = () => {
       project={project}
       onRetry={refetch}
     >
-      <>
-        <div className="flex-1 p-4 sm:p-6">
-          <div
-            className="h-[calc(100vh-130px)] overflow-hidden"
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line)',
-              borderRadius: 'var(--r-xl)',
-              boxShadow: 'var(--sh-1)',
-            }}
-          >
-            <TasksView
-              tasks={tasks}
-              projectId={projectId || ''}
-              loading={tasksLoading}
-              error={tasksError}
-              apiRef={ganttApiRef}
-              onAddTask={handleAddTask}
-              onCreateTask={handleCreateTaskInline}
-              onUpdateTask={handleUpdateTaskInline}
-              onTasksChanged={applyTasksPayload}
-              assignees={assigneeOptions}
-            />
-          </div>
+      <div className="flex-1 p-4 sm:p-6">
+        <div
+          className="h-[calc(100vh-130px)] overflow-hidden"
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--line)',
+            borderRadius: 'var(--r-xl)',
+            boxShadow: 'var(--sh-1)',
+          }}
+        >
+          <TasksView
+            tasks={tasks}
+            projectId={projectId || ''}
+            loading={tasksLoading}
+            error={tasksError}
+            apiRef={ganttApiRef}
+            onAddTask={handleAddTask}
+            onCreateTask={handleCreateTaskInline}
+            onUpdateTask={handleUpdateTaskInline}
+            onTasksChanged={applyTasksPayload}
+            assignees={assigneeOptions}
+          />
         </div>
-      </>
+      </div>
     </ProjectStateManager>
   );
 };

@@ -468,7 +468,9 @@ export class TasksService {
     for (const task of tasks) {
       if (task.parentId === null) continue;
       const key = task.parentId.toString();
-      childrenByParent.set(key, [...(childrenByParent.get(key) ?? []), task]);
+      const list = childrenByParent.get(key);
+      if (list) list.push(task);
+      else childrenByParent.set(key, [task]);
     }
 
     const memo = new Map<string, SummaryStats>();
@@ -534,32 +536,18 @@ export class TasksService {
     };
 
     const patches: SummaryPatch[] = [];
-    const summaryIds = tasks
-      .filter((task) => task.type === 'summary')
-      .map((task) => task.id);
     const previousById = new Map<
       string,
       { startDate: Date; endDate: Date; duration: string; progress: number; estimatedHours: string }
     >();
-    if (summaryIds.length > 0) {
-      const previous = await client.task.findMany({
-        where: { id: { in: summaryIds } },
-        select: {
-          id: true,
-          startDate: true,
-          endDate: true,
-          duration: true,
-          progress: true,
-          estimatedHours: true,
-        },
-      });
-      for (const p of previous) {
-        previousById.set(p.id.toString(), {
-          startDate: p.startDate,
-          endDate: p.endDate,
-          duration: p.duration.toString(),
-          progress: p.progress,
-          estimatedHours: p.estimatedHours.toString(),
+    for (const task of tasks) {
+      if (task.type === 'summary') {
+        previousById.set(task.id.toString(), {
+          startDate: task.startDate,
+          endDate: task.endDate,
+          duration: task.duration.toString(),
+          progress: task.progress,
+          estimatedHours: task.estimatedHours.toString(),
         });
       }
     }
@@ -1210,12 +1198,7 @@ export class TasksService {
             updatedTasks.push(updated);
           } catch (err) {
             if (expectedVersion !== undefined && this.isVersionConflict(err)) {
-              throw new ConflictException({
-                code: 'TASK_VERSION_STALE',
-                message: 'task has been modified by another request',
-                taskId: item.id,
-                expectedVersion,
-              });
+              await this.assertVersionConflict(itemId, expectedVersion, 'bulkUpdate');
             }
             throw err;
           }
