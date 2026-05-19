@@ -102,9 +102,21 @@ model Project {
   taskLinks TaskLink[]
   workload  Workload[]
   calendar  WorkingCalendar?
+  settings  ProjectSettings?
 
   @@index([ownerId, status])
   @@map("projects")
+}
+
+model ProjectSettings {
+  projectId        BigInt   @id @map("project_id")
+  timeGranularity  String   @default("hours") @map("time_granularity")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_settings")
 }
 
 model ProjectMember {
