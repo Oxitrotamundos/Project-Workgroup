@@ -154,6 +154,9 @@ export class TaskOpenStateDto {
 
   @IsBoolean()
   open!: boolean;
+
+  @IsOptional() @IsInt() @Min(1)
+  expectedVersion?: number;
 }
 
 export class BulkTaskOpenStateDto {
@@ -234,8 +237,15 @@ export interface BulkTaskUpdateResponse {
   summariesPatched: SummaryPatch[];
 }
 
+export interface BulkTaskOpenStateConflict {
+  id: string;
+  currentVersion: number;
+  expectedVersion: number;
+}
+
 export interface BulkTaskOpenStateResponse {
-  updated: Array<{ id: string; open: boolean }>;
+  updated: Array<{ id: string; open: boolean; version: number }>;
+  conflicts?: BulkTaskOpenStateConflict[];
 }
 
 export interface PropagationChange {

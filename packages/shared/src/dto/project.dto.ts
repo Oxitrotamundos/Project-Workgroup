@@ -55,3 +55,18 @@ export interface ProjectResponse {
   createdAt: string;
   updatedAt: string;
 }
+
+export const TIME_GRANULARITIES = ['hours', 'days'] as const;
+export type TimeGranularity = (typeof TIME_GRANULARITIES)[number];
+
+export interface ProjectSettingsResponse {
+  projectId: string;
+  timeGranularity: TimeGranularity;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export class UpdateProjectSettingsDto {
+  @IsOptional() @IsIn(TIME_GRANULARITIES)
+  timeGranularity?: TimeGranularity;
+}
