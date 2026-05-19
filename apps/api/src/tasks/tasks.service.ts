@@ -12,14 +12,18 @@ import { Prisma } from '../generated/prisma/client';
 import { MetricsService } from '../observability/metrics.service';
 import {
   ApplyPropagationDto,
+  BulkTaskOpenStateDto,
+  BulkTaskOpenStateResponse,
   BulkTaskUpdateDto,
   BulkTaskUpdateResponse,
   CreateTaskDto,
   PropagationChange,
   PropagationPreview,
   SummaryPatch,
+  TaskMutationResponse,
   TaskResponse,
   UpdateOrderDto,
+  UpdateTaskPositionDto,
   UpdateProgressDto,
   UpdateTaskDto,
 } from '@project-workgroup/shared';
@@ -82,6 +86,13 @@ type SummaryStats = {
   estimatedHours: number;
 };
 
+type TaskUpdatePlan = {
+  scheduleTouched: boolean;
+  workloadTouched: boolean;
+  summariesTouched: boolean;
+  versioned: boolean;
+};
+
 @Injectable()
 export class TasksService {
   constructor(
@@ -130,6 +141,61 @@ export class TasksService {
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
     };
+  }
+
+  private toMutationResponse(
+    t: TaskRow,
+    hoursPerDay: number | undefined,
+    summariesPatched: SummaryPatch[],
+  ): TaskMutationResponse {
+    return {
+      ...this.toResponse(t, hoursPerDay),
+      summariesPatched,
+    };
+  }
+
+  private planTaskUpdate(dto: UpdateTaskDto): TaskUpdatePlan {
+    const scheduleTouched =
+      dto.startDate !== undefined ||
+      dto.endDate !== undefined ||
+      dto.type !== undefined ||
+      dto.estimatedHours !== undefined;
+    const workloadTouched = scheduleTouched || dto.assigneeId !== undefined;
+    const summariesTouched =
+      scheduleTouched || dto.progress !== undefined || dto.parentId !== undefined;
+    const versioned =
+      dto.name !== undefined ||
+      dto.description !== undefined ||
+      scheduleTouched ||
+      dto.priority !== undefined ||
+      dto.status !== undefined ||
+      dto.type !== undefined ||
+      dto.color !== undefined ||
+      dto.assigneeId !== undefined ||
+      dto.parentId !== undefined ||
+      dto.progress !== undefined;
+
+    return { scheduleTouched, workloadTouched, summariesTouched, versioned };
+  }
+
+  private async computeWorkloadFromCurrentRange(
+    projectId: bigint,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<{
+    hoursPerDay: number;
+    workload: ScheduledSlot[];
+  }> {
+    const calendar = await this.calendarResolver.resolveForProject(projectId);
+    if (endDate.getTime() <= startDate.getTime()) {
+      return { hoursPerDay: calendar.hoursPerDay || 8, workload: [] };
+    }
+    const result = this.scheduling.scheduleFromRange({
+      startDateTime: startDate,
+      endDateTime: endDate,
+      calendar,
+    });
+    return { hoursPerDay: calendar.hoursPerDay || 8, workload: result.workload };
   }
 
   private parseEstimatedHours(raw: string | undefined): number | undefined {
@@ -701,29 +767,33 @@ export class TasksService {
     id: bigint,
     dto: UpdateTaskDto,
     user: AuthUser,
-  ): Promise<TaskResponse> {
+  ): Promise<TaskMutationResponse> {
     const startedAt = Date.now();
     const existing = await this.assertTaskAccess(id, user);
+    const plan = this.planTaskUpdate(dto);
     const nextType = dto.type ?? (existing.type as any);
-    const scheduleInputsTouched =
-      dto.startDate !== undefined ||
-      dto.endDate !== undefined ||
-      dto.type !== undefined ||
-      dto.estimatedHours !== undefined;
-
-    const schedule = await this.computeSchedule(
-      existing.projectId,
-      nextType,
-      dto.startDate
-        ? this.parseDate(dto.startDate, 'startDate')
-        : existing.startDate,
-      dto.endDate
-        ? this.parseDate(dto.endDate, 'endDate')
-        : dto.estimatedHours
-          ? undefined
-          : existing.endDate,
-      dto.estimatedHours,
-    );
+    const schedule = plan.scheduleTouched
+      ? await this.computeSchedule(
+          existing.projectId,
+          nextType,
+          dto.startDate
+            ? this.parseDate(dto.startDate, 'startDate')
+            : existing.startDate,
+          dto.endDate
+            ? this.parseDate(dto.endDate, 'endDate')
+            : dto.estimatedHours
+              ? undefined
+              : existing.endDate,
+          dto.estimatedHours,
+        )
+      : null;
+    const workloadOnly = !schedule && plan.workloadTouched
+      ? await this.computeWorkloadFromCurrentRange(
+          existing.projectId,
+          existing.startDate,
+          existing.endDate,
+        )
+      : null;
 
     const parentId = await this.validateParent(
       existing.projectId,
@@ -739,9 +809,10 @@ export class TasksService {
         ? { id, version: dto.expectedVersion }
         : { id };
 
-    let refreshed;
+    let refreshed: TaskRow;
+    let summariesPatched: SummaryPatch[] = [];
     try {
-      refreshed = await this.prisma.$transaction(
+      const result = await this.prisma.$transaction(
         async (tx) => {
           const updated = await tx.task.update({
             where,
@@ -750,7 +821,7 @@ export class TasksService {
               ...(dto.description !== undefined && {
                 description: dto.description,
               }),
-              ...(scheduleInputsTouched && {
+              ...(schedule && {
                 startDate: schedule.startDate,
                 endDate: schedule.endDate,
                 duration: schedule.duration,
@@ -758,6 +829,7 @@ export class TasksService {
                   estimatedHours: new Prisma.Decimal(schedule.estimatedHours),
                 }),
               }),
+              ...(dto.progress !== undefined && { progress: dto.progress }),
               ...(dto.priority !== undefined && {
                 priority: priorityToPrisma(dto.priority),
               }),
@@ -769,31 +841,32 @@ export class TasksService {
               ...(assigneeId !== undefined && { assigneeId }),
               ...(dto.open !== undefined && { open: dto.open }),
               ...(parentId !== undefined && { parentId }),
-              version: { increment: 1 },
+              ...(plan.versioned && { version: { increment: 1 } }),
             },
           });
-          if (schedule.workload.length > 0) {
+          const workload = schedule?.workload ?? workloadOnly?.workload;
+          if (plan.workloadTouched && workload !== undefined) {
             await this.regenerateWorkload(
               tx,
               id,
               existing.projectId,
               finalAssigneeId ?? null,
-              schedule.workload,
+              workload,
             );
-          } else if (
-            dto.estimatedHours !== undefined ||
-            assigneeId !== undefined
-          ) {
-            await tx.workload.deleteMany({ where: { taskId: id } });
           }
-          await this.recalculateProjectSummaries(existing.projectId, tx);
-          return tx.task.findUnique({ where: { id } }) ?? updated;
+          const patched = plan.summariesTouched
+            ? await this.recalculateProjectSummaries(existing.projectId, tx)
+            : [];
+          const fresh = (await tx.task.findUnique({ where: { id } })) ?? updated;
+          return { fresh, patched };
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
           timeout: 10000,
         },
       );
+      refreshed = result.fresh;
+      summariesPatched = result.patched;
     } catch (err) {
       if (dto.expectedVersion !== undefined && this.isVersionConflict(err)) {
         return this.assertVersionConflict(id, dto.expectedVersion, 'update');
@@ -810,14 +883,18 @@ export class TasksService {
       },
       Date.now() - startedAt,
     );
-    return this.toResponse(refreshed!, schedule.hoursPerDay);
+    const hoursPerDay =
+      schedule?.hoursPerDay ??
+      workloadOnly?.hoursPerDay ??
+      (await this.calendarResolver.resolveForProject(existing.projectId)).hoursPerDay;
+    return this.toMutationResponse(refreshed!, hoursPerDay, summariesPatched);
   }
 
   async updateProgress(
     id: bigint,
     dto: UpdateProgressDto,
     user: AuthUser,
-  ): Promise<TaskResponse> {
+  ): Promise<TaskMutationResponse> {
     const startedAt = Date.now();
     const existing = await this.assertTaskAccess(id, user);
     const where =
@@ -825,22 +902,29 @@ export class TasksService {
         ? { id, version: dto.expectedVersion }
         : { id };
 
-    let refreshed;
+    let refreshed: TaskRow;
+    let summariesPatched: SummaryPatch[] = [];
     try {
-      refreshed = await this.prisma.$transaction(
+      const result = await this.prisma.$transaction(
         async (tx) => {
           const updated = await tx.task.update({
             where,
             data: { progress: dto.progress, version: { increment: 1 } },
           });
-          await this.recalculateProjectSummaries(existing.projectId, tx);
-          return tx.task.findUnique({ where: { id } }) ?? updated;
+          const patched = await this.recalculateProjectSummaries(
+            existing.projectId,
+            tx,
+          );
+          const fresh = (await tx.task.findUnique({ where: { id } })) ?? updated;
+          return { fresh, patched };
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
           timeout: 10000,
         },
       );
+      refreshed = result.fresh;
+      summariesPatched = result.patched;
     } catch (err) {
       if (dto.expectedVersion !== undefined && this.isVersionConflict(err)) {
         return this.assertVersionConflict(
@@ -864,14 +948,18 @@ export class TasksService {
     const calendar = await this.calendarResolver.resolveForProject(
       existing.projectId,
     );
-    return this.toResponse(refreshed!, calendar.hoursPerDay);
+    return this.toMutationResponse(
+      refreshed!,
+      calendar.hoursPerDay,
+      summariesPatched,
+    );
   }
 
   async updateOrder(
     id: bigint,
     dto: UpdateOrderDto,
     user: AuthUser,
-  ): Promise<TaskResponse> {
+  ): Promise<TaskMutationResponse> {
     const startedAt = Date.now();
     const existing = await this.assertTaskAccess(id, user);
     const order = await this.resolveNeighborOrders(
@@ -888,12 +976,10 @@ export class TasksService {
     try {
       updated = await this.prisma.$transaction(
         async (tx) => {
-          const task = await tx.task.update({
+          return tx.task.update({
             where,
             data: { order, version: { increment: 1 } },
           });
-          await this.recalculateProjectSummaries(existing.projectId, tx);
-          return task;
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
@@ -919,7 +1005,130 @@ export class TasksService {
     const calendar = await this.calendarResolver.resolveForProject(
       existing.projectId,
     );
-    return this.toResponse(updated, calendar.hoursPerDay);
+    return this.toMutationResponse(updated, calendar.hoursPerDay, []);
+  }
+
+  async updatePosition(
+    id: bigint,
+    dto: UpdateTaskPositionDto,
+    user: AuthUser,
+  ): Promise<TaskMutationResponse> {
+    const startedAt = Date.now();
+    const existing = await this.assertTaskAccess(id, user);
+    const parentId = await this.validateParent(
+      existing.projectId,
+      id,
+      dto.parentId,
+    );
+    const order = await this.resolveNeighborOrders(
+      existing.projectId,
+      dto.afterTaskId,
+      dto.beforeTaskId,
+    );
+    const where =
+      dto.expectedVersion !== undefined
+        ? { id, version: dto.expectedVersion }
+        : { id };
+    const parentChanged =
+      parentId !== undefined && parentId !== existing.parentId;
+
+    let updated: TaskRow;
+    let summariesPatched: SummaryPatch[] = [];
+    try {
+      const result = await this.prisma.$transaction(
+        async (tx) => {
+          const task = await tx.task.update({
+            where,
+            data: {
+              order,
+              ...(parentId !== undefined && { parentId }),
+              version: { increment: 1 },
+            },
+          });
+          const patched = parentChanged
+            ? await this.recalculateProjectSummaries(existing.projectId, tx)
+            : [];
+          return { task, patched };
+        },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+          timeout: 10000,
+        },
+      );
+      updated = result.task;
+      summariesPatched = result.patched;
+    } catch (err) {
+      if (dto.expectedVersion !== undefined && this.isVersionConflict(err)) {
+        return this.assertVersionConflict(
+          id,
+          dto.expectedVersion,
+          'updatePosition',
+        );
+      }
+      throw err;
+    }
+
+    this.logOp(
+      'updatePosition',
+      { projectId: existing.projectId.toString(), taskId: id.toString() },
+      Date.now() - startedAt,
+    );
+    const calendar = await this.calendarResolver.resolveForProject(
+      existing.projectId,
+    );
+    return this.toMutationResponse(
+      updated!,
+      calendar.hoursPerDay,
+      summariesPatched,
+    );
+  }
+
+  async updateOpenStates(
+    projectId: bigint,
+    dto: BulkTaskOpenStateDto,
+    user: AuthUser,
+  ): Promise<BulkTaskOpenStateResponse> {
+    const startedAt = Date.now();
+    await this.assertProjectAccess(projectId, user);
+
+    const ids = dto.states.map((s) => this.parseBigInt(s.id, 'id'));
+    const owned = await this.prisma.task.findMany({
+      where: { id: { in: ids }, projectId },
+      select: { id: true },
+    });
+    if (owned.length !== ids.length) {
+      throw new BadRequestException(
+        'one or more tasks do not belong to this project',
+      );
+    }
+
+    await this.prisma.$transaction(
+      async (tx) => {
+        for (const state of dto.states) {
+          await tx.task.update({
+            where: { id: this.parseBigInt(state.id, 'id') },
+            data: { open: state.open },
+          });
+        }
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        timeout: 10000,
+      },
+    );
+
+    this.logOp(
+      'openStates',
+      { projectId: projectId.toString(), count: dto.states.length },
+      Date.now() - startedAt,
+    );
+
+    return {
+      updated: dto.states.map((state) => ({
+        id: state.id,
+        open: state.open,
+      })),
+    };
   }
 
   async remove(id: bigint, user: AuthUser): Promise<void> {
@@ -1110,9 +1319,11 @@ export class TasksService {
     const result = await this.prisma.$transaction(
       async (tx) => {
         const updatedTasks: TaskRow[] = [];
+        let summariesDirty = false;
         for (const item of dto.updates) {
           const itemId = this.parseBigInt(item.id, 'id');
           const data = item.data;
+          const plan = this.planTaskUpdate(data);
           const expectedVersion = item.expectedVersion ?? data.expectedVersion;
           const where =
             expectedVersion !== undefined
@@ -1124,24 +1335,28 @@ export class TasksService {
           }
 
           const nextType = data.type ?? (existing.type as any);
-          const scheduleTouched =
-            data.startDate !== undefined ||
-            data.endDate !== undefined ||
-            data.type !== undefined ||
-            data.estimatedHours !== undefined;
-          const schedule = await this.computeSchedule(
-            existing.projectId,
-            nextType,
-            data.startDate
-              ? this.parseDate(data.startDate, 'startDate')
-              : existing.startDate,
-            data.endDate
-              ? this.parseDate(data.endDate, 'endDate')
-              : data.estimatedHours
-                ? undefined
-                : existing.endDate,
-            data.estimatedHours,
-          );
+          const schedule = plan.scheduleTouched
+            ? await this.computeSchedule(
+                existing.projectId,
+                nextType,
+                data.startDate
+                  ? this.parseDate(data.startDate, 'startDate')
+                  : existing.startDate,
+                data.endDate
+                  ? this.parseDate(data.endDate, 'endDate')
+                  : data.estimatedHours
+                    ? undefined
+                    : existing.endDate,
+                data.estimatedHours,
+              )
+            : null;
+          const workloadOnly = !schedule && plan.workloadTouched
+            ? await this.computeWorkloadFromCurrentRange(
+                existing.projectId,
+                existing.startDate,
+                existing.endDate,
+              )
+            : null;
           const parentId = await this.validateParent(
             existing.projectId,
             itemId,
@@ -1159,7 +1374,7 @@ export class TasksService {
                 ...(data.description !== undefined && {
                   description: data.description,
                 }),
-                ...(scheduleTouched && {
+                ...(schedule && {
                   startDate: schedule.startDate,
                   endDate: schedule.endDate,
                   duration: schedule.duration,
@@ -1167,6 +1382,7 @@ export class TasksService {
                     estimatedHours: new Prisma.Decimal(schedule.estimatedHours),
                   }),
                 }),
+                ...(data.progress !== undefined && { progress: data.progress }),
                 ...(data.priority !== undefined && {
                   priority: priorityToPrisma(data.priority),
                 }),
@@ -1178,36 +1394,36 @@ export class TasksService {
                 ...(assigneeId !== undefined && { assigneeId }),
                 ...(data.open !== undefined && { open: data.open }),
                 ...(parentId !== undefined && { parentId }),
-                version: { increment: 1 },
+                ...(plan.versioned && { version: { increment: 1 } }),
               },
             });
-            if (schedule.workload.length > 0) {
+            const workload = schedule?.workload ?? workloadOnly?.workload;
+            if (plan.workloadTouched && workload !== undefined) {
               await this.regenerateWorkload(
                 tx,
                 itemId,
                 existing.projectId,
                 finalAssigneeId ?? null,
-                schedule.workload,
+                workload,
               );
-            } else if (
-              data.estimatedHours !== undefined ||
-              assigneeId !== undefined
-            ) {
-              await tx.workload.deleteMany({ where: { taskId: itemId } });
             }
+            summariesDirty = summariesDirty || plan.summariesTouched;
             updatedTasks.push(updated);
           } catch (err) {
             if (expectedVersion !== undefined && this.isVersionConflict(err)) {
-              await this.assertVersionConflict(itemId, expectedVersion, 'bulkUpdate');
+              await this.assertVersionConflict(
+                itemId,
+                expectedVersion,
+                'bulkUpdate',
+              );
             }
             throw err;
           }
         }
 
-        const summariesPatched = await this.recalculateProjectSummaries(
-          projectId,
-          tx,
-        );
+        const summariesPatched = summariesDirty
+          ? await this.recalculateProjectSummaries(projectId, tx)
+          : [];
         return { tasks: updatedTasks, summariesPatched };
       },
       {

@@ -13,9 +13,11 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   ApplyPropagationDto,
+  BulkTaskOpenStateDto,
   BulkTaskUpdateDto,
   CreateTaskDto,
   UpdateOrderDto,
+  UpdateTaskPositionDto,
   UpdateProgressDto,
   UpdateTaskDto,
 } from '@project-workgroup/shared';
@@ -68,6 +70,17 @@ export class TasksController {
     return this.tasks.bulkUpdate(this.id(projectId, 'projectId'), dto, user);
   }
 
+  @Patch('projects/:projectId/tasks/open-states')
+  @UseGuards(ProjectMembershipGuard)
+  @RequireProject('projectId')
+  async updateOpenStates(
+    @Param('projectId') projectId: string,
+    @Body() dto: BulkTaskOpenStateDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.tasks.updateOpenStates(this.id(projectId, 'projectId'), dto, user);
+  }
+
   @Get('tasks/:id')
   async getById(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.tasks.getById(this.id(id), user);
@@ -98,6 +111,15 @@ export class TasksController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.tasks.updateOrder(this.id(id), dto, user);
+  }
+
+  @Patch('tasks/:id/position')
+  async updatePosition(
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskPositionDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.tasks.updatePosition(this.id(id), dto, user);
   }
 
   @Delete('tasks/:id')

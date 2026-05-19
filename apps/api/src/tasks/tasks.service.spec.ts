@@ -324,4 +324,93 @@ describe('TasksService', () => {
     );
     expect(result.version).toBe(2);
   });
+
+  it('does not schedule workload or recalculate summaries for status-only updates', async () => {
+    const prisma = makePrisma();
+    const before = taskRow({ version: 1, status: 'not_started' });
+    const after = taskRow({ version: 2, status: 'in_progress' });
+    prisma.task.findUnique
+      .mockResolvedValueOnce(before)
+      .mockResolvedValue(after);
+    prisma.task.update.mockResolvedValue(after);
+    const resolver = makeResolver();
+    const scheduling = makeScheduling();
+    const service = new TasksService(prisma, resolver as any, scheduling as any);
+
+    const result = await service.update(
+      10n,
+      { status: 'in-progress', expectedVersion: 1 },
+      admin,
+    );
+
+    expect(result.status).toBe('in-progress');
+    expect(scheduling.scheduleFromHours).not.toHaveBeenCalled();
+    expect(scheduling.scheduleFromRange).not.toHaveBeenCalled();
+    expect(prisma.workload.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.task.findMany).not.toHaveBeenCalled();
+    expect(prisma.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'in_progress',
+          version: { increment: 1 },
+        }),
+      }),
+    );
+  });
+
+  it('persists open states without incrementing task versions', async () => {
+    const prisma = makePrisma();
+    prisma.task.findMany.mockResolvedValue([{ id: 10n }, { id: 11n }]);
+    prisma.task.update.mockResolvedValue(taskRow());
+    const service = makeService(prisma);
+
+    const result = await service.updateOpenStates(
+      1n,
+      { states: [{ id: '10', open: false }, { id: '11', open: true }] },
+      admin,
+    );
+
+    expect(result.updated).toEqual([{ id: '10', open: false }, { id: '11', open: true }]);
+    expect(prisma.task.update).toHaveBeenCalledWith({
+      where: { id: 10n },
+      data: { open: false },
+    });
+    expect(prisma.task.update).toHaveBeenCalledWith({
+      where: { id: 11n },
+      data: { open: true },
+    });
+    expect(prisma.task.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates position in one task update and recalculates summaries only when parent changes', async () => {
+    const prisma = makePrisma();
+    const before = taskRow({ id: 10n, parentId: null, version: 1 });
+    const newParent = { projectId: 1n, parentId: null };
+    const after = taskRow({ id: 10n, parentId: 20n, version: 2 });
+    prisma.task.findUnique
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(newParent);
+    prisma.task.findFirst.mockResolvedValue(null);
+    prisma.task.update.mockResolvedValue(after);
+    prisma.task.findMany.mockResolvedValue([after]);
+    const service = makeService(prisma);
+
+    const result = await service.updatePosition(
+      10n,
+      { parentId: '20', expectedVersion: 1 },
+      admin,
+    );
+
+    expect(result.parentId).toBe('20');
+    expect(prisma.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10n, version: 1 },
+        data: expect.objectContaining({
+          parentId: 20n,
+          version: { increment: 1 },
+        }),
+      }),
+    );
+    expect(prisma.task.findMany).toHaveBeenCalled();
+  });
 });
