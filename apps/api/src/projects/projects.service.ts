@@ -1,9 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateProjectDto,
   UpdateProjectDto,
   ProjectResponse,
+  ProjectSettingsResponse,
+  TIME_GRANULARITIES,
+  TimeGranularity,
+  UpdateProjectSettingsDto,
 } from '@project-workgroup/shared';
 import { toPrisma, toWire } from './status.mapper';
 
@@ -90,5 +94,59 @@ export class ProjectsService {
 
   async remove(id: bigint): Promise<void> {
     await this.prisma.project.delete({ where: { id } });
+  }
+
+  private toSettingsResponse(s: {
+    projectId: bigint;
+    timeGranularity: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }): ProjectSettingsResponse {
+    return {
+      projectId: s.projectId.toString(),
+      timeGranularity: (s.timeGranularity as TimeGranularity) ?? 'hours',
+      createdAt: s.createdAt.toISOString(),
+      updatedAt: s.updatedAt.toISOString(),
+    };
+  }
+
+  async getSettings(projectId: bigint): Promise<ProjectSettingsResponse> {
+    const existing = await this.prisma.projectSettings.findUnique({
+      where: { projectId },
+    });
+    if (existing) return this.toSettingsResponse(existing);
+
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('project not found');
+    const created = await this.prisma.projectSettings.create({
+      data: { projectId, timeGranularity: 'hours' },
+    });
+    return this.toSettingsResponse(created);
+  }
+
+  async updateSettings(
+    projectId: bigint,
+    dto: UpdateProjectSettingsDto,
+  ): Promise<ProjectSettingsResponse> {
+    if (
+      dto.timeGranularity !== undefined &&
+      !TIME_GRANULARITIES.includes(dto.timeGranularity)
+    ) {
+      throw new BadRequestException('invalid timeGranularity');
+    }
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('project not found');
+
+    const updated = await this.prisma.projectSettings.upsert({
+      where: { projectId },
+      create: {
+        projectId,
+        timeGranularity: dto.timeGranularity ?? 'hours',
+      },
+      update: {
+        ...(dto.timeGranularity !== undefined && { timeGranularity: dto.timeGranularity }),
+      },
+    });
+    return this.toSettingsResponse(updated);
   }
 }

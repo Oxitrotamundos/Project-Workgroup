@@ -12,6 +12,7 @@ import { Prisma } from '../generated/prisma/client';
 import { MetricsService } from '../observability/metrics.service';
 import {
   ApplyPropagationDto,
+  BulkTaskOpenStateConflict,
   BulkTaskOpenStateDto,
   BulkTaskOpenStateResponse,
   BulkTaskUpdateDto,
@@ -1094,21 +1095,54 @@ export class TasksService {
     const ids = dto.states.map((s) => this.parseBigInt(s.id, 'id'));
     const owned = await this.prisma.task.findMany({
       where: { id: { in: ids }, projectId },
-      select: { id: true },
+      select: { id: true, version: true },
     });
     if (owned.length !== ids.length) {
       throw new BadRequestException(
         'one or more tasks do not belong to this project',
       );
     }
+    const versionById = new Map(
+      owned.map((t) => [t.id.toString(), t.version] as const),
+    );
+
+    const updated: Array<{ id: string; open: boolean; version: number }> = [];
+    const conflicts: BulkTaskOpenStateConflict[] = [];
 
     await this.prisma.$transaction(
       async (tx) => {
         for (const state of dto.states) {
-          await tx.task.update({
-            where: { id: this.parseBigInt(state.id, 'id') },
-            data: { open: state.open },
-          });
+          const taskId = this.parseBigInt(state.id, 'id');
+          if (state.expectedVersion !== undefined) {
+            const res = await tx.task.updateMany({
+              where: { id: taskId, version: state.expectedVersion },
+              data: { open: state.open, version: { increment: 1 } },
+            });
+            if (res.count === 0) {
+              conflicts.push({
+                id: state.id,
+                currentVersion: versionById.get(state.id) ?? 0,
+                expectedVersion: state.expectedVersion,
+              });
+              continue;
+            }
+            updated.push({
+              id: state.id,
+              open: state.open,
+              version: state.expectedVersion + 1,
+            });
+          } else {
+            const res = await tx.task.update({
+              where: { id: taskId },
+              data: { open: state.open, version: { increment: 1 } },
+              select: { version: true },
+            });
+            updated.push({
+              id: state.id,
+              open: state.open,
+              version: res.version,
+            });
+          }
         }
       },
       {
@@ -1119,16 +1153,15 @@ export class TasksService {
 
     this.logOp(
       'openStates',
-      { projectId: projectId.toString(), count: dto.states.length },
+      {
+        projectId: projectId.toString(),
+        count: dto.states.length,
+        conflicts: conflicts.length,
+      },
       Date.now() - startedAt,
     );
 
-    return {
-      updated: dto.states.map((state) => ({
-        id: state.id,
-        open: state.open,
-      })),
-    };
+    return conflicts.length > 0 ? { updated, conflicts } : { updated };
   }
 
   async remove(id: bigint, user: AuthUser): Promise<void> {

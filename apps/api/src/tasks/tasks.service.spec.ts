@@ -111,6 +111,7 @@ describe('TasksService', () => {
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
         delete: jest.fn(),
       },
       workload: {
@@ -358,10 +359,15 @@ describe('TasksService', () => {
     );
   });
 
-  it('persists open states without incrementing task versions', async () => {
+  it('persists open states and bumps version per task', async () => {
     const prisma = makePrisma();
-    prisma.task.findMany.mockResolvedValue([{ id: 10n }, { id: 11n }]);
-    prisma.task.update.mockResolvedValue(taskRow());
+    prisma.task.findMany.mockResolvedValue([
+      { id: 10n, version: 3 },
+      { id: 11n, version: 7 },
+    ]);
+    prisma.task.update
+      .mockResolvedValueOnce({ version: 4 })
+      .mockResolvedValueOnce({ version: 8 });
     const service = makeService(prisma);
 
     const result = await service.updateOpenStates(
@@ -370,16 +376,58 @@ describe('TasksService', () => {
       admin,
     );
 
-    expect(result.updated).toEqual([{ id: '10', open: false }, { id: '11', open: true }]);
+    expect(result.updated).toEqual([
+      { id: '10', open: false, version: 4 },
+      { id: '11', open: true, version: 8 },
+    ]);
+    expect(result.conflicts).toBeUndefined();
     expect(prisma.task.update).toHaveBeenCalledWith({
       where: { id: 10n },
-      data: { open: false },
+      data: { open: false, version: { increment: 1 } },
+      select: { version: true },
     });
     expect(prisma.task.update).toHaveBeenCalledWith({
       where: { id: 11n },
-      data: { open: true },
+      data: { open: true, version: { increment: 1 } },
+      select: { version: true },
     });
     expect(prisma.task.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports conflicts when expectedVersion does not match in open-states', async () => {
+    const prisma = makePrisma();
+    prisma.task.findMany.mockResolvedValue([
+      { id: 10n, version: 5 },
+      { id: 11n, version: 2 },
+    ]);
+    prisma.task.updateMany
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 });
+    const service = makeService(prisma);
+
+    const result = await service.updateOpenStates(
+      1n,
+      {
+        states: [
+          { id: '10', open: false, expectedVersion: 4 },
+          { id: '11', open: true, expectedVersion: 2 },
+        ],
+      },
+      admin,
+    );
+
+    expect(result.updated).toEqual([{ id: '11', open: true, version: 3 }]);
+    expect(result.conflicts).toEqual([
+      { id: '10', currentVersion: 5, expectedVersion: 4 },
+    ]);
+    expect(prisma.task.updateMany).toHaveBeenCalledWith({
+      where: { id: 10n, version: 4 },
+      data: { open: false, version: { increment: 1 } },
+    });
+    expect(prisma.task.updateMany).toHaveBeenCalledWith({
+      where: { id: 11n, version: 2 },
+      data: { open: true, version: { increment: 1 } },
+    });
   });
 
   it('updates position in one task update and recalculates summaries only when parent changes', async () => {

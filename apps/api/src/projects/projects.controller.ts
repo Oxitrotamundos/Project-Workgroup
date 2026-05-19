@@ -10,7 +10,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { CreateProjectDto, UpdateProjectDto } from '@project-workgroup/shared';
+import {
+  CreateProjectDto,
+  UpdateProjectDto,
+  UpdateProjectSettingsDto,
+} from '@project-workgroup/shared';
 import { AuthGuard, AuthUser } from '../auth/auth.guard';
 import { ProjectMembershipGuard } from '../auth/project-membership.guard';
 import { RequireProject } from '../auth/require-project.decorator';
@@ -54,5 +58,22 @@ export class ProjectsController {
   @RequireProject('id')
   async remove(@Param('id') id: string) {
     await this.projects.remove(BigInt(id));
+  }
+
+  @Get(':projectId/settings')
+  @UseGuards(ProjectMembershipGuard)
+  @RequireProject('projectId')
+  async getSettings(@Param('projectId') projectId: string) {
+    return this.projects.getSettings(BigInt(projectId));
+  }
+
+  @Patch(':projectId/settings')
+  @UseGuards(ProjectMembershipGuard)
+  @RequireProject('projectId')
+  async updateSettings(
+    @Param('projectId') projectId: string,
+    @Body() dto: UpdateProjectSettingsDto,
+  ) {
+    return this.projects.updateSettings(BigInt(projectId), dto);
   }
 }
