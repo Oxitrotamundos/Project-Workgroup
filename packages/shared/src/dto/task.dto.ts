@@ -89,6 +89,9 @@ export class UpdateTaskDto {
   @IsOptional() @IsIn(TASK_TYPES)
   type?: TaskType;
 
+  @IsOptional() @IsInt() @Min(0) @Max(100)
+  progress?: number;
+
   @IsOptional() @IsString() @MinLength(1)
   color?: string;
 
@@ -127,6 +130,39 @@ export class UpdateOrderDto {
 
   @IsOptional() @IsInt() @Min(1)
   expectedVersion?: number;
+}
+
+export class UpdateTaskPositionDto {
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  parentId?: string | null;
+
+  @IsOptional() @IsString()
+  afterTaskId?: string;
+
+  @IsOptional() @IsString()
+  beforeTaskId?: string;
+
+  @IsOptional() @IsInt() @Min(1)
+  expectedVersion?: number;
+}
+
+export class TaskOpenStateDto {
+  @IsString()
+  id!: string;
+
+  @IsBoolean()
+  open!: boolean;
+}
+
+export class BulkTaskOpenStateDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => TaskOpenStateDto)
+  states!: TaskOpenStateDto[];
 }
 
 export interface TaskResponse {
@@ -189,9 +225,17 @@ export interface SummaryPatch {
   version: number;
 }
 
+export interface TaskMutationResponse extends TaskResponse {
+  summariesPatched?: SummaryPatch[];
+}
+
 export interface BulkTaskUpdateResponse {
   tasks: TaskResponse[];
   summariesPatched: SummaryPatch[];
+}
+
+export interface BulkTaskOpenStateResponse {
+  updated: Array<{ id: string; open: boolean }>;
 }
 
 export interface PropagationChange {
