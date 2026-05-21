@@ -7,7 +7,9 @@ import type {
   GanttLinkResponse,
   UpdateTaskLinkData,
 } from '../types/domain';
-import type { UpdateTaskDto } from '@project-workgroup/shared';
+import type { SummaryPatch, UpdateTaskDto } from '@project-workgroup/shared';
+import { wouldCreateCycle, type CycleEdge } from '../utils/cycleDetector';
+import { mergeSummaryPatchIntoTask } from '../lib/summaryPatches';
 import type {
   GanttApi,
   GanttActionPayloadMap,
@@ -50,9 +52,23 @@ export type GanttErrorCallback = (err: { message: string; cause?: unknown }) => 
 export interface GanttDataChangePayload {
   updated: Task[];
   deleted: string[];
+  summariesPatched?: SummaryPatch[];
+  refresh?: boolean;
 }
 
 export type GanttDataChangeCallback = (payload: GanttDataChangePayload) => void;
+
+export interface GanttLinkChangePayload {
+  updated: TaskLink[];
+  deleted: string[];
+}
+
+export type GanttLinkChangeCallback = (payload: GanttLinkChangePayload) => void;
+
+type PendingQueuedAction = {
+  timer: ReturnType<typeof setTimeout>;
+  resolvers: Array<{ resolve: (value: unknown) => void; reject: (err: unknown) => void }>;
+};
 
 export class GanttDataProvider {
   private projectId: string;
@@ -63,12 +79,17 @@ export class GanttDataProvider {
   private linkCache: Map<string, TaskLink> = new Map();
   private onError: GanttErrorCallback | null = null;
   private onDataChange: GanttDataChangeCallback | null = null;
+  private onLinkChange: GanttLinkChangeCallback | null = null;
   private pendingUpdated: Map<string, Task> = new Map();
   private pendingDeleted: Set<string> = new Set();
+  private pendingRefresh = false;
+  private pendingOpenStates: Map<string, boolean> = new Map();
   private dataChangeDebounceMs = 200;
   private dataChangeTimer: ReturnType<typeof setTimeout> | null = null;
+  private openStateDebounceMs = 350;
+  private openStateTimer: ReturnType<typeof setTimeout> | null = null;
   private throttleMs = 150;
-  private throttleTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private pendingActions: Map<string, PendingQueuedAction> = new Map();
 
   constructor(projectId: string) {
     this.projectId = projectId;
@@ -80,6 +101,10 @@ export class GanttDataProvider {
 
   setOnDataChange(cb: GanttDataChangeCallback | null): void {
     this.onDataChange = cb;
+  }
+
+  setOnLinkChange(cb: GanttLinkChangeCallback | null): void {
+    this.onLinkChange = cb;
   }
 
   syncFromTasks(tasks: Task[]): void {
@@ -99,7 +124,9 @@ export class GanttDataProvider {
         cached.progress === fresh.progress &&
         cached.name === fresh.name &&
         cached.type === fresh.type &&
-        cached.parentId === fresh.parentId;
+        cached.parentId === fresh.parentId &&
+        cached.order === fresh.order &&
+        cached.open === fresh.open;
       if (sameShape) continue;
 
       this.taskCache.set(fresh.id, fresh);
@@ -131,16 +158,86 @@ export class GanttDataProvider {
     }
   }
 
-  private markTaskUpdated(task: Task): void {
+  syncFromData(tasks: Task[], links: TaskLink[]): GanttDataProviderData {
+    this.syncFromTasks(tasks);
+    this.syncFromLinks(links);
+    return this.toGanttData(tasks, links);
+  }
+
+  syncFromLinks(links: TaskLink[]): void {
+    const incomingIds = new Set<string>();
+    for (const link of links) {
+      incomingIds.add(link.id);
+      this.linkCache.set(link.id, link);
+    }
+    for (const cachedId of Array.from(this.linkCache.keys())) {
+      if (!cachedId.startsWith('temp://') && !incomingIds.has(cachedId)) {
+        this.linkCache.delete(cachedId);
+      }
+    }
+  }
+
+  private toGanttData(tasks: Task[], links: TaskLink[]): GanttDataProviderData {
+    const ganttTasks = tasks
+      .map((task) => this.toGanttTask(task, tasks))
+      .filter((t): t is GanttTask => t !== null);
+
+    const ganttLinks = links
+      .map((link) => this.toGanttLink(link))
+      .filter((l): l is GanttLinkData => l !== null);
+
+    return { tasks: ganttTasks, links: ganttLinks };
+  }
+
+  private toGanttLink(link: TaskLink): GanttLinkData | null {
+    const id = toGanttId(link.id);
+    const source = toGanttId(link.sourceTaskId);
+    const target = toGanttId(link.targetTaskId);
+    if (id === undefined || source === undefined || target === undefined) return null;
+    return { id, source, target, type: link.type };
+  }
+
+  private markTaskUpdated(task: Task, refresh = false): void {
     this.pendingDeleted.delete(task.id);
     this.pendingUpdated.set(task.id, task);
+    this.pendingRefresh = this.pendingRefresh || refresh;
     this.scheduleDataChange();
   }
 
-  private markTaskDeleted(taskId: string): void {
+  private markTaskDeleted(taskId: string, refresh = false): void {
     this.pendingUpdated.delete(taskId);
     this.pendingDeleted.add(taskId);
+    this.pendingRefresh = this.pendingRefresh || refresh;
     this.scheduleDataChange();
+  }
+
+  private applySummaryPatches(patches: SummaryPatch[] | undefined): void {
+    if (!patches?.length) return;
+    for (const patch of patches) {
+      const cached = this.taskCache.get(patch.id);
+      if (!cached) continue;
+      const updated = mergeSummaryPatchIntoTask(cached, patch);
+      this.taskCache.set(updated.id, updated);
+      this.markTaskUpdated(updated);
+      const ganttTask = this.toGanttTask(updated);
+      if (ganttTask && this._ganttApi && ganttTask.id !== undefined) {
+        this._ganttApi.exec('update-task', {
+          id: ganttTask.id,
+          task: ganttTask,
+          _silent: true,
+        });
+      }
+    }
+  }
+
+  private markLinkUpdated(link: TaskLink): void {
+    this.linkCache.set(link.id, link);
+    this.onLinkChange?.({ updated: [link], deleted: [] });
+  }
+
+  private markLinkDeleted(linkId: string): void {
+    this.linkCache.delete(linkId);
+    this.onLinkChange?.({ updated: [], deleted: [linkId] });
   }
 
   private scheduleDataChange(): void {
@@ -152,9 +249,11 @@ export class GanttDataProvider {
       const payload: GanttDataChangePayload = {
         updated: Array.from(this.pendingUpdated.values()),
         deleted: Array.from(this.pendingDeleted),
+        refresh: this.pendingRefresh,
       };
       this.pendingUpdated.clear();
       this.pendingDeleted.clear();
+      this.pendingRefresh = false;
       this.onDataChange?.(payload);
     }, this.dataChangeDebounceMs);
   }
@@ -199,8 +298,8 @@ export class GanttDataProvider {
 
   private isUiOnlyEvent(data: unknown): boolean {
     if (!data || typeof data !== 'object') return false;
-    const d = data as { inProgress?: boolean; _rollback?: boolean; _silent?: boolean };
-    return Boolean(d.inProgress || d._rollback || d._silent);
+    const d = data as { inProgress?: boolean; _rollback?: boolean; _silent?: boolean; _addTaskSync?: boolean };
+    return Boolean(d.inProgress || d._rollback || d._silent || d._addTaskSync);
   }
 
   async exec(action: string, data: unknown): Promise<unknown> {
@@ -219,21 +318,7 @@ export class GanttDataProvider {
     tasks.forEach((task: Task) => this.taskCache.set(task.id, task));
     links.forEach((link: TaskLink) => this.linkCache.set(link.id, link));
 
-    const ganttTasks = tasks
-      .map((task) => this.toGanttTask(task, tasks))
-      .filter((t): t is GanttTask => t !== null);
-
-    const ganttLinks: GanttLinkData[] = links
-      .map((link) => {
-        const id = toGanttId(link.id);
-        const source = toGanttId(link.sourceTaskId);
-        const target = toGanttId(link.targetTaskId);
-        if (id === undefined || source === undefined || target === undefined) return null;
-        return { id, source, target, type: link.type };
-      })
-      .filter((l): l is GanttLinkData => l !== null);
-
-    return { tasks: ganttTasks, links: ganttLinks };
+    return this.toGanttData(tasks, links);
   }
 
   private toGanttTask(task: Task, allTasks?: Task[]): GanttTask | null {
@@ -266,12 +351,14 @@ export class GanttDataProvider {
       start: startDate,
       end: endDate,
       duration: durationInDays,
-      progress: task.progress || 0,
+      progress: typeof task.progress === 'number' ? task.progress : 0,
       type: task.type || 'task',
       parent: toGanttId(task.parentId) ?? 0,
       estimatedHours: Number.isFinite(task.estimatedHours) ? task.estimatedHours : undefined,
       hoursPerDay: Number.isFinite(task.hoursPerDay) ? task.hoursPerDay : undefined,
-    };
+      status: task.status,
+      priority: task.priority,
+    } as GanttTask & { status: string; priority: string };
 
     if (allTasks) {
       const hasChildren = allTasks.some((t) => t.parentId === task.id);
@@ -279,6 +366,40 @@ export class GanttDataProvider {
     }
 
     return ganttTask;
+  }
+
+  private enqueueAction(
+    key: string,
+    run: () => Promise<unknown>,
+  ): Promise<unknown> {
+    const existing = this.pendingActions.get(key);
+    if (existing) {
+      clearTimeout(existing.timer);
+      existing.resolvers.forEach(({ resolve }) => resolve({ success: true, superseded: true }));
+      this.pendingActions.delete(key);
+    }
+
+    return new Promise((resolve, reject) => {
+      const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const timer = setTimeout(async () => {
+        this.pendingActions.delete(key);
+        try {
+          const result = await run();
+          const durationMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt;
+          this.emitMetric('persist-action', { key, durationMs: Math.round(durationMs) });
+          resolve(result);
+        } catch (err) {
+          console.error('GanttDataProvider: error procesando acción', key, err);
+          reject(err);
+        }
+      }, this.throttleMs);
+      this.pendingActions.set(key, { timer, resolvers: [{ resolve, reject }] });
+    });
+  }
+
+  private emitMetric(name: string, detail: Record<string, unknown>): void {
+    if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+    window.dispatchEvent(new CustomEvent(`pwg:gantt:${name}`, { detail }));
   }
 
   async send(action: string, data: unknown): Promise<unknown> {
@@ -290,24 +411,11 @@ export class GanttDataProvider {
       const taskId = this.resolveTaskId((data as { id?: GanttId }).id);
       if (taskId) {
         const key = `${action}:${taskId}`;
-        const existing = this.throttleTimers.get(key);
-        if (existing) clearTimeout(existing);
-        return new Promise((resolve, reject) => {
-          const timer = setTimeout(async () => {
-            this.throttleTimers.delete(key);
-            try {
-              const result =
-                action === 'update-task'
-                  ? await this.handleUpdateTask(data as GanttActionPayloadMap['update-task'])
-                  : await this.handleMoveTask(data as GanttActionPayloadMap['move-task']);
-              resolve(result);
-            } catch (err) {
-              console.error('GanttDataProvider: error procesando acción', action, err);
-              reject(err);
-            }
-          }, this.throttleMs);
-          this.throttleTimers.set(key, timer);
-        });
+        return this.enqueueAction(key, () =>
+          action === 'update-task'
+            ? this.handleUpdateTask(data as GanttActionPayloadMap['update-task'])
+            : this.handleMoveTask(data as GanttActionPayloadMap['move-task']),
+        );
       }
     }
 
@@ -336,7 +444,7 @@ export class GanttDataProvider {
     }
   }
 
-  private applyEntityUpdate(taskId: string, fresh: Task, descendants?: Task[]): void {
+  private applyEntityUpdate(taskId: string, fresh: Task, summariesPatched?: SummaryPatch[]): void {
     this.taskCache.set(taskId, fresh);
     this.markTaskUpdated(fresh);
     const ganttTask = this.toGanttTask(fresh);
@@ -347,21 +455,8 @@ export class GanttDataProvider {
         _silent: true,
       });
     }
-    descendants?.forEach((d) => {
-      this.taskCache.set(d.id, d);
-      this.markTaskUpdated(d);
-      const gd = this.toGanttTask(d);
-      if (gd && this._ganttApi && gd.id !== undefined) {
-        this._ganttApi.exec('update-task', {
-          id: gd.id,
-          task: gd,
-          _silent: true,
-        });
-      }
-    });
+    this.applySummaryPatches(summariesPatched);
   }
-
-  // Handlers
 
   private async handleAddTask(data: GanttActionPayloadMap['add-task']): Promise<unknown> {
     const { taskManager } = await import('./taskManager');
@@ -401,13 +496,13 @@ export class GanttDataProvider {
     const created = await TaskService.getTask(taskId);
     if (created) {
       this.taskCache.set(taskId, created);
-      this.markTaskUpdated(created);
+      this.markTaskUpdated(created, true);
       const ganttTask = this.toGanttTask(created);
       if (ganttTask && this._ganttApi && data.id !== undefined && ganttTask.id !== undefined) {
         this._ganttApi.exec('update-task', {
           id: data.id,
           task: { ...ganttTask, id: ganttTask.id },
-          _silent: true,
+          _addTaskSync: true,
         });
       }
     }
@@ -452,25 +547,19 @@ export class GanttDataProvider {
       updateData.type = taskData.type;
     }
 
+    if (!isSummary && taskData.progress !== undefined && Number.isFinite(taskData.progress)) {
+      const nextProgress = Math.max(0, Math.min(100, Math.round(Number(taskData.progress))));
+      if (!cachedForVersion || cachedForVersion.progress !== nextProgress) {
+        updateData.progress = nextProgress;
+      }
+    }
+
     const hasMeaningfulChange = Object.keys(updateData).length > 0;
     if (hasMeaningfulChange && cachedForVersion?.version !== undefined) {
       updateData.expectedVersion = cachedForVersion.version;
     }
 
-    const calls: Array<Promise<Task>> = [];
-    if (hasMeaningfulChange) {
-      calls.push(TaskService.updateTask(taskId, updateData));
-    }
-
-    if (!isSummary && taskData.progress !== undefined && Number.isFinite(taskData.progress)) {
-      const cached = this.taskCache.get(taskId);
-      const nextProgress = Math.max(0, Math.min(100, Math.round(Number(taskData.progress))));
-      if (!cached || cached.progress !== nextProgress) {
-        calls.push(TaskService.updateTaskProgress(taskId, nextProgress, cached?.version));
-      }
-    }
-
-    if (calls.length === 0) return { success: true };
+    if (!hasMeaningfulChange) return { success: true };
 
     const cached = this.taskCache.get(taskId);
     const ganttPrev = this._ganttApi?.getTask?.(taskId);
@@ -483,9 +572,8 @@ export class GanttDataProvider {
     };
 
     try {
-      const results = await Promise.all(calls);
-      const fresh = results[results.length - 1];
-      this.applyEntityUpdate(taskId, fresh);
+      const result = await TaskService.updateTaskWithMeta(taskId, updateData);
+      this.applyEntityUpdate(taskId, result.task, result.summariesPatched);
       return { success: true };
     } catch (error) {
       console.error('GanttDataProvider: error en update-task, revirtiendo UI', error);
@@ -506,7 +594,9 @@ export class GanttDataProvider {
           console.error('GanttDataProvider: error en rollback visual', rollbackError);
         }
       }
-      this.onError?.({ message: 'No se pudo guardar el cambio. Se revirtió.', cause: error });
+      const message = 'No se pudo guardar el cambio. Se revirtió.';
+      this.emitMetric('rollback', { action: 'update-task', taskId, message });
+      this.onError?.({ message, cause: error });
       throw error;
     }
   }
@@ -517,7 +607,7 @@ export class GanttDataProvider {
 
     await TaskService.deleteTask(taskId);
     this.taskCache.delete(taskId);
-    this.markTaskDeleted(taskId);
+    this.markTaskDeleted(taskId, true);
     return { success: true };
   }
 
@@ -539,24 +629,32 @@ export class GanttDataProvider {
 
     try {
       const cachedMoved = this.taskCache.get(movedTaskId);
-      if (newParentId !== undefined) {
-        const parentUpdate: UpdateTaskDto = { parentId: newParentId ?? null };
-        if (cachedMoved?.version !== undefined) parentUpdate.expectedVersion = cachedMoved.version;
-        await TaskService.updateTask(movedTaskId, parentUpdate);
+      const mode = (data.mode as 'before' | 'after' | 'child' | undefined) ?? 'after';
+      const positionData: {
+        parentId?: string | null;
+        afterTaskId?: string;
+        beforeTaskId?: string;
+        expectedVersion?: number;
+      } = {
+        parentId: newParentId,
+      };
+      if (targetTaskId) {
+        if (mode === 'before') positionData.beforeTaskId = targetTaskId;
+        else positionData.afterTaskId = targetTaskId;
       }
-      const updated = await TaskService.updateTaskOrder(
-        this.projectId,
+      if (cachedMoved?.version !== undefined) positionData.expectedVersion = cachedMoved.version;
+
+      const result = await TaskService.updateTaskPosition(
         movedTaskId,
-        targetTaskId,
-        (data.mode as 'before' | 'after') || 'after',
-        this.taskCache.get(movedTaskId)?.version,
+        positionData,
       );
-      const descendants = await TaskService.getDescendants(this.projectId, movedTaskId);
-      this.applyEntityUpdate(movedTaskId, updated, descendants);
+      this.applyEntityUpdate(movedTaskId, result.task, result.summariesPatched);
       return { success: true };
     } catch (error) {
       console.error('GanttDataProvider: error al mover tarea', error);
-      this.onError?.({ message: 'No se pudo mover la tarea. Reintentando...', cause: error });
+      const message = 'No se pudo mover la tarea. Se revirtió.';
+      this.emitMetric('rollback', { action: 'move-task', taskId: movedTaskId, message });
+      this.onError?.({ message, cause: error });
       throw error;
     }
   }
@@ -575,27 +673,28 @@ export class GanttDataProvider {
     const sourceTaskId = this.getTaskIdFromGanttId(sourceId) ?? String(sourceId);
     const targetTaskId = this.getTaskIdFromGanttId(targetId) ?? String(targetId);
 
-    const validation = await TaskLinkService.validateLinkCreation(
-      sourceTaskId,
-      targetTaskId,
-      this.projectId,
-    );
-    if (!validation.valid) return { success: false, error: validation.error };
+    if (sourceTaskId === targetTaskId) {
+      return { success: false, error: 'No se puede crear un enlace de una tarea a sí misma' };
+    }
+    const edges: CycleEdge[] = Array.from(this.linkCache.values()).map((link) => ({
+      sourceTaskId: link.sourceTaskId,
+      targetTaskId: link.targetTaskId,
+    }));
+    if (wouldCreateCycle(edges, sourceTaskId, targetTaskId)) {
+      return { success: false, error: 'Crear este enlace generaría una dependencia circular' };
+    }
 
     try {
-      const linkId = await TaskLinkService.createLink({
+      const newLink = await TaskLinkService.createLinkWithResponse({
         projectId: this.projectId,
         sourceTaskId,
         targetTaskId,
         type: linkType,
       });
-      const newLink = await TaskLinkService.getLink(linkId);
-      if (newLink) {
-        this.linkCache.set(linkId, newLink);
-        if (tempId !== undefined) this.linkCache.set(String(tempId), newLink);
-      }
+      this.markLinkUpdated(newLink);
+      if (tempId !== undefined) this.linkCache.set(String(tempId), newLink);
       if (tempId !== undefined && this._ganttApi) {
-        const linkGanttId = toGanttId(linkId);
+        const linkGanttId = toGanttId(newLink.id);
         const sourceGanttId = toGanttId(sourceTaskId);
         const targetGanttId = toGanttId(targetTaskId);
         if (
@@ -610,7 +709,7 @@ export class GanttDataProvider {
           });
         }
       }
-      return { success: true, id: linkId };
+      return { success: true, id: newLink.id };
     } catch (error) {
       console.error('GanttDataProvider: error creando enlace', error);
       return {
@@ -629,9 +728,8 @@ export class GanttDataProvider {
     if (Object.keys(updateData).length === 0) return { success: true, id: linkId };
 
     try {
-      await TaskLinkService.updateLink(linkId, updateData);
-      const updatedLink = await TaskLinkService.getLink(linkId);
-      if (updatedLink) this.linkCache.set(linkId, updatedLink);
+      const updatedLink = await TaskLinkService.updateLink(linkId, updateData);
+      this.markLinkUpdated(updatedLink);
       return { success: true, id: linkId };
     } catch (error) {
       console.error('GanttDataProvider: error actualizando enlace', error);
@@ -648,7 +746,7 @@ export class GanttDataProvider {
 
     try {
       await TaskLinkService.deleteLink(linkId);
-      this.linkCache.delete(linkId);
+      this.markLinkDeleted(linkId);
       return { success: true, id: linkId };
     } catch (error) {
       console.error('GanttDataProvider: error eliminando enlace', error);
@@ -664,12 +762,60 @@ export class GanttDataProvider {
     const cached = this.taskCache.get(taskId);
     if (cached?.open === args.isOpen) return;
 
-    if (cached) cached.open = args.isOpen;
+    if (cached) {
+      const updated = { ...cached, open: args.isOpen };
+      this.taskCache.set(taskId, updated);
+      this.markTaskUpdated(updated);
+    }
+    this.pendingOpenStates.set(taskId, args.isOpen);
+    this.scheduleOpenStateFlush();
+  }
+
+  private scheduleOpenStateFlush(): void {
+    if (this.openStateTimer !== null) clearTimeout(this.openStateTimer);
+    this.openStateTimer = setTimeout(() => {
+      this.openStateTimer = null;
+      void this.flushOpenStates();
+    }, this.openStateDebounceMs);
+  }
+
+  private async flushOpenStates(): Promise<void> {
+    if (this.pendingOpenStates.size === 0) return;
+    const states = Array.from(this.pendingOpenStates, ([id, open]) => {
+      const cached = this.taskCache.get(id);
+      return cached?.version !== undefined
+        ? { id, open, expectedVersion: cached.version }
+        : { id, open };
+    });
+    this.pendingOpenStates.clear();
     try {
-      await TaskService.updateTaskExpandState(taskId, args.isOpen);
+      const result = await TaskService.updateOpenStates(this.projectId, states);
+      for (const item of result.updated) {
+        const cached = this.taskCache.get(item.id);
+        if (!cached) continue;
+        const next: Task = { ...cached, open: item.open, version: item.version };
+        this.taskCache.set(item.id, next);
+        this.markTaskUpdated(next);
+      }
+      if (result.conflicts && result.conflicts.length > 0) {
+        this.emitMetric('rollback', {
+          action: 'open-states',
+          conflicts: result.conflicts.length,
+        });
+        this.onError?.({
+          message: 'Algunos cambios de expandir/colapsar no se guardaron por conflicto.',
+          cause: result.conflicts,
+        });
+      }
+      this.emitMetric('open-states', {
+        count: states.length,
+        updated: result.updated.length,
+        conflicts: result.conflicts?.length ?? 0,
+      });
     } catch (error) {
-      if (cached) cached.open = !args.isOpen;
       console.error('GanttDataProvider: error sincronizando expand/collapse', error);
+      this.emitMetric('rollback', { action: 'open-states', message: 'network' });
+      this.onError?.({ message: 'No se pudo guardar el estado expandido.', cause: error });
     }
   }
 
@@ -706,13 +852,22 @@ export class GanttDataProvider {
     this.tempIdMapping.clear();
     this.taskCache.clear();
     this.linkCache.clear();
-    this.throttleTimers.forEach((t) => clearTimeout(t));
-    this.throttleTimers.clear();
+    this.pendingActions.forEach((entry) => {
+      clearTimeout(entry.timer);
+      entry.resolvers.forEach(({ resolve }) => resolve({ success: true, superseded: true }));
+    });
+    this.pendingActions.clear();
     if (this.dataChangeTimer !== null) {
       clearTimeout(this.dataChangeTimer);
       this.dataChangeTimer = null;
     }
+    if (this.openStateTimer !== null) {
+      clearTimeout(this.openStateTimer);
+      this.openStateTimer = null;
+      void this.flushOpenStates();
+    }
     this.onDataChange = null;
+    this.onLinkChange = null;
     this._ganttApi = null;
   }
 }

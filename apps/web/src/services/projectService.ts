@@ -6,6 +6,10 @@ import type {
   ProjectFilters,
   PaginatedResponse
 } from '../types/domain';
+import type {
+  ProjectSettingsResponse,
+  UpdateProjectSettingsDto,
+} from '@project-workgroup/shared';
 
 const toDomain = (r: any): Project => ({
   id: r.id,
@@ -90,6 +94,17 @@ export class ProjectService {
 
   static async removeMember(projectId: string, userId: string): Promise<void> {
     await apiClient.delete(`/v1/projects/${projectId}/members/${userId}`);
+  }
+
+  static async getSettings(projectId: string): Promise<ProjectSettingsResponse> {
+    return apiClient.get<ProjectSettingsResponse>(`/v1/projects/${projectId}/settings`);
+  }
+
+  static async updateSettings(
+    projectId: string,
+    dto: UpdateProjectSettingsDto,
+  ): Promise<ProjectSettingsResponse> {
+    return apiClient.patch<ProjectSettingsResponse>(`/v1/projects/${projectId}/settings`, dto);
   }
 
   static async hasAccess(projectId: string, _userId: string): Promise<boolean> {

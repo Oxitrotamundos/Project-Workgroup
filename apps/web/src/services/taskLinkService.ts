@@ -21,6 +21,10 @@ const toDomain = (r: any): TaskLink => ({
 export class TaskLinkService {
 
   static async createLink(data: CreateTaskLinkData): Promise<string> {
+    return (await this.createLinkWithResponse(data)).id;
+  }
+
+  static async createLinkWithResponse(data: CreateTaskLinkData): Promise<TaskLink> {
     if (data.sourceTaskId === data.targetTaskId) {
       throw new Error('No se puede crear un enlace de una tarea a sí misma');
     }
@@ -29,7 +33,7 @@ export class TaskLinkService {
       targetTaskId: data.targetTaskId,
       type: data.type,
     });
-    return result.id;
+    return toDomain(result);
   }
 
   static async getLink(id: string): Promise<TaskLink | null> {
@@ -70,8 +74,9 @@ export class TaskLinkService {
     }
   }
 
-  static async updateLink(id: string, data: UpdateTaskLinkData): Promise<void> {
-    await apiClient.patch(`/v1/task-links/${id}`, data);
+  static async updateLink(id: string, data: UpdateTaskLinkData): Promise<TaskLink> {
+    const result = await apiClient.patch<any>(`/v1/task-links/${id}`, data);
+    return toDomain(result);
   }
 
   static async deleteLink(id: string): Promise<void> {
