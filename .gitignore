@@ -40,3 +40,4 @@ config/service-account-key.json
 apps/api/.env
 apps/api/.env.local
 /docs/superpowers
+docs/pr/2026-05-21-v1.0.0-epic-db-refactor.md
