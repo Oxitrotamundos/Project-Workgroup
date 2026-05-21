@@ -14,9 +14,15 @@ import type { NewTaskInput } from '../components/TasksView/NewTaskRow';
 import { ProjectStateManager } from '../components/ProjectLoadingStates';
 import { taskManager } from '../services/taskManager';
 import { TaskService } from '../services/taskService';
-import type { GanttDataChangePayload } from '../services/ganttDataProvider';
+import type { GanttDataChangePayload, GanttLinkChangePayload } from '../services/ganttDataProvider';
 import { taskKeys } from '../hooks/queries/taskQueryKeys';
-import type { Task, TaskPriority, TaskStatus } from '../types/domain';
+import { useProjectTaskLinksQuery } from '../hooks/queries/useTaskQueries';
+import { useProjectSettingsQuery } from '../hooks/queries/useProjectSettings';
+import { ProjectSettingsProvider } from '../contexts/ProjectSettingsContext';
+import { applySummaryPatches } from '../lib/summaryPatches';
+import { calendarService } from '../services/calendarService';
+import type { WorkingCalendarResponse } from '@project-workgroup/shared';
+import type { Task, TaskLink, TaskPriority, TaskStatus, TaskType } from '../types/domain';
 
 const ProjectView: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -28,7 +34,24 @@ const ProjectView: React.FC = () => {
 
   const { project, loading, error, refetch } = useProject(projectId);
   const { tasks, loading: tasksLoading, error: tasksError, refetch: refetchTasks } = useTasks(projectId);
+  const { data: taskLinks = [] } = useProjectTaskLinksQuery(user ? projectId : undefined);
+  const { data: projectSettings } = useProjectSettingsQuery(user ? projectId : undefined);
   const { members, loadMembers } = useMembers(projectId ?? null);
+  const [calendar, setCalendar] = React.useState<WorkingCalendarResponse | null>(null);
+
+  React.useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    calendarService
+      .getForProject(projectId)
+      .then((cal) => {
+        if (!cancelled) setCalendar(cal);
+      })
+      .catch((e) => console.error('ProjectView: error cargando calendario', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const applyTasksPayload = React.useCallback(
     (payload: GanttDataChangePayload) => {
@@ -42,9 +65,34 @@ const ProjectView: React.FC = () => {
           if (idx === -1) next.push(fresh);
           else next[idx] = fresh;
         }
+        next = applySummaryPatches(next, payload.summariesPatched) ?? next;
         if (payload.deleted.length > 0) {
           const deletedSet = new Set(payload.deleted);
           next = next.filter((t) => !deletedSet.has(t.id));
+        }
+        return next;
+      });
+      if (payload.refresh) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+    },
+    [projectId, queryClient],
+  );
+
+  const applyLinksPayload = React.useCallback(
+    (payload: GanttLinkChangePayload) => {
+      if (!projectId) return;
+      queryClient.setQueryData<TaskLink[]>(taskKeys.linksByProject(projectId), (prev) => {
+        if (!prev && payload.updated.length === 0) return prev;
+        let next = prev ? prev.slice() : [];
+        for (const fresh of payload.updated) {
+          const idx = next.findIndex((link) => link.id === fresh.id);
+          if (idx === -1) next.push(fresh);
+          else next[idx] = fresh;
+        }
+        if (payload.deleted.length > 0) {
+          const deleted = new Set(payload.deleted);
+          next = next.filter((link) => !deleted.has(link.id));
         }
         return next;
       });
@@ -59,7 +107,7 @@ const ProjectView: React.FC = () => {
   }, [projectId, loadMembers]);
 
   const handleOpenCalendar = React.useCallback(() => {
-    if (projectId) navigate(`/project/${projectId}/settings/calendar`);
+    if (projectId) navigate(`/project/${projectId}/settings`);
   }, [projectId, navigate]);
 
   const tasksCount = tasks.length;
@@ -74,10 +122,10 @@ const ProjectView: React.FC = () => {
           className="hidden md:block"
           style={{ width: 1, height: 18, background: 'var(--line-2)' }}
         />
-        <ProjectActions onOpenCalendar={handleOpenCalendar} />
+        <ProjectActions onOpenCalendar={handleOpenCalendar} calendar={calendar} />
       </div>
     );
-  }, [project, tasksCount, handleOpenCalendar]);
+  }, [project, tasksCount, handleOpenCalendar, calendar]);
 
   const crumbs = React.useMemo(
     () =>
@@ -144,8 +192,11 @@ const ProjectView: React.FC = () => {
     async (
       taskId: string,
       patch: {
+        name?: string;
+        description?: string;
         status?: TaskStatus;
         priority?: TaskPriority;
+        type?: TaskType;
         estimatedHours?: number;
         progress?: number;
         startDate?: string;
@@ -153,32 +204,24 @@ const ProjectView: React.FC = () => {
       },
       expectedVersion?: number,
     ) => {
-      const hasGeneralPatch =
-        patch.status !== undefined ||
-        patch.priority !== undefined ||
-        patch.estimatedHours !== undefined ||
-        patch.startDate !== undefined ||
-        patch.endDate !== undefined;
-      let latest: Task | undefined;
       try {
-        if (hasGeneralPatch) {
-          latest = await TaskService.updateTask(taskId, {
-            ...(patch.status !== undefined && { status: patch.status }),
-            ...(patch.priority !== undefined && { priority: patch.priority }),
-            ...(patch.estimatedHours !== undefined && { estimatedHours: String(patch.estimatedHours) }),
-            ...(patch.startDate !== undefined && { startDate: patch.startDate }),
-            ...(patch.endDate !== undefined && { endDate: patch.endDate }),
-            ...(expectedVersion !== undefined && { expectedVersion }),
-          });
-        }
-        if (patch.progress !== undefined) {
-          latest = await TaskService.updateTaskProgress(
-            taskId,
-            patch.progress,
-            hasGeneralPatch ? undefined : expectedVersion,
-          );
-        }
-        if (latest) applyTasksPayload({ updated: [latest], deleted: [] });
+        const result = await TaskService.updateTaskWithMeta(taskId, {
+          ...(patch.name !== undefined && { name: patch.name }),
+          ...(patch.description !== undefined && { description: patch.description }),
+          ...(patch.status !== undefined && { status: patch.status }),
+          ...(patch.priority !== undefined && { priority: patch.priority }),
+          ...(patch.type !== undefined && { type: patch.type }),
+          ...(patch.estimatedHours !== undefined && { estimatedHours: String(patch.estimatedHours) }),
+          ...(patch.startDate !== undefined && { startDate: patch.startDate }),
+          ...(patch.endDate !== undefined && { endDate: patch.endDate }),
+          ...(patch.progress !== undefined && { progress: patch.progress }),
+          ...(expectedVersion !== undefined && { expectedVersion }),
+        });
+        applyTasksPayload({
+          updated: [result.task],
+          deleted: [],
+          summariesPatched: result.summariesPatched,
+        });
       } catch (e) {
         await refetchTasks();
         throw e;
@@ -194,30 +237,35 @@ const ProjectView: React.FC = () => {
       project={project}
       onRetry={refetch}
     >
-      <div className="flex-1 p-4 sm:p-6">
-        <div
-          className="h-[calc(100vh-130px)] overflow-hidden"
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--line)',
-            borderRadius: 'var(--r-xl)',
-            boxShadow: 'var(--sh-1)',
-          }}
-        >
-          <TasksView
-            tasks={tasks}
-            projectId={projectId || ''}
-            loading={tasksLoading}
-            error={tasksError}
-            apiRef={ganttApiRef}
-            onAddTask={handleAddTask}
-            onCreateTask={handleCreateTaskInline}
-            onUpdateTask={handleUpdateTaskInline}
-            onTasksChanged={applyTasksPayload}
-            assignees={assigneeOptions}
-          />
+      <ProjectSettingsProvider settings={projectSettings ?? null}>
+        <div className="flex-1 p-4 sm:p-6">
+          <div
+            className="h-[calc(100vh-130px)] overflow-hidden"
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--line)',
+              borderRadius: 'var(--r-xl)',
+              boxShadow: 'var(--sh-1)',
+            }}
+          >
+            <TasksView
+              tasks={tasks}
+              links={taskLinks}
+              projectId={projectId || ''}
+              loading={tasksLoading}
+              error={tasksError}
+              apiRef={ganttApiRef}
+              onAddTask={handleAddTask}
+              onCreateTask={handleCreateTaskInline}
+              onUpdateTask={handleUpdateTaskInline}
+              onTasksChanged={applyTasksPayload}
+              onLinksChanged={applyLinksPayload}
+              assignees={assigneeOptions}
+              calendar={calendar}
+            />
+          </div>
         </div>
-      </div>
+      </ProjectSettingsProvider>
     </ProjectStateManager>
   );
 };
