@@ -297,6 +297,125 @@ describe('TasksService', () => {
     );
   });
 
+  it('respects endDate over estimatedHours when both are sent together', async () => {
+    const prisma = makePrisma();
+    const before = taskRow({
+      version: 1,
+      estimatedHours: { toString: () => '8' },
+    });
+    const after = taskRow({
+      version: 2,
+      startDate: new Date('2026-02-02T00:00:00.000Z'),
+      endDate: new Date('2026-02-06T00:00:00.000Z'),
+      duration: { toString: () => '4.00' },
+      estimatedHours: { toString: () => '32.00' },
+    });
+    prisma.task.findUnique
+      .mockResolvedValueOnce(before)
+      .mockResolvedValue(after);
+    prisma.task.update.mockResolvedValue(after);
+    prisma.task.findMany.mockResolvedValue([after]);
+
+    const resolver = makeResolver();
+    const scheduling = makeScheduling();
+    scheduling.scheduleFromRange.mockReturnValue({
+      startDate: new Date('2026-02-02T00:00:00.000Z'),
+      endDate: new Date('2026-02-06T00:00:00.000Z'),
+      estimatedHours: 32,
+      workload: [
+        { date: new Date('2026-02-02T00:00:00.000Z'), allocatedHours: 8 },
+        { date: new Date('2026-02-03T00:00:00.000Z'), allocatedHours: 8 },
+        { date: new Date('2026-02-04T00:00:00.000Z'), allocatedHours: 8 },
+        { date: new Date('2026-02-05T00:00:00.000Z'), allocatedHours: 8 },
+      ],
+    });
+    const service = new TasksService(
+      prisma,
+      resolver as any,
+      scheduling as any,
+    );
+
+    await service.update(
+      10n,
+      {
+        startDate: '2026-02-02T00:00:00.000Z',
+        endDate: '2026-02-06T00:00:00.000Z',
+        estimatedHours: '999',
+        expectedVersion: 1,
+      },
+      admin,
+    );
+
+    expect(scheduling.scheduleFromRange).toHaveBeenCalled();
+    expect(scheduling.scheduleFromHours).not.toHaveBeenCalled();
+    expect(prisma.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          endDate: new Date('2026-02-06T00:00:00.000Z'),
+          duration: '4.00',
+          estimatedHours: new Prisma.Decimal('32.00'),
+        }),
+      }),
+    );
+  });
+
+  it('derives endDate from estimatedHours when only hours are sent', async () => {
+    const prisma = makePrisma();
+    const before = taskRow({
+      version: 1,
+      estimatedHours: { toString: () => '8' },
+    });
+    const computedEnd = new Date('2026-03-04T00:00:00.000Z');
+    const after = taskRow({
+      version: 2,
+      startDate: new Date('2026-03-02T00:00:00.000Z'),
+      endDate: computedEnd,
+      duration: { toString: () => '2.00' },
+      estimatedHours: { toString: () => '16.00' },
+    });
+    prisma.task.findUnique
+      .mockResolvedValueOnce(before)
+      .mockResolvedValue(after);
+    prisma.task.update.mockResolvedValue(after);
+    prisma.task.findMany.mockResolvedValue([after]);
+
+    const resolver = makeResolver();
+    const scheduling = makeScheduling();
+    scheduling.scheduleFromHours.mockReturnValue({
+      startDate: new Date('2026-03-02T00:00:00.000Z'),
+      endDate: computedEnd,
+      workload: [
+        { date: new Date('2026-03-02T00:00:00.000Z'), allocatedHours: 8 },
+        { date: new Date('2026-03-03T00:00:00.000Z'), allocatedHours: 8 },
+      ],
+    });
+    const service = new TasksService(
+      prisma,
+      resolver as any,
+      scheduling as any,
+    );
+
+    await service.update(
+      10n,
+      {
+        estimatedHours: '16',
+        expectedVersion: 1,
+      },
+      admin,
+    );
+
+    expect(scheduling.scheduleFromHours).toHaveBeenCalled();
+    expect(scheduling.scheduleFromRange).not.toHaveBeenCalled();
+    expect(prisma.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          endDate: computedEnd,
+          estimatedHours: new Prisma.Decimal('16.00'),
+        }),
+      }),
+    );
+  });
+
   it('increments version on successful update', async () => {
     const prisma = makePrisma();
     const before = taskRow({ version: 1 });

@@ -242,23 +242,6 @@ export class TasksService {
       };
     }
 
-    if (estimatedHours !== undefined && estimatedHours > 0) {
-      const result = this.scheduling.scheduleFromHours({
-        estimatedHours,
-        startDateTime: rawStart,
-        calendar,
-      });
-      return {
-        startDate: result.startDate,
-        endDate: result.endDate,
-        duration: (estimatedHours / hoursPerDay).toFixed(2),
-        estimatedHours: estimatedHours.toFixed(2),
-        hoursPerDay,
-        workload: result.workload,
-        calendar,
-      };
-    }
-
     if (rawEnd !== undefined) {
       if (rawEnd.getTime() <= rawStart.getTime()) {
         throw new BadRequestException('endDate must be greater than startDate');
@@ -276,6 +259,23 @@ export class TasksService {
             ? (result.estimatedHours / hoursPerDay).toFixed(2)
             : '0',
         estimatedHours: result.estimatedHours.toFixed(2),
+        hoursPerDay,
+        workload: result.workload,
+        calendar,
+      };
+    }
+
+    if (estimatedHours !== undefined && estimatedHours > 0) {
+      const result = this.scheduling.scheduleFromHours({
+        estimatedHours,
+        startDateTime: rawStart,
+        calendar,
+      });
+      return {
+        startDate: result.startDate,
+        endDate: result.endDate,
+        duration: (estimatedHours / hoursPerDay).toFixed(2),
+        estimatedHours: estimatedHours.toFixed(2),
         hoursPerDay,
         workload: result.workload,
         calendar,
