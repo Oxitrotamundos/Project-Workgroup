@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import ProjectView from './pages/ProjectView';
 import AccountApiKeys from './pages/AccountApiKeys';
 import CalendarSettingsPage from './pages/CalendarSettingsPage';
+import ProjectSettingsPage from './pages/ProjectSettingsPage';
 import SettingsPage from './pages/SettingsPage';
 
 const LoginWrapper = () => {
@@ -67,6 +68,16 @@ function App() {
                 <ProtectedRoute>
                   <AppLayout>
                     <AccountApiKeys />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/project/:projectId/settings"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <ProjectSettingsPage />
                   </AppLayout>
                 </ProtectedRoute>
               }

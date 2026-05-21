@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import React, { createContext } from 'react'
-import { render, type RenderOptions } from '@testing-library/react'
+import { render, type RenderOptions, type RenderResult } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import type { AuthContextType, User } from '../types'
@@ -59,7 +59,7 @@ interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
 const customRender = (
   ui: React.ReactElement,
   options: CustomRenderOptions = {}
-) => {
+): RenderResult => {
   const { authProps, ...renderOptions } = options
   
   return render(ui, {

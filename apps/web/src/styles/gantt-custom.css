@@ -86,15 +86,8 @@
   }
 }
 
-/* Animaciones ultra-suaves y rápidas */
 .wx-willow-theme .wx-gantt-bar {
-  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 0.375rem;
-  will-change: transform;
-}
-
-.wx-willow-theme .wx-gantt-bar:hover {
-  transform: translateY(-0.5px);
 }
 
 /* ─── Summary bars: tinta (ink) — diferenciadas del verde de tasks ──
@@ -729,4 +722,12 @@
 
 [data-theme="dark"] .wx-cell.wx-holiday {
   background: color-mix(in oklab, var(--warn-bg, var(--surface-3)) 35%, transparent);
+}
+
+/* Ocultamos el sidebar nativo de wx-react-gantt: usamos TaskSidebar propio (Fase 3). */
+.wx-gantt .wx-sidebar,
+.wx-gantt .wx-modal-block,
+.gantt-container .wx-sidebar,
+.gantt-container .wx-modal-block {
+  display: none !important;
 }

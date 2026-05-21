@@ -37,6 +37,7 @@ export interface UserProfileProps {
 
 export interface ProjectActionsProps {
   onOpenCalendar?: () => void;
+  calendar?: import('@project-workgroup/shared').WorkingCalendarResponse | null;
   className?: string;
 }
 
