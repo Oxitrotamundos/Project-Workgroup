@@ -1,65 +1,48 @@
 {
   "name": "project-workgroup",
   "private": true,
-  "version": "0.1.1",
-  "type": "module",
+  "version": "1.0.0",
   "engines": {
-    "node": ">=18.19.0",
-    "npm": ">=9.0.0"
+    "node": ">=20.0.0"
   },
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest --watch",
-    "setup:firestore": "node scripts/setup-firestore.js",
-    "setup:firestore:sample": "node scripts/setup-firestore.js --sample-data",
-    "setup:cli": "node scripts/firestore-cli.js",
-    "firebase:rules": "firebase deploy --only firestore:rules",
-    "firebase:indexes": "firebase deploy --only firestore:indexes",
-    "firebase:deploy": "firebase deploy"
-  },
-  "dependencies": {
-    "@rive-app/react-canvas": "^4.23.3",
-    "@types/react-router-dom": "^5.3.3",
-    "firebase": "^12.2.1",
-    "firebase-admin": "^13.5.0",
-    "lucide-react": "^0.539.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^7.8.0",
-    "wx-core-locales": "^2.2.1",
-    "wx-gantt-data-provider": "^2.2.1",
-    "wx-gantt-locales": "^2.2.1",
-    "wx-react-gantt": "^1.3.1"
+    "build:shared": "pnpm --filter @project-workgroup/shared run build",
+    "dev": "pnpm run build:shared && concurrently -n web,api -c auto \"pnpm:dev:web\" \"pnpm:dev:api\"",
+    "dev:web": "pnpm --filter @project-workgroup/web run dev",
+    "dev:api": "pnpm --filter @project-workgroup/api run start:dev",
+    "build": "pnpm run build:shared && pnpm --filter @project-workgroup/web run build && pnpm --filter @project-workgroup/api run build",
+    "lint": "pnpm --filter @project-workgroup/web run lint && pnpm --filter @project-workgroup/api run lint",
+    "test": "pnpm run build:shared && pnpm --filter @project-workgroup/web run test:run && pnpm --filter @project-workgroup/api run test",
+    "db:up": "docker compose -f apps/api/docker-compose.dev.yml up -d",
+    "db:down": "docker compose -f apps/api/docker-compose.dev.yml down",
+    "migrate": "pnpm --filter @project-workgroup/api exec prisma migrate dev",
+    "seed": "pnpm --filter @project-workgroup/api exec prisma db seed",
+    "api:openapi:dump": "pnpm --filter @project-workgroup/api run openapi:dump",
+    "api:openapi:check": "pnpm --filter @project-workgroup/api run openapi:check"
   },
   "devDependencies": {
-    "@eslint/js": "^9.32.0",
-    "@tailwindcss/postcss": "^4.1.11",
-    "@testing-library/jest-dom": "^6.6.4",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^14.6.1",
-    "@types/react": "^18.3.23",
-    "@types/react-dom": "^18.3.7",
-    "@vitejs/plugin-react": "^4.3.0",
-    "@vitest/ui": "^0.30.1",
-    "autoprefixer": "^10.4.21",
-    "eslint": "^9.32.0",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.20",
-    "globals": "^16.3.0",
-    "jsdom": "^16.5.3",
-    "msw": "^2.1.7",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.11",
-    "typescript": "~5.6.0",
-    "typescript-eslint": "^8.14.0",
-    "vite": "^7.1.2",
-    "vitest": "^3.2.4"
+    "concurrently": "^9.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "protobufjs": ">=7.5.6",
+      "fast-xml-parser": ">=4.5.3",
+      "fast-xml-builder": ">=1.1.7",
+      "glob": ">=10.5.0",
+      "picomatch": ">=4.0.4",
+      "fast-uri": ">=3.1.2",
+      "lodash": ">=4.18.0",
+      "multer": ">=2.1.1"
+    },
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "argon2",
+      "esbuild",
+      "msw",
+      "prisma"
+    ]
   }
 }

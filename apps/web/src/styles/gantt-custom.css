@@ -1,0 +1,733 @@
+/* Estilos optimizados para el componente Gantt - Minimalista y elegante */
+
+/* Estilos para la columna de acciones */
+.task-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+}
+
+.add-child-btn {
+  background: var(--p-500);
+  color: var(--ink-on-primary);
+  border: none;
+  border-radius: var(--r-sm);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+}
+
+.add-child-btn:hover {
+  background: var(--p-600);
+  transform: scale(1.1);
+}
+
+.add-child-btn:active {
+  transform: scale(0.95);
+}
+
+.wx-willow-theme {
+  --wx-gantt-project-color: var(--p-400);
+  --wx-gantt-project-fill-color: var(--p-500);
+  --wx-gantt-project-border-color: color-mix(in oklab, var(--p-500) 30%, transparent);
+
+  --wx-gantt-task-color: var(--p-500);
+  --wx-gantt-task-fill-color: var(--p-600);
+  --wx-gantt-task-border-color: color-mix(in oklab, var(--p-500) 30%, transparent);
+
+  --wx-gantt-milestone-color: var(--ink-1);
+
+  --wx-grid-header-font: 500 11px var(--font-mono);
+  --wx-grid-body-font: 400 var(--t-small) var(--font-sans);
+  --wx-timescale-font: 500 11px var(--font-mono);
+
+  --wx-gantt-border: 1px solid var(--line);
+  --wx-gantt-select-color: var(--surface-2);
+  --wx-gantt-hover-color: var(--surface-2);
+
+  --wx-gantt-bar-shadow: var(--sh-1);
+  --wx-gantt-bar-hover-shadow: var(--sh-2);
+
+  --wx-gantt-holiday-background: var(--surface-2);
+  --wx-gantt-holiday-color: var(--ink-4);
+
+  --wx-tooltip-background: var(--ink-1);
+  --wx-tooltip-font-color: var(--surface);
+  --wx-tooltip-border-radius: var(--r-md);
+
+  --wx-gantt-progress-border-color: var(--surface-3);
+  --wx-gantt-progress-fill-color: var(--p-500);
+
+  --wx-gantt-bar-border-radius: var(--r-sm);
+  --wx-gantt-milestone-border-radius: 50%;
+}
+
+/* Contenedor optimizado para velocidad */
+.gantt-container {
+  font-family: system-ui, sans-serif;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  will-change: transform; /* Optimización para GPU */
+}
+
+/* Responsividad minimalista */
+@media (max-width: 768px) {
+  .wx-willow-theme {
+    --wx-grid-header-font: 500 0.7rem system-ui, sans-serif;
+    --wx-grid-body-font: 400 0.7rem system-ui, sans-serif;
+    --wx-timescale-font: 500 0.6rem system-ui, sans-serif;
+  }
+}
+
+.wx-willow-theme .wx-gantt-bar {
+  border-radius: 0.375rem;
+}
+
+/* ─── Summary bars: tinta (ink) — diferenciadas del verde de tasks ──
+   Same DS scheme: summaries son estructurales (alto contraste neutro),
+   tasks son trabajo activo (verde primario). Funciona en light y dark.
+   ─────────────────────────────────────────────────────────────── */
+.wx-gantt .wx-bar.wx-summary {
+  background: var(--ink-1) !important;
+  background-color: var(--ink-1) !important;
+  border: 1px solid var(--ink-1) !important;
+  color: var(--surface) !important;
+}
+.wx-gantt .wx-bar.wx-summary .wx-progress-wrapper {
+  background: transparent !important;
+}
+.wx-gantt .wx-bar.wx-summary .wx-progress-percent {
+  background: color-mix(in oklab, var(--surface) 45%, transparent) !important;
+  opacity: 1;
+}
+.wx-gantt .wx-bar.wx-summary .wx-progress-marker {
+  color: var(--surface) !important;
+  background: transparent !important;
+  font-weight: 600;
+}
+.wx-gantt .wx-bar.wx-summary .wx-content {
+  background: transparent !important;
+  color: var(--surface) !important;
+  font-weight: 500;
+}
+
+/* Colores específicos para diferentes tipos de tareas */
+.wx-willow-theme .wx-gantt-bar[data-task-type="task"] {
+  /* Colores variados para tareas individuales */
+}
+
+.wx-willow-theme .wx-gantt-bar[data-task-id="1"] { background-color: #3b82f6; border-color: #1d4ed8; } /* blue */
+.wx-willow-theme .wx-gantt-bar[data-task-id="2"] { background-color: #ef4444; border-color: #dc2626; } /* red */
+.wx-willow-theme .wx-gantt-bar[data-task-id="3"] { background-color: #10b981; border-color: #047857; } /* emerald */
+.wx-willow-theme .wx-gantt-bar[data-task-id="4"] { background-color: #f59e0b; border-color: #d97706; } /* amber */
+.wx-willow-theme .wx-gantt-bar[data-task-id="5"] { background-color: #8b5cf6; border-color: #7c3aed; } /* violet */
+.wx-willow-theme .wx-gantt-bar[data-task-id="6"] { background-color: #06b6d4; border-color: #0891b2; } /* cyan */
+.wx-willow-theme .wx-gantt-bar[data-task-id="7"] { background-color: #84cc16; border-color: #65a30d; } /* lime */
+.wx-willow-theme .wx-gantt-bar[data-task-id="8"] { background-color: #ec4899; border-color: #db2777; } /* pink */
+.wx-willow-theme .wx-gantt-bar[data-task-id="9"] { background-color: #6366f1; border-color: #4f46e5; } /* indigo */
+.wx-willow-theme .wx-gantt-bar[data-task-id="10"] { background-color: #14b8a6; border-color: #0d9488; } /* teal */
+
+/* Summary tasks mantienen su estilo distintivo */
+.wx-willow-theme .wx-gantt-bar[data-task-type="summary"] {
+  background: linear-gradient(135deg, var(--p-500) 0%, var(--p-600) 100%);
+  border-color: var(--p-700);
+  height: 1.25rem;
+  border-radius: var(--r-md);
+}
+
+/* Enlaces discretos */
+.wx-willow-theme .wx-gantt-link {
+  --wx-gantt-link-color: var(--line-strong);
+  stroke-width: 1.5;
+  opacity: 0.7;
+}
+
+.wx-willow-theme .wx-gantt-link:hover {
+  --wx-gantt-link-color: var(--ink-3);
+  opacity: 1;
+}
+
+/* Milestones con mejor roundness */
+.wx-willow-theme .wx-gantt-milestone {
+  border-radius: var(--wx-gantt-milestone-border-radius);
+  box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.wx-willow-theme .wx-gantt-milestone:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* Estados optimizados */
+.gantt-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+.gantt-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  background: var(--surface);
+  color: var(--ink-2);
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.wx-willow-theme {
+  --wx-gantt-focus-color: var(--p-500);
+  --wx-gantt-focus-outline: 2px solid color-mix(in oklab, var(--p-500) 50%, transparent);
+}
+
+.wx-willow-theme .wx-gantt-bar:focus,
+.wx-willow-theme .wx-grid-cell:focus {
+  outline: var(--wx-gantt-focus-outline);
+  outline-offset: 1px;
+}
+
+/* Optimizaciones de rendimiento */
+.wx-willow-theme .wx-gantt-bar {
+  contain: layout style;
+}
+
+.wx-willow-theme .wx-grid-cell {
+  contain: layout;
+}
+
+.wx-willow-theme .wx-grid-header {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line-2);
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+/* Celdas del grid con hover mejorado */
+.wx-willow-theme .wx-grid-cell:hover {
+  background-color: var(--wx-gantt-hover-color);
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Scrollbars minimalistas */
+.wx-willow-theme ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.wx-willow-theme ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wx-willow-theme ::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 3px;
+}
+
+.wx-willow-theme ::-webkit-scrollbar-thumb:hover {
+  background: var(--line-strong);
+}
+
+/* Toolbar */
+.wx-toolbar {
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--line) !important;
+  padding: 8px 16px !important;
+  box-shadow: var(--sh-1) !important;
+}
+
+.wx-toolbar .wx-button {
+  background: var(--surface) !important;
+  border: 1px solid var(--line-2) !important;
+  color: var(--ink-1) !important;
+  border-radius: var(--r-md) !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  margin-right: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 32px !important;
+  vertical-align: middle !important;
+}
+
+.wx-toolbar .wx-button:hover:not(:disabled) {
+  background: var(--surface-2) !important;
+  border-color: var(--line-strong) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: var(--sh-2) !important;
+}
+
+.wx-toolbar .wx-button:active:not(:disabled) {
+  transform: translateY(0) !important;
+  box-shadow: var(--sh-1) !important;
+}
+
+.wx-toolbar .wx-button:disabled {
+  background: var(--surface-2) !important;
+  border-color: var(--line) !important;
+  color: var(--ink-4) !important;
+  cursor: not-allowed !important;
+}
+
+.wx-toolbar .wx-button.wx-primary {
+  background: var(--p-500) !important;
+  border-color: color-mix(in oklab, var(--p-500) 60%, black) !important;
+  color: var(--ink-on-primary) !important;
+  font-weight: 600 !important;
+}
+
+.wx-toolbar .wx-button.wx-primary:hover:not(:disabled) {
+  background: var(--p-600) !important;
+  box-shadow: var(--sh-2) !important;
+}
+
+.wx-toolbar .wx-button.wx-danger {
+  background: var(--err-bg) !important;
+  border-color: var(--err-line) !important;
+  color: var(--err-fg) !important;
+}
+
+.wx-toolbar .wx-button.wx-danger:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--err-bg) 80%, var(--err-line)) !important;
+  box-shadow: var(--sh-2) !important;
+}
+
+.wx-toolbar .wx-separator {
+  width: 1px !important;
+  height: 24px !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  margin: 0 8px !important;
+}
+
+.wx-toolbar .wx-button i {
+  margin-right: 6px !important;
+  font-size: 14px !important;
+  
+  /* Alineación perfecta de iconos */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  vertical-align: baseline !important;
+}
+
+/* Para botones que solo tienen icono (sin texto) */
+.wx-toolbar .wx-button:not(:has(> span)):not(:has(> .wx-button-text)) i,
+.wx-toolbar .wx-button.wx-icon i {
+  margin-right: 0 !important;
+}
+
+/* Corrección específica para iconos wxi */
+.wx-toolbar .wx-button i[class^="wxi-"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 16px !important;
+  height: 16px !important;
+  line-height: 1 !important;
+}
+
+/* Ajustes para el contenedor del Gantt con toolbar.
+   El -50px descuenta el Toolbar; el flex-1 del wrapper ya reserva
+   espacio para el GanttTimeline, así que no hace falta descontarlo aquí. */
+.gantt-container .wx-gantt {
+  height: calc(100% - 50px) !important;
+}
+
+/* ── GanttTimeline scrubber — Studio Monitor ─────────────────────────── */
+.gantt-timeline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 5px;
+  user-select: none;
+}
+
+/* Zoom badge */
+.gantt-timeline__zoom-badge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: 20px;
+  padding: 2px 8px 2px 6px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.gantt-timeline__zoom-icon {
+  font-size: 11px;
+  color: var(--p-500);
+  line-height: 1;
+}
+
+/* Track: light precision strip */
+.gantt-timeline__track {
+  position: relative;
+  flex: 1;
+  height: 22px;
+  background: var(--surface-3);
+  border-radius: 5px;
+  overflow: visible;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);
+}
+
+/* Minimap layer */
+.gantt-timeline__minimap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 5px;
+}
+
+.gantt-timeline__minibar {
+  position: absolute;
+  border-radius: 2px;
+  opacity: 0.45;
+}
+
+/* Viewport thumb */
+.gantt-timeline__thumb {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  display: flex;
+  align-items: stretch;
+  background: color-mix(in oklab, var(--p-500) 8%, transparent);
+  border: 1.5px solid color-mix(in oklab, var(--p-500) 55%, transparent);
+  border-radius: 4px;
+  box-shadow: 0 1px 4px color-mix(in oklab, var(--p-500) 15%, transparent);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gantt-timeline__thumb:hover {
+  border-color: color-mix(in oklab, var(--p-500) 80%, transparent);
+  box-shadow: 0 1px 6px color-mix(in oklab, var(--p-500) 25%, transparent);
+}
+
+.gantt-timeline__thumb--panning {
+  background: color-mix(in oklab, var(--p-500) 13%, transparent);
+}
+
+/* Pan zone */
+.gantt-timeline__center {
+  flex: 1;
+  cursor: grab;
+  min-width: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.025) 50%,
+    transparent 100%
+  );
+}
+
+.gantt-timeline__center--active {
+  cursor: grabbing;
+}
+
+/* Responsive toolbar */
+@media (max-width: 768px) {
+  .wx-toolbar {
+    padding: 6px 12px !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+  }
+  
+  .wx-toolbar .wx-button {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    margin-right: 2px !important;
+  }
+  
+  .wx-toolbar .wx-button i {
+    margin-right: 4px !important;
+    font-size: 12px !important;
+    width: 14px !important;
+    height: 14px !important;
+  }
+}
+
+/* CSS para forzar que todas las tareas aparezcan expandidas por defecto */
+.wx-willow-theme .wx-gantt-tree-expand {
+  /* Ocultar iconos de colapso para forzar expansión visual */
+  display: none !important;
+}
+
+.wx-willow-theme .wx-gantt-tree-collapse {
+  /* Mostrar solo iconos de expansión */
+  display: block !important;
+}
+
+/* Alternativa: Forzar que todos los summary tasks muestren sus hijos */
+.wx-willow-theme .wx-gantt-row[data-task-type="summary"] {
+  /* Forzar visualización de summary tasks como expandidos */
+}
+
+.wx-willow-theme .wx-gantt-row[data-has-children="true"] {
+  /* Asegurar que las tareas con hijos se muestren expandidas */
+  --wx-gantt-tree-icon: '▼'; /* Icono de expandido */
+}
+
+/* Forzar que las sub-tareas siempre sean visibles */
+.wx-willow-theme .wx-gantt-row[data-parent-id]:not([data-parent-id="0"]) {
+  display: table-row !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Estilos para el marker del día actual */
+.wx-willow-theme .current-day-marker {
+  position: relative;
+  background-color: var(--p-500) !important;
+  border-left: 2px solid var(--p-600) !important;
+  opacity: 0.8;
+  z-index: 10;
+}
+
+.wx-willow-theme .current-day-marker::before {
+  content: attr(data-marker-text);
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--p-600);
+  color: var(--ink-on-primary);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  font: 600 11px var(--font-mono);
+  white-space: nowrap;
+  box-shadow: var(--sh-2);
+}
+
+.wx-willow-theme .wx-default {
+  background-color: var(--p-500) !important;
+  border-left: 2px solid var(--p-600) !important;
+  opacity: 0.8;
+}
+
+/* ─── Dark mode overrides ──────────────────────────────────────
+   wx-react-gantt usa clases internas con fondos hardcodeados que no
+   leen variables CSS. Las sobrescribimos con tokens del DS.
+   Apuntamos directamente a `.wx-*` (sin requerir `.wx-willow-theme`)
+   porque el contenedor puede no llevar esa clase en todo momento.
+   ─────────────────────────────────────────────────────────── */
+[data-theme="dark"] .wx-gantt,
+[data-theme="dark"] .wx-gantt .wx-layout,
+[data-theme="dark"] .wx-gantt .wx-table-wrapper,
+[data-theme="dark"] .wx-gantt .wx-table,
+[data-theme="dark"] .wx-gantt .wx-grid,
+[data-theme="dark"] .wx-gantt .wx-table-box,
+[data-theme="dark"] .wx-gantt .wx-scroll,
+[data-theme="dark"] .wx-gantt .wx-body,
+[data-theme="dark"] .wx-gantt .wx-data {
+  background: var(--surface) !important;
+  color: var(--ink-1) !important;
+}
+
+/* `.wx-content` también se usa DENTRO de las barras del timeline para el label.
+   No le forzamos background ni color aquí; lo gestionamos por contexto. */
+[data-theme="dark"] .wx-gantt .wx-content {
+  background: transparent;
+  color: var(--ink-1);
+}
+/* Sólo en celdas del grid (tabla lateral) sí queremos fondo de superficie */
+[data-theme="dark"] .wx-gantt .wx-cell .wx-content {
+  background: var(--surface) !important;
+  color: var(--ink-1) !important;
+}
+
+[data-theme="dark"] .wx-gantt .wx-header,
+[data-theme="dark"] .wx-gantt .wx-header-wrapper,
+[data-theme="dark"] .wx-gantt .wx-h-row,
+[data-theme="dark"] .wx-gantt .wx-scale {
+  background: var(--surface-2) !important;
+  color: var(--ink-3) !important;
+  border-color: var(--line-2) !important;
+}
+
+[data-theme="dark"] .wx-gantt .wx-header .wx-cell,
+[data-theme="dark"] .wx-gantt .wx-scale .wx-cell {
+  background: var(--surface-2) !important;
+  color: var(--ink-3) !important;
+  border-color: var(--line) !important;
+}
+
+[data-theme="dark"] .wx-gantt .wx-row {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+}
+[data-theme="dark"] .wx-gantt .wx-row:hover {
+  background: var(--surface-2) !important;
+}
+
+[data-theme="dark"] .wx-gantt .wx-cell {
+  border-color: var(--line) !important;
+  color: var(--ink-1) !important;
+}
+
+[data-theme="dark"] .wx-gantt .wx-text,
+[data-theme="dark"] .wx-gantt .wx-content .wx-text {
+  color: var(--ink-1) !important;
+}
+
+[data-theme="dark"] .wx-gantt .wx-toggle-icon,
+[data-theme="dark"] .wx-gantt .wx-add-icon,
+[data-theme="dark"] .wx-gantt .wx-collapse i,
+[data-theme="dark"] .wx-gantt .wxi-angle-right,
+[data-theme="dark"] .wx-gantt .wxi-menu-down,
+[data-theme="dark"] .wx-gantt [class*="wxi-"] {
+  color: var(--ink-2) !important;
+}
+
+[data-theme="dark"] .wx-gantt .wx-grip,
+[data-theme="dark"] .wx-gantt .wx-resizer,
+[data-theme="dark"] .wx-gantt .wx-resizer-line {
+  background: var(--line-2) !important;
+}
+
+/* Chart canvas (timeline area) */
+[data-theme="dark"] .wx-gantt .wx-content,
+[data-theme="dark"] .wx-gantt .wx-area,
+[data-theme="dark"] .wx-gantt .wx-chart {
+  background: var(--surface) !important;
+}
+
+/* Internal PNG grid pattern: invert + atenuar para que se vea sobre dark */
+[data-theme="dark"] .wx-gantt .wx-area > div[style*="background: url"],
+[data-theme="dark"] .wx-gantt .wx-area > div[style*="background:url"] {
+  opacity: 0.18 !important;
+  filter: invert(1) brightness(1.6) !important;
+}
+
+/* Task bars en dark — verde primario sólido */
+[data-theme="dark"] .wx-gantt .wx-bar.wx-task {
+  background: var(--p-500) !important;
+  background-color: var(--p-500) !important;
+  color: var(--ink-on-primary) !important;
+  border: 1px solid var(--p-400) !important;
+}
+
+/* La pista del progreso queda transparente para dejar ver el verde de la barra */
+[data-theme="dark"] .wx-gantt .wx-bar.wx-task .wx-progress-wrapper {
+  background: transparent !important;
+}
+/* El % completado se pinta como overlay oscuro semitransparente sobre la barra */
+[data-theme="dark"] .wx-gantt .wx-bar.wx-task .wx-progress-percent {
+  background: rgba(6, 35, 26, 0.35) !important;
+  opacity: 1;
+}
+[data-theme="dark"] .wx-gantt .wx-bar.wx-task .wx-progress-marker {
+  color: var(--ink-on-primary) !important;
+  font-weight: 600;
+  background: transparent !important;
+}
+/* Label de la barra (e.g. "T1", "Prueba") en blanco-cálido sobre verde */
+[data-theme="dark"] .wx-gantt .wx-bar.wx-task .wx-content {
+  background: transparent !important;
+  color: var(--ink-on-primary) !important;
+  font-weight: 500;
+}
+
+/* Markers (today / "Hoy") */
+[data-theme="dark"] .wx-gantt .wx-marker {
+  background-color: var(--p-500) !important;
+  border-left-color: var(--p-400) !important;
+  color: var(--ink-on-primary) !important;
+}
+[data-theme="dark"] .wx-gantt .wx-marker .wx-content {
+  background: var(--p-500) !important;
+  color: var(--ink-on-primary) !important;
+}
+
+/* Links entre dependencias */
+[data-theme="dark"] .wx-gantt .wx-link .wx-inner {
+  background: var(--ink-3) !important;
+}
+
+/* Toolbar */
+[data-theme="dark"] .wx-toolbar {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+}
+[data-theme="dark"] .wx-toolbar .wx-button {
+  background: var(--surface-2) !important;
+  border-color: var(--line-2) !important;
+  color: var(--ink-1) !important;
+}
+[data-theme="dark"] .wx-toolbar .wx-button:hover:not(:disabled) {
+  background: var(--surface-3) !important;
+  border-color: var(--line-strong) !important;
+}
+
+/* Native form controls inside Gantt cells (input[type=date], etc.) */
+[data-theme="dark"] .wx-gantt input,
+[data-theme="dark"] .wx-gantt select,
+[data-theme="dark"] .wx-gantt textarea {
+  background: var(--surface-2) !important;
+  color: var(--ink-1) !important;
+  border-color: var(--line-2) !important;
+}
+
+/* Scrollbar en dark */
+[data-theme="dark"] .wx-gantt ::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+}
+[data-theme="dark"] .wx-gantt ::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-4);
+}
+
+/* ============================================================
+ * Sombreado de tiempo no laboral en el background del Gantt.
+ * Aplicado por `highlightTime` (createHighlightTime). La librería
+ * añade nuestras clases extra a cada `.wx-cell` (eje X y fondo
+ * de filas) cuya fecha cae fuera de la jornada del WorkingCalendar.
+ * ============================================================ */
+
+.wx-cell.wx-non-working {
+  background: color-mix(in oklab, var(--surface-2) 70%, transparent);
+}
+
+.wx-cell.wx-holiday {
+  background: color-mix(in oklab, var(--warn-bg, var(--surface-2)) 45%, transparent);
+}
+
+[data-theme="dark"] .wx-cell.wx-non-working {
+  background: color-mix(in oklab, var(--surface-3, var(--surface-2)) 55%, transparent);
+}
+
+[data-theme="dark"] .wx-cell.wx-holiday {
+  background: color-mix(in oklab, var(--warn-bg, var(--surface-3)) 35%, transparent);
+}
+
+/* Ocultamos el sidebar nativo de wx-react-gantt: usamos TaskSidebar propio (Fase 3). */
+.wx-gantt .wx-sidebar,
+.wx-gantt .wx-modal-block,
+.gantt-container .wx-sidebar,
+.gantt-container .wx-modal-block {
+  display: none !important;
+}

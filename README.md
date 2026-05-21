@@ -2,82 +2,84 @@
 
 [![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/Oxitrotamundos/Gannt-Workgroup?style=flat&label=version)](https://github.com/Oxitrotamundos/Gannt-Workgroup/releases/latest)
 
-Aplicación web de gestión de proyectos con visualización tipo Gantt, desarrollada con **React**, **TypeScript** y **Firebase**.
+Aplicación web de gestión de proyectos con visualización tipo Gantt. Frontend en **React + TypeScript + Vite**, backend en **NestJS + Prisma + PostgreSQL**, autenticación con **Firebase Auth (Google-only)** y API REST pública documentada con OpenAPI.
 
 ## Características principales
 
 * Gráfico Gantt interactivo (wx-react-gantt)
-* Gestión de tareas y dependencias
-* Colaboración en tiempo real con Firestore
-* Autenticación y roles de usuario
+* Gestión de proyectos, tareas jerárquicas y dependencias
+* API REST versionada (`/v1`) con OpenAPI en `/v1/docs`
+* Autenticación dual: Firebase ID tokens (UI) + API keys (clientes externos)
 * Diseño adaptable y soporte en español
 
 ## Requisitos
 
-* Node.js >= 18.19.0
-* npm >= 9.0.0
-* Proyecto Firebase con Firestore habilitado
+* Node.js >= 20.0.0
+* pnpm >= 10.0.0 (instálalo con `corepack enable`, o `npm i -g pnpm@10`)
+* Docker + Docker Compose (para Postgres local)
+* Proyecto Firebase con provider Google habilitado
 
-## Instalación
+## Estructura del monorepo
 
-```bash
-git clone https://github.com/Oxitrotamundos/Gannt-Workgroup.git
-cd Gannt-Workgroup
-npm install
-cp .env.example .env  # Agrega tu configuración de Firebase
+```
+apps/
+├── web/       # Frontend React + Vite
+└── api/       # Backend NestJS + Prisma
+packages/
+└── shared/    # DTOs y tipos compartidos
 ```
 
-Inicializa Firestore (opcional):
+## Desarrollo
+
+1. Instalar dependencias:
+   ```bash
+   pnpm install
+   ```
+
+2. Copiar archivos `.env.example`:
+   - `apps/web/.env.example` → `apps/web/.env` (Firebase Auth vars + `VITE_API_URL`)
+   - `apps/api/.env.example` → `apps/api/.env` (`DATABASE_URL`, `FIREBASE_SERVICE_ACCOUNT_JSON`)
+
+3. Levantar Postgres local:
+   ```bash
+   pnpm run db:up
+   ```
+
+4. Aplicar migraciones:
+   ```bash
+   pnpm run migrate
+   ```
+
+5. (Opcional) sembrar admin de prueba:
+   ```bash
+   SEED_ADMIN_UID=<firebase-uid> SEED_ADMIN_EMAIL=<email> pnpm run seed
+   ```
+
+6. Arrancar web + api concurrentemente:
+   ```bash
+   pnpm run dev
+   ```
+
+- Web:    http://localhost:5173
+- API:    http://localhost:3000
+- Docs:   http://localhost:3000/v1/docs
+
+## Testing
 
 ```bash
-npm run setup:firestore
-```
-
-## Uso
-
-Modo desarrollo:
-
-```bash
-npm run dev
-```
-
-Compilación para producción:
-
-```bash
-npm run build
-npm run preview
-```
-
-## Despliegue en Firebase
-
-```bash
-npm run firebase:deploy
+pnpm run test                 # web + api
+pnpm --filter @project-workgroup/web run test:run
+pnpm --filter @project-workgroup/api run test
+pnpm --filter @project-workgroup/api run test:e2e
 ```
 
 ## Stack tecnológico
 
-* **Frontend:** React + TypeScript
-* **Estilos:** Tailwind CSS
-* **Backend:** Firebase / Firestore
-* **Gráfico Gantt:** wx-react-gantt
-* **Build:** Vite
-
-## Estructura básica
-
-```
-src/
-├── components/     # Componentes React
-├── contexts/       # Contextos globales
-├── services/       # Capa de servicios Firestore
-├── types/          # Tipos TypeScript
-└── hooks/          # Hooks personalizados
-```
+* **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS 4
+* **Backend:** NestJS 10 + Prisma 7 + PostgreSQL 16
+* **Auth:** Firebase Auth (Google provider) + API keys argon2id
+* **Gantt:** wx-react-gantt
 
 ## Contribución
 
-1. Haz un fork del repositorio
-2. Crea una rama: `git checkout -b feature/nueva-funcion`
-3. Envía un Pull Request
-
-Más información en [CONTRIBUTING.md](CONTRIBUTING.md).
-
+Consulta [CONTRIBUTING.md](CONTRIBUTING.md) para convenciones de ramas, commits y versionado.

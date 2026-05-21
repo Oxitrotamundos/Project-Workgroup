@@ -1,0 +1,1083 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Project Workgroup — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;1,400&family=Instrument+Serif:ital@0;1&family=Public+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="components.css" />
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<!-- Reusable SVG icon symbol library -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+    <symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 22V4M4 4h13l-2 4 2 4H4"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 6 3 7 3 7H3s3-1 3-7M10 21a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+    <symbol id="i-kanban" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="14" rx="1"/><rect x="11" y="3" width="6" height="9" rx="1"/><rect x="19" y="3" width="2" height="18" rx="1"/></symbol>
+    <symbol id="i-gantt" viewBox="0 0 24 24"><path d="M3 5h10M3 12h7M3 19h13"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v.01M12 12v4"/></symbol>
+  </defs>
+</svg>
+
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark" aria-hidden="true"></div>
+      <div class="logo-text">
+        <span class="logo-name">Project Workgroup</span>
+        <span class="logo-sub">KTP / DS v0.1</span>
+      </div>
+    </div>
+
+    <div class="stack" style="gap:2px">
+      <div class="nav-group-title">Foundations</div>
+      <a class="nav-item" href="#overview"><span>Overview</span><span class="num">00</span></a>
+      <a class="nav-item" href="#color"><span>Color</span><span class="num">01</span></a>
+      <a class="nav-item" href="#typography"><span>Typography</span><span class="num">02</span></a>
+      <a class="nav-item" href="#space"><span>Spacing &amp; grid</span><span class="num">03</span></a>
+      <a class="nav-item" href="#radius"><span>Radii</span><span class="num">04</span></a>
+      <a class="nav-item" href="#elevation"><span>Elevation</span><span class="num">05</span></a>
+      <a class="nav-item" href="#motion"><span>Motion</span><span class="num">06</span></a>
+      <a class="nav-item" href="#iconography"><span>Iconography</span><span class="num">07</span></a>
+
+      <div class="nav-group-title">Components</div>
+      <a class="nav-item" href="#buttons"><span>Buttons</span><span class="num">08</span></a>
+      <a class="nav-item" href="#forms"><span>Forms</span><span class="num">09</span></a>
+      <a class="nav-item" href="#badges"><span>Badges &amp; tags</span><span class="num">10</span></a>
+      <a class="nav-item" href="#users"><span>Users &amp; avatars</span><span class="num">11</span></a>
+      <a class="nav-item" href="#kpi"><span>KPI cards</span><span class="num">12</span></a>
+
+      <div class="nav-group-title">Patterns</div>
+      <a class="nav-item" href="#projects"><span>Project list</span><span class="num">13</span></a>
+      <a class="nav-item" href="#kanban"><span>Kanban</span><span class="num">14</span></a>
+      <a class="nav-item" href="#gantt"><span>Gantt</span><span class="num">15</span></a>
+      <a class="nav-item" href="#table"><span>Tables</span><span class="num">16</span></a>
+      <a class="nav-item" href="#feedback"><span>Feedback</span><span class="num">17</span></a>
+    </div>
+
+    <div style="margin-top:auto" class="note">
+      Sistema vivo. Cambia colores, densidad y tipografía desde <strong>Tweaks</strong> ↘
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="topbar">
+      <div class="crumbs">
+        <svg class="i i-14"><use href="#i-folder"/></svg>
+        <span>Project Workgroup</span><span class="sep">/</span>
+        <span>Design system</span><span class="sep">/</span>
+        <span class="cur">v0.1 · Mayo 2026</span>
+      </div>
+      <div class="actions">
+        <span class="badge dot ok">Activo</span>
+        <button class="btn btn-ghost btn-sm">
+          <svg class="i i-14"><use href="#i-link"/></svg> Compartir
+        </button>
+        <div class="theme-toggle" id="themeToggle" role="tablist">
+          <button data-mode="light" class="active" aria-label="Light">
+            <svg class="i i-14"><use href="#i-sun"/></svg>
+          </button>
+          <button data-mode="dark" aria-label="Dark">
+            <svg class="i i-14"><use href="#i-moon"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ OVERVIEW ═════════════════════════ -->
+    <section class="section" id="overview">
+      <div class="section-h">
+        <span class="eyebrow">00 · Foundations</span>
+        <span class="id">/overview</span>
+      </div>
+      <h2>Un sistema <em>humanista</em> para ingeniería de proyectos.</h2>
+      <p class="section-lede">
+        Lenguaje visual para una plataforma de gestión orientada a equipos de ingeniería:
+        densa donde el desarrollador la necesita, ordenada para la lectura ejecutiva,
+        y con calidez tipográfica para no sentir que se trabaja dentro de una hoja de cálculo.
+      </p>
+
+      <div class="grid cols-3">
+        <div class="card">
+          <div class="label" style="margin-bottom:8px">Principio 01</div>
+          <div style="font: 500 18px/1.3 var(--font-sans); color: var(--ink); margin-bottom:6px">
+            Datos antes que adornos.
+          </div>
+          <div class="spec">Cada elemento debe transportar información — números, estado, dueños, fechas — antes que ornamentos.</div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:8px">Principio 02</div>
+          <div style="font: 500 18px/1.3 var(--font-sans); color: var(--ink); margin-bottom:6px">
+            Densidad <em style="font-family:var(--font-display);font-style:italic;font-weight:300">o</em> respiro.
+          </div>
+          <div class="spec">Tres densidades coherentes: vista de operación, vista por defecto y vista ejecutiva. Una sola variable cambia toda la jerarquía.</div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:8px">Principio 03</div>
+          <div style="font: 500 18px/1.3 var(--font-sans); color: var(--ink); margin-bottom:6px">
+            Tipografía con voz.
+          </div>
+          <div class="spec">Sans humanista para texto, monoespaciada para datos y metadatos, serif itálica para titulares ejecutivos. Nunca todas a la vez.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ COLOR ════════════════════════════ -->
+    <section class="section" id="color">
+      <div class="section-h">
+        <span class="eyebrow">01 · Foundations</span>
+        <span class="id">/color</span>
+      </div>
+      <h2>Color con <em>temperatura</em>.</h2>
+      <p class="section-lede">
+        Cremas y carbones cálidos en lugar de blancos quirúrgicos. El acento naranja
+        transporta acción y atención; los estados son legibles en ambos modos sin saturar.
+      </p>
+
+      <div class="label" style="margin-bottom:12px">Superficies</div>
+      <div class="grid cols-4" style="margin-bottom: 32px">
+        <div class="swatch"><div class="chip" style="background:var(--bg)"></div><div class="info"><span class="name">bg</span><span class="val">app background</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--surface)"></div><div class="info"><span class="name">surface</span><span class="val">cards / panels</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--surface-2)"></div><div class="info"><span class="name">surface-2</span><span class="val">subtle row / header</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--surface-3)"></div><div class="info"><span class="name">surface-3</span><span class="val">hover / pressed</span></div></div>
+      </div>
+
+      <div class="label" style="margin-bottom:12px">Tinta &amp; líneas</div>
+      <div class="grid cols-4" style="margin-bottom: 32px">
+        <div class="swatch"><div class="chip" style="background:var(--ink)"></div><div class="info"><span class="name">ink</span><span class="val">titulares</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--ink-2)"></div><div class="info"><span class="name">ink-2</span><span class="val">cuerpo secundario</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--ink-3)"></div><div class="info"><span class="name">ink-3</span><span class="val">metadatos</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--line-2)"></div><div class="info"><span class="name">line-2</span><span class="val">bordes</span></div></div>
+      </div>
+
+      <div class="label" style="margin-bottom:12px">Primario · escala</div>
+      <div class="ramp" style="margin-bottom:32px">
+        <div style="background:var(--p-50)" class="dark-text">50</div>
+        <div style="background:var(--p-100)" class="dark-text">100</div>
+        <div style="background:var(--p-200)" class="dark-text">200</div>
+        <div style="background:var(--p-300)" class="dark-text">300</div>
+        <div style="background:var(--p-400)">400</div>
+        <div style="background:var(--p-500)">500</div>
+        <div style="background:var(--p-600)">600</div>
+        <div style="background:var(--p-700)">700</div>
+        <div style="background:var(--p-800)">800</div>
+      </div>
+
+      <div class="label" style="margin-bottom:12px">Estados semánticos</div>
+      <div class="grid cols-4">
+        <div class="card" style="padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="width:16px;height:16px;border-radius:4px;background:var(--ok-fg)"></span>
+            <span style="font-weight:500;color:var(--ink-1)">Success</span>
+          </div>
+          <span class="badge ok dot">On track</span>
+          <div class="spec" style="margin-top:10px">--ok-fg / --ok-bg / --ok-line</div>
+        </div>
+        <div class="card" style="padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="width:16px;height:16px;border-radius:4px;background:var(--warn-fg)"></span>
+            <span style="font-weight:500;color:var(--ink-1)">Warning</span>
+          </div>
+          <span class="badge warn dot">At risk</span>
+          <div class="spec" style="margin-top:10px">--warn-fg / --warn-bg / --warn-line</div>
+        </div>
+        <div class="card" style="padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="width:16px;height:16px;border-radius:4px;background:var(--err-fg)"></span>
+            <span style="font-weight:500;color:var(--ink-1)">Danger</span>
+          </div>
+          <span class="badge err dot">Overdue</span>
+          <div class="spec" style="margin-top:10px">--err-fg / --err-bg / --err-line</div>
+        </div>
+        <div class="card" style="padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="width:16px;height:16px;border-radius:4px;background:var(--info-fg)"></span>
+            <span style="font-weight:500;color:var(--ink-1)">Info</span>
+          </div>
+          <span class="badge info dot">In review</span>
+          <div class="spec" style="margin-top:10px">--info-fg / --info-bg / --info-line</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ TYPOGRAPHY ═══════════════════════ -->
+    <section class="section" id="typography">
+      <div class="section-h">
+        <span class="eyebrow">02 · Foundations</span>
+        <span class="id">/typography</span>
+      </div>
+      <h2>Tres voces, una <em>conversación</em>.</h2>
+      <p class="section-lede">
+        IBM Plex Sans para texto, interfaz y display (en <em style="font-style:italic;font-weight:300">italic light</em>).
+        IBM Plex Mono para identificadores, datos y código. Sin serifas — la voz editorial viene del peso, no del estilo.
+      </p>
+
+      <div class="card" style="padding: 28px 32px">
+        <div class="type-row">
+          <span class="lbl">display / italic</span>
+          <span class="specimen display">Calendarios honestos.</span>
+          <span class="specs">56 / 60 · light italic<br/>Plex Sans · 300</span>
+        </div>
+        <div class="type-row">
+          <span class="lbl">h1 / sans</span>
+          <span class="specimen h1">Iteración Q2 — Plataforma de operaciones.</span>
+          <span class="specs">40 / 44 · −0.018em<br/>Plex Sans · 500</span>
+        </div>
+        <div class="type-row">
+          <span class="lbl">h2 / sans</span>
+          <span class="specimen h2">Proyectos en cartera</span>
+          <span class="specs">28 / 33 · −0.012em<br/>Plex Sans · 500</span>
+        </div>
+        <div class="type-row">
+          <span class="lbl">h3 / sans</span>
+          <span class="specimen h3">Hitos próximos</span>
+          <span class="specs">20 / 25<br/>Plex Sans · 500</span>
+        </div>
+        <div class="type-row">
+          <span class="lbl">body / sans</span>
+          <span class="specimen body">El equipo de plataforma cerró 14 tareas esta semana, manteniendo el cronograma del lanzamiento del 18 de junio. Dos riesgos quedaron abiertos pendientes de revisión técnica.</span>
+          <span class="specs">14 / 22<br/>Plex Sans · 400</span>
+        </div>
+        <div class="type-row">
+          <span class="lbl">mono / data</span>
+          <span class="specimen mono">PWG-2218 · sprint-24 · 2026-05-18 · 87.4%</span>
+          <span class="specs">13 / 19.5<br/>Plex Mono · 400</span>
+        </div>
+        <div class="type-row">
+          <span class="lbl">caption</span>
+          <span class="specimen caption">Última actualización hace 6 minutos por Mariana V.</span>
+          <span class="specs">12 / 17<br/>Plex Sans · 400</span>
+        </div>
+      </div>
+
+      <div class="grid cols-3" style="margin-top: 24px">
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">Numéricos tabulares</div>
+          <div style="font: 500 28px/1 var(--font-mono); color: var(--ink); font-variant-numeric: tabular-nums">
+            1,248,902
+          </div>
+          <div class="spec" style="margin-top:6px">Plex Mono · font-variant-numeric: tabular-nums</div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">Pesos disponibles</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span style="font-weight:300;color:var(--ink)">Light · 300</span>
+            <span style="font-weight:400;color:var(--ink)">Regular · 400</span>
+            <span style="font-weight:500;color:var(--ink)">Medium · 500</span>
+            <span style="font-weight:600;color:var(--ink)">Semibold · 600</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">Display, en contexto</div>
+          <div style="font: 300 36px/1.05 var(--font-display); font-style: italic; letter-spacing:-0.025em; color: var(--ink)">
+            “Entregar a tiempo.”
+          </div>
+          <div class="spec" style="margin-top:8px">Sólo en hero de reportes, slogans y pull-quotes — siempre Plex Sans <em>italic 300</em>.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ SPACING ═══════════════════════ -->
+    <section class="section" id="space">
+      <div class="section-h">
+        <span class="eyebrow">03 · Foundations</span>
+        <span class="id">/spacing</span>
+      </div>
+      <h2>Escala <em>4·8</em>, sin excepciones.</h2>
+      <p class="section-lede">Todo espacio múltiplo de 4px. La densidad cambia los paddings de filas y celdas, no la escala base.</p>
+
+      <div class="card" style="padding:24px">
+        <div style="display:flex;align-items:flex-end;gap:14px;height:120px">
+          <div style="text-align:center"><div style="background:var(--p-200);width:4px;height:4px;margin:0 auto"></div><div class="spec" style="margin-top:8px">4</div></div>
+          <div style="text-align:center"><div style="background:var(--p-200);width:8px;height:8px;margin:0 auto"></div><div class="spec" style="margin-top:8px">8</div></div>
+          <div style="text-align:center"><div style="background:var(--p-300);width:12px;height:12px;margin:0 auto"></div><div class="spec" style="margin-top:8px">12</div></div>
+          <div style="text-align:center"><div style="background:var(--p-300);width:16px;height:16px;margin:0 auto"></div><div class="spec" style="margin-top:8px">16</div></div>
+          <div style="text-align:center"><div style="background:var(--p-400);width:20px;height:20px;margin:0 auto"></div><div class="spec" style="margin-top:8px">20</div></div>
+          <div style="text-align:center"><div style="background:var(--p-400);width:24px;height:24px;margin:0 auto"></div><div class="spec" style="margin-top:8px">24</div></div>
+          <div style="text-align:center"><div style="background:var(--p-500);width:32px;height:32px;margin:0 auto"></div><div class="spec" style="margin-top:8px">32</div></div>
+          <div style="text-align:center"><div style="background:var(--p-500);width:40px;height:40px;margin:0 auto"></div><div class="spec" style="margin-top:8px">40</div></div>
+          <div style="text-align:center"><div style="background:var(--p-600);width:48px;height:48px;margin:0 auto"></div><div class="spec" style="margin-top:8px">48</div></div>
+          <div style="text-align:center"><div style="background:var(--p-600);width:64px;height:64px;margin:0 auto"></div><div class="spec" style="margin-top:8px">64</div></div>
+          <div style="text-align:center"><div style="background:var(--p-700);width:80px;height:80px;margin:0 auto"></div><div class="spec" style="margin-top:8px">80</div></div>
+        </div>
+      </div>
+
+      <div class="grid cols-3" style="margin-top:16px">
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">Compact — densidad operativa</div>
+          <div class="spec">Fila 36px · celdas 6×10 · cuerpo 13/19</div>
+          <div class="spec" style="margin-top:4px">Para Gantt y listas largas de tareas.</div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">Regular — por defecto</div>
+          <div class="spec">Fila 44px · celdas 10×14 · cuerpo 14/22</div>
+          <div class="spec" style="margin-top:4px">Equilibrio para programadores + creativos.</div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">Comfy — ejecutivo</div>
+          <div class="spec">Fila 52px · celdas 14×18 · cuerpo 15/24</div>
+          <div class="spec" style="margin-top:4px">Reportes, dashboards de Comité.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ RADIUS ═══════════════════════ -->
+    <section class="section" id="radius">
+      <div class="section-h">
+        <span class="eyebrow">04 · Foundations</span>
+        <span class="id">/radius</span>
+      </div>
+      <h2>Radios con <em>intención</em>.</h2>
+      <p class="section-lede">Más afilado para datos, más redondo para acción. El Tweak <em>Radio</em> escala todo el sistema.</p>
+
+      <div class="card">
+        <div class="row" style="gap:20px;justify-content:flex-start">
+          <div style="text-align:center"><div style="width:64px;height:64px;background:var(--surface-3);border:1px solid var(--line-2);border-radius:2px"></div><div class="spec" style="margin-top:8px">xs · 2</div></div>
+          <div style="text-align:center"><div style="width:64px;height:64px;background:var(--surface-3);border:1px solid var(--line-2);border-radius:4px"></div><div class="spec" style="margin-top:8px">sm · 4</div></div>
+          <div style="text-align:center"><div style="width:64px;height:64px;background:var(--surface-3);border:1px solid var(--line-2);border-radius:6px"></div><div class="spec" style="margin-top:8px">md · 6</div></div>
+          <div style="text-align:center"><div style="width:64px;height:64px;background:var(--surface-3);border:1px solid var(--line-2);border-radius:10px"></div><div class="spec" style="margin-top:8px">lg · 10</div></div>
+          <div style="text-align:center"><div style="width:64px;height:64px;background:var(--surface-3);border:1px solid var(--line-2);border-radius:14px"></div><div class="spec" style="margin-top:8px">xl · 14</div></div>
+          <div style="text-align:center"><div style="width:64px;height:64px;background:var(--surface-3);border:1px solid var(--line-2);border-radius:20px"></div><div class="spec" style="margin-top:8px">2xl · 20</div></div>
+          <div style="text-align:center"><div style="width:64px;height:64px;background:var(--surface-3);border:1px solid var(--line-2);border-radius:999px"></div><div class="spec" style="margin-top:8px">pill</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ ELEVATION ═══════════════════════ -->
+    <section class="section" id="elevation">
+      <div class="section-h">
+        <span class="eyebrow">05 · Foundations</span>
+        <span class="id">/elevation</span>
+      </div>
+      <h2>Sombras <em>quietas</em>.</h2>
+      <p class="section-lede">Cuatro niveles. Suficiente para separar planos sin perder la atmósfera de papel.</p>
+
+      <div class="grid cols-4">
+        <div class="canvas" style="padding:28px;display:flex;align-items:center;justify-content:center;background-image:none">
+          <div style="width:140px;height:90px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow: var(--sh-1);display:flex;align-items:center;justify-content:center;font:500 12px/1 var(--font-mono);color:var(--ink-3)">sh-1</div>
+        </div>
+        <div class="canvas" style="padding:28px;display:flex;align-items:center;justify-content:center;background-image:none">
+          <div style="width:140px;height:90px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow: var(--sh-2);display:flex;align-items:center;justify-content:center;font:500 12px/1 var(--font-mono);color:var(--ink-3)">sh-2</div>
+        </div>
+        <div class="canvas" style="padding:28px;display:flex;align-items:center;justify-content:center;background-image:none">
+          <div style="width:140px;height:90px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow: var(--sh-3);display:flex;align-items:center;justify-content:center;font:500 12px/1 var(--font-mono);color:var(--ink-3)">sh-3</div>
+        </div>
+        <div class="canvas" style="padding:28px;display:flex;align-items:center;justify-content:center;background-image:none">
+          <div style="width:140px;height:90px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow: var(--sh-4);display:flex;align-items:center;justify-content:center;font:500 12px/1 var(--font-mono);color:var(--ink-3)">sh-4</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ MOTION ═══════════════════════ -->
+    <section class="section" id="motion">
+      <div class="section-h">
+        <span class="eyebrow">06 · Foundations</span>
+        <span class="id">/motion</span>
+      </div>
+      <h2>Movimiento <em>contenido</em>.</h2>
+      <p class="section-lede">Toda transición usa la curva <code style="font:500 13px/1.4 var(--font-mono);color:var(--ink-1);background:var(--surface-2);padding:2px 6px;border-radius:4px">--ease</code>. Tres duraciones.</p>
+
+      <div class="grid cols-3">
+        <div class="card">
+          <div class="label" style="margin-bottom:8px">fast · 120ms</div>
+          <div class="spec">Hover, foco, switch toggle, click feedback.</div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:8px">default · 180ms</div>
+          <div class="spec">Aparición de menús, tooltips, paneles colapsables.</div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:8px">slow · 320ms</div>
+          <div class="spec">Cambios de ruta, transiciones de vista de proyecto.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ ICONOGRAPHY ═══════════════════════ -->
+    <section class="section" id="iconography">
+      <div class="section-h">
+        <span class="eyebrow">07 · Foundations</span>
+        <span class="id">/icons</span>
+      </div>
+      <h2>Iconos <em>de línea</em>.</h2>
+      <p class="section-lede">Trazo 1.5px, esquinas redondeadas, sobre rejilla 24. Tamaños: 12, 14, 16, 20, 24.</p>
+
+      <div class="card">
+        <div class="row" style="gap:24px;flex-wrap:wrap;color:var(--ink-1)">
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-folder"/></svg><div class="spec" style="margin-top:6px">folder</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-list"/></svg><div class="spec" style="margin-top:6px">list</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-kanban"/></svg><div class="spec" style="margin-top:6px">board</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-gantt"/></svg><div class="spec" style="margin-top:6px">gantt</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-calendar"/></svg><div class="spec" style="margin-top:6px">calendar</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-flag"/></svg><div class="spec" style="margin-top:6px">milestone</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-user"/></svg><div class="spec" style="margin-top:6px">user</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-bell"/></svg><div class="spec" style="margin-top:6px">bell</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-search"/></svg><div class="spec" style="margin-top:6px">search</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-filter"/></svg><div class="spec" style="margin-top:6px">filter</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-link"/></svg><div class="spec" style="margin-top:6px">link</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-spark"/></svg><div class="spec" style="margin-top:6px">spark</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-info"/></svg><div class="spec" style="margin-top:6px">info</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-plus"/></svg><div class="spec" style="margin-top:6px">plus</div></div>
+          <div style="text-align:center"><svg class="i i-20"><use href="#i-more"/></svg><div class="spec" style="margin-top:6px">more</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ BUTTONS ═══════════════════════ -->
+    <section class="section" id="buttons">
+      <div class="section-h">
+        <span class="eyebrow">08 · Components</span>
+        <span class="id">/buttons</span>
+      </div>
+      <h2>Botones</h2>
+      <p class="section-lede">Una primaria por contexto. Secundario por defecto. Ghost para acción terciaria.</p>
+
+      <div class="preview-grid">
+        <div class="canvas left">
+          <div class="stack" style="gap:20px;width:100%">
+            <div class="row">
+              <button class="btn btn-primary"><svg class="i i-14"><use href="#i-plus"/></svg> Nuevo proyecto</button>
+              <button class="btn btn-secondary">Filtrar</button>
+              <button class="btn btn-ghost">Cancelar</button>
+              <button class="btn btn-danger">Archivar</button>
+            </div>
+            <div class="row">
+              <button class="btn btn-primary btn-lg">Crear y abrir</button>
+              <button class="btn btn-primary">Guardar <span class="kbd">⌘S</span></button>
+              <button class="btn btn-secondary btn-sm">Detalle</button>
+              <button class="btn btn-icon btn-secondary"><svg class="i i-14"><use href="#i-more"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="specs">
+          <h4>Spec</h4>
+          <ul>
+            <li><span>height</span><span>var(--d-control)</span></li>
+            <li><span>radius</span><span>var(--r-md)</span></li>
+            <li><span>label</span><span>500 / 13px</span></li>
+            <li><span>gap (icon)</span><span>8</span></li>
+            <li><span>kbd hint</span><span>500 / 11px mono</span></li>
+            <li><span>focus</span><span>--ring</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ FORMS ═══════════════════════ -->
+    <section class="section" id="forms">
+      <div class="section-h">
+        <span class="eyebrow">09 · Components</span>
+        <span class="id">/forms</span>
+      </div>
+      <h2>Formularios</h2>
+      <p class="section-lede">Campos sobrios. Etiquetas visibles, descripciones cuando aportan, validación discreta.</p>
+
+      <div class="preview-grid">
+        <div class="canvas left" style="background-image:none">
+          <div class="stack" style="width:100%;max-width:520px;gap:18px">
+            <div class="row" style="gap:14px">
+              <div class="field" style="flex:1">
+                <label class="field-label">Nombre del proyecto</label>
+                <input class="input" value="Migración billing v2" />
+              </div>
+              <div class="field" style="width:140px">
+                <label class="field-label">Clave</label>
+                <input class="input" style="font-family:var(--font-mono)" value="BILL-2026" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label">Búsqueda</label>
+              <div class="input-wrap">
+                <svg class="i i-14 lead"><use href="#i-search"/></svg>
+                <input class="input with-icon" placeholder="Buscar por dueño, etiqueta, hito…" />
+              </div>
+              <span class="field-hint">Acepta operadores: <code style="font-family:var(--font-mono)">owner:mariana</code></span>
+            </div>
+            <div class="row" style="gap:18px">
+              <div class="field" style="flex:1">
+                <label class="field-label">Owner</label>
+                <select class="select">
+                  <option>Mariana Villalobos</option>
+                  <option>Andrés Castro</option>
+                </select>
+              </div>
+              <div class="field" style="flex:1">
+                <label class="field-label">Prioridad</label>
+                <select class="select">
+                  <option>P1 · Crítica</option><option>P2 · Alta</option><option>P3 · Media</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label">Descripción</label>
+              <textarea class="textarea" placeholder="Una frase. Sé específico."></textarea>
+            </div>
+            <div class="row">
+              <span class="checkbox checked"></span><span class="spec" style="color:var(--ink-1)">Notificar al stakeholder</span>
+              <div style="margin-left:16px;display:inline-flex;gap:8px;align-items:center"><span class="switch on"></span><span class="spec" style="color:var(--ink-1)">Sincronizar con calendario</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="specs">
+          <h4>Spec</h4>
+          <ul>
+            <li><span>input height</span><span>var(--d-control)</span></li>
+            <li><span>radius</span><span>var(--r-md)</span></li>
+            <li><span>label</span><span>500 / 12px</span></li>
+            <li><span>focus</span><span>border var(--p-500) + ring</span></li>
+            <li><span>hint</span><span>400 / 12px ink-3</span></li>
+            <li><span>monoespaciada</span><span>códigos &amp; queries</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ BADGES ═══════════════════════ -->
+    <section class="section" id="badges">
+      <div class="section-h">
+        <span class="eyebrow">10 · Components</span>
+        <span class="id">/badges</span>
+      </div>
+      <h2>Badges <em>&amp;</em> tags</h2>
+      <p class="section-lede">Badge para estado del sistema (semántico). Tag para metadatos del usuario (libre).</p>
+
+      <div class="preview-grid">
+        <div class="canvas left">
+          <div class="stack" style="gap:18px;width:100%">
+            <div class="row">
+              <span class="badge dot ok">On track</span>
+              <span class="badge dot warn">At risk</span>
+              <span class="badge dot err">Overdue</span>
+              <span class="badge dot info">In review</span>
+              <span class="badge">Draft</span>
+              <span class="badge solid">P1</span>
+              <span class="badge outline">v0.1</span>
+            </div>
+            <div class="row">
+              <span class="tag"><span class="dot" style="background:#8B5CF6"></span>billing</span>
+              <span class="tag"><span class="dot" style="background:#0EA5E9"></span>infra</span>
+              <span class="tag"><span class="dot" style="background:#10B981"></span>frontend</span>
+              <span class="tag"><span class="dot" style="background:#F59E0B"></span>research</span>
+              <span class="tag"><span class="dot" style="background:#EF4444"></span>sec-review</span>
+            </div>
+            <div class="row">
+              <span class="badge lg dot ok">Sprint 24 · cerrado</span>
+              <span class="badge lg dot info">PR #2218 listo</span>
+            </div>
+          </div>
+        </div>
+        <div class="specs">
+          <h4>Cuándo</h4>
+          <ul>
+            <li><span>badge</span><span>estado · sistema</span></li>
+            <li><span>tag</span><span>metadato · usuario</span></li>
+            <li><span>dot</span><span>visibilidad rápida</span></li>
+            <li><span>solid</span><span>prioridad / SKU</span></li>
+            <li><span>outline</span><span>versión / build</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ USERS ═══════════════════════ -->
+    <section class="section" id="users">
+      <div class="section-h">
+        <span class="eyebrow">11 · Components</span>
+        <span class="id">/users</span>
+      </div>
+      <h2>Personas <em>en el sistema</em>.</h2>
+      <p class="section-lede">Avatares con iniciales tonalizadas. Sin fotos por defecto: ruido visual mínimo en listas largas.</p>
+
+      <div class="preview-grid">
+        <div class="canvas left">
+          <div class="stack" style="gap:20px;width:100%">
+            <div class="row" style="align-items:center">
+              <span class="avatar sm av-1">MV</span>
+              <span class="avatar av-2">AC</span>
+              <span class="avatar md av-3">RJ</span>
+              <span class="avatar lg av-4">DP</span>
+              <span class="avatar lg av-5">LO</span>
+            </div>
+            <div class="row">
+              <span class="avatar-stack">
+                <span class="avatar av-1">MV</span>
+                <span class="avatar av-2">AC</span>
+                <span class="avatar av-3">RJ</span>
+                <span class="avatar" style="background:var(--surface-3);color:var(--ink-2)">+4</span>
+              </span>
+              <div class="spec">7 personas asignadas</div>
+            </div>
+            <div class="row" style="gap:12px;align-items:center">
+              <span class="avatar md av-2">AC</span>
+              <div class="stack" style="gap:0;align-items:flex-start">
+                <span style="font:500 14px/1.2 var(--font-sans);color:var(--ink)">Andrés Castro</span>
+                <span class="spec">Engineering Lead · andres@ktp.dev</span>
+              </div>
+              <span class="badge solid" style="margin-left:auto">Owner</span>
+            </div>
+          </div>
+        </div>
+        <div class="specs">
+          <h4>Spec</h4>
+          <ul>
+            <li><span>sm</span><span>22px</span></li>
+            <li><span>regular</span><span>28px</span></li>
+            <li><span>md</span><span>36px</span></li>
+            <li><span>lg</span><span>48px</span></li>
+            <li><span>iniciales</span><span>600 / sans</span></li>
+            <li><span>borde</span><span>1.5px surface</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ KPI ═══════════════════════ -->
+    <section class="section" id="kpi">
+      <div class="section-h">
+        <span class="eyebrow">12 · Components</span>
+        <span class="id">/kpi</span>
+      </div>
+      <h2>KPIs para el <em>Comité</em>.</h2>
+      <p class="section-lede">Una cifra grande, una unidad pequeña, una variación versus periodo. Sin gradientes decorativos.</p>
+
+      <div class="grid cols-4">
+        <div class="kpi">
+          <div class="kpi-lbl"><svg class="i i-12"><use href="#i-folder"/></svg>Proyectos activos</div>
+          <div class="kpi-val">27</div>
+          <div class="delta up"><svg class="i i-12"><use href="#i-arrow-up"/></svg>+3 vs. abril</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-lbl"><svg class="i i-12"><use href="#i-check"/></svg>Hitos a tiempo</div>
+          <div class="kpi-val">87<span class="unit">%</span></div>
+          <div class="delta up"><svg class="i i-12"><use href="#i-arrow-up"/></svg>+4.2 pts</div>
+          <svg class="spark" width="120" height="40" viewBox="0 0 120 40" fill="none">
+            <polyline points="0,28 15,30 30,24 45,26 60,18 75,22 90,12 105,16 120,8"
+              stroke="var(--p-500)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </div>
+        <div class="kpi">
+          <div class="kpi-lbl"><svg class="i i-12"><use href="#i-flag"/></svg>Riesgos abiertos</div>
+          <div class="kpi-val">4</div>
+          <div class="delta down"><svg class="i i-12"><use href="#i-arrow-down"/></svg>−2 vs. abril</div>
+        </div>
+        <div class="kpi feature">
+          <div class="kpi-lbl"><svg class="i i-12"><use href="#i-spark"/></svg>Velocity media</div>
+          <div class="kpi-val">38<span class="unit" style="opacity:.6">pts</span></div>
+          <div class="delta up" style="color: var(--p-300)"><svg class="i i-12"><use href="#i-arrow-up"/></svg>+12% trimestre</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ PROJECT LIST ═══════════════════════ -->
+    <section class="section" id="projects">
+      <div class="section-h">
+        <span class="eyebrow">13 · Patterns</span>
+        <span class="id">/projects</span>
+      </div>
+      <h2>Lista de proyectos</h2>
+      <p class="section-lede">Una fila por proyecto, ordenable, con progreso y dueño visible sin abrir el detalle.</p>
+
+      <div class="surface-table">
+        <div class="proj-row head">
+          <span></span>
+          <span>Proyecto</span>
+          <span>Owner</span>
+          <span>Estado</span>
+          <span>Prioridad</span>
+          <span>Progreso</span>
+          <span>Entrega</span>
+          <span></span>
+        </div>
+        <div class="proj-row">
+          <span class="tag-dot" style="background:#8B5CF6"></span>
+          <span class="name"><span class="code">BILL-2026</span>Migración billing v2</span>
+          <span><span class="avatar sm av-1">MV</span> <span class="spec" style="margin-left:6px;color:var(--ink-1)">M. Villalobos</span></span>
+          <span><span class="badge dot ok">On track</span></span>
+          <span><span class="badge solid">P1</span></span>
+          <span class="prog"><span>62%</span><span class="bar"><i style="width:62%"></i></span></span>
+          <span class="spec" style="color:var(--ink-1)">18 Jun 2026</span>
+          <span class="more"><svg class="i i-14"><use href="#i-more"/></svg></span>
+        </div>
+        <div class="proj-row over">
+          <span class="tag-dot" style="background:#EF4444"></span>
+          <span class="name"><span class="code">SEC-118</span>Auditoría perimetral Q2</span>
+          <span><span class="avatar sm av-2">AC</span> <span class="spec" style="margin-left:6px;color:var(--ink-1)">A. Castro</span></span>
+          <span><span class="badge dot err">Overdue</span></span>
+          <span><span class="badge solid">P1</span></span>
+          <span class="prog"><span>41%</span><span class="bar"><i style="width:41%"></i></span></span>
+          <span class="spec" style="color:var(--err-fg)">12 May · −2d</span>
+          <span class="more"><svg class="i i-14"><use href="#i-more"/></svg></span>
+        </div>
+        <div class="proj-row">
+          <span class="tag-dot" style="background:#0EA5E9"></span>
+          <span class="name"><span class="code">INFRA-90</span>Rediseño cola de eventos</span>
+          <span><span class="avatar sm av-3">RJ</span> <span class="spec" style="margin-left:6px;color:var(--ink-1)">R. Jiménez</span></span>
+          <span><span class="badge dot warn">At risk</span></span>
+          <span><span class="badge solid">P2</span></span>
+          <span class="prog"><span>74%</span><span class="bar"><i style="width:74%"></i></span></span>
+          <span class="spec" style="color:var(--ink-1)">02 Jul 2026</span>
+          <span class="more"><svg class="i i-14"><use href="#i-more"/></svg></span>
+        </div>
+        <div class="proj-row">
+          <span class="tag-dot" style="background:#10B981"></span>
+          <span class="name"><span class="code">UX-2204</span>Onboarding rediseño</span>
+          <span><span class="avatar sm av-4">DP</span> <span class="spec" style="margin-left:6px;color:var(--ink-1)">D. Padilla</span></span>
+          <span><span class="badge dot info">In review</span></span>
+          <span><span class="badge solid">P2</span></span>
+          <span class="prog"><span>88%</span><span class="bar"><i style="width:88%"></i></span></span>
+          <span class="spec" style="color:var(--ink-1)">28 May 2026</span>
+          <span class="more"><svg class="i i-14"><use href="#i-more"/></svg></span>
+        </div>
+        <div class="proj-row">
+          <span class="tag-dot" style="background:#F59E0B"></span>
+          <span class="name"><span class="code">DATA-441</span>Modelo demanda 2027</span>
+          <span><span class="avatar sm av-5">LO</span> <span class="spec" style="margin-left:6px;color:var(--ink-1)">L. Ortega</span></span>
+          <span><span class="badge dot ok">On track</span></span>
+          <span><span class="badge solid">P3</span></span>
+          <span class="prog"><span>23%</span><span class="bar"><i style="width:23%"></i></span></span>
+          <span class="spec" style="color:var(--ink-1)">14 Ago 2026</span>
+          <span class="more"><svg class="i i-14"><use href="#i-more"/></svg></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ KANBAN ═══════════════════════ -->
+    <section class="section" id="kanban">
+      <div class="section-h">
+        <span class="eyebrow">14 · Patterns</span>
+        <span class="id">/kanban</span>
+      </div>
+      <h2>Tablero (kanban)</h2>
+      <p class="section-lede">Cuatro columnas por defecto: Backlog → In progress → In review → Done. Cards arrastrables.</p>
+
+      <div class="kanban">
+        <div class="k-col">
+          <div class="k-col-head"><span style="width:8px;height:8px;border-radius:2px;background:var(--ink-3)"></span>Backlog <span class="count">8</span></div>
+          <div class="k-card">
+            <div class="row" style="justify-content:space-between">
+              <span class="k-id">BILL-2218</span>
+              <span class="badge solid">P2</span>
+            </div>
+            <div class="k-title">Validar regla de prorrateo en cierres mensuales</div>
+            <div class="k-foot">
+              <span class="tag" style="height:20px;font-size:11px"><span class="dot" style="background:#8B5CF6"></span>billing</span>
+              <span class="k-due">02 Jun</span>
+            </div>
+          </div>
+          <div class="k-card">
+            <div class="row" style="justify-content:space-between">
+              <span class="k-id">DATA-447</span>
+              <span class="badge solid">P3</span>
+            </div>
+            <div class="k-title">Snapshot histórico de cohortes 2023–2025</div>
+            <div class="k-foot">
+              <span class="avatar sm av-5">LO</span>
+              <span class="k-due">12 Jun</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="k-col">
+          <div class="k-col-head"><span style="width:8px;height:8px;border-radius:2px;background:var(--info-fg)"></span>In progress <span class="count">5</span></div>
+          <div class="k-card" style="border-left: 3px solid var(--p-500)">
+            <div class="row" style="justify-content:space-between">
+              <span class="k-id">INFRA-90</span>
+              <span class="badge dot warn">At risk</span>
+            </div>
+            <div class="k-title">Migrar workers de NATS a Redpanda</div>
+            <div class="k-foot">
+              <span class="avatar sm av-3">RJ</span>
+              <span class="avatar sm av-2" style="margin-left:-4px">AC</span>
+              <span class="k-due">15 May</span>
+            </div>
+          </div>
+          <div class="k-card">
+            <div class="row" style="justify-content:space-between">
+              <span class="k-id">UX-2204</span>
+              <span class="badge solid">P2</span>
+            </div>
+            <div class="k-title">Wireframes onboarding mobile (3 variantes)</div>
+            <div class="k-foot">
+              <span class="avatar sm av-4">DP</span>
+              <span class="k-due">19 May</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="k-col">
+          <div class="k-col-head"><span style="width:8px;height:8px;border-radius:2px;background:var(--p-500)"></span>In review <span class="count">3</span></div>
+          <div class="k-card">
+            <div class="row" style="justify-content:space-between">
+              <span class="k-id">SEC-118</span>
+              <span class="badge dot err">Overdue</span>
+            </div>
+            <div class="k-title">Reporte de pentesting hacia el comité de riesgos</div>
+            <div class="k-foot">
+              <span class="avatar sm av-2">AC</span>
+              <span class="k-due">12 May</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="k-col">
+          <div class="k-col-head"><span style="width:8px;height:8px;border-radius:2px;background:var(--ok-fg)"></span>Done <span class="count">12</span></div>
+          <div class="k-card" style="opacity:.78">
+            <div class="row" style="justify-content:space-between">
+              <span class="k-id">BILL-2210</span>
+              <svg class="i i-14" style="color:var(--ok-fg)"><use href="#i-check"/></svg>
+            </div>
+            <div class="k-title">Migrar tablas a particionado por fecha</div>
+            <div class="k-foot">
+              <span class="avatar sm av-1">MV</span>
+              <span class="k-due">08 May</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ GANTT ═══════════════════════ -->
+    <section class="section" id="gantt">
+      <div class="section-h">
+        <span class="eyebrow">15 · Patterns</span>
+        <span class="id">/gantt</span>
+      </div>
+      <h2>Gantt &amp; <em>cronograma</em>.</h2>
+      <p class="section-lede">Doce columnas (meses, semanas o sprints). Barras con relleno de avance, dependencias finas y un hito como diamante.</p>
+
+      <div class="gantt">
+        <div class="gantt-head">
+          <div class="left">Tarea</div>
+          <div class="axis">
+            <span>S 21</span><span>S 22</span><span>S 23</span><span>S 24</span>
+            <span>S 25</span><span>S 26</span><span>S 27</span><span>S 28</span>
+            <span>S 29</span><span>S 30</span><span>S 31</span><span>S 32</span>
+          </div>
+        </div>
+        <div class="gantt-body">
+          <div class="gantt-row">
+            <div class="left">
+              <div class="t">Discovery + spec técnica</div>
+              <div class="s">M. Villalobos · BILL-2026</div>
+            </div>
+            <div class="track">
+              <div class="today" style="left: 30%"></div>
+              <div class="bar done" style="left: 0; width: 18%">
+                <div class="fill" style="width: 100%"></div>
+                Discovery
+              </div>
+            </div>
+          </div>
+          <div class="gantt-row">
+            <div class="left">
+              <div class="t">Implementación motor</div>
+              <div class="s">R. Jiménez · INFRA-90</div>
+            </div>
+            <div class="track">
+              <div class="today" style="left: 30%"></div>
+              <div class="bar solid" style="left: 16%; width: 30%">
+                <div class="fill" style="width:48%; background: rgba(255,255,255,.18)"></div>
+                Implementación · 48%
+              </div>
+            </div>
+          </div>
+          <div class="gantt-row">
+            <div class="left">
+              <div class="t">QA + carga</div>
+              <div class="s">A. Castro</div>
+            </div>
+            <div class="track">
+              <div class="today" style="left: 30%"></div>
+              <div class="bar" style="left: 42%; width: 20%">
+                <div class="fill" style="width: 0"></div>
+                QA
+              </div>
+            </div>
+          </div>
+          <div class="gantt-row">
+            <div class="left">
+              <div class="t">Security review</div>
+              <div class="s">SEC-118 · en riesgo</div>
+            </div>
+            <div class="track">
+              <div class="today" style="left: 30%"></div>
+              <div class="bar risk" style="left: 48%; width: 14%">Review</div>
+            </div>
+          </div>
+          <div class="gantt-row">
+            <div class="left">
+              <div class="t">Lanzamiento</div>
+              <div class="s">Hito · cross-team</div>
+            </div>
+            <div class="track">
+              <div class="today" style="left: 30%"></div>
+              <div class="milestone" style="left: 64%" title="GA 18 Jun"></div>
+              <div style="position:absolute;left:65%;top:50%;transform:translateY(-50%);font:500 11px/1 var(--font-mono);color:var(--ink-2);margin-left:8px">GA · 18 Jun</div>
+            </div>
+          </div>
+          <div class="gantt-row">
+            <div class="left">
+              <div class="t">Adopción + métricas</div>
+              <div class="s">D. Padilla · L. Ortega</div>
+            </div>
+            <div class="track">
+              <div class="today" style="left: 30%"></div>
+              <div class="bar" style="left: 66%; width: 32%">Rollout + medición</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid cols-3" style="margin-top:16px">
+        <div class="card" style="padding:14px">
+          <div class="label" style="margin-bottom:8px">Flat — por defecto</div>
+          <div class="spec">Sin sombras, color sólido. Densidad operativa.</div>
+        </div>
+        <div class="card" style="padding:14px">
+          <div class="label" style="margin-bottom:8px">Layered — ejecutivo</div>
+          <div class="spec">Sombra sutil y degradado vertical en la barra principal.</div>
+        </div>
+        <div class="card" style="padding:14px">
+          <div class="label" style="margin-bottom:8px">ASCII — modo terminal</div>
+          <div class="spec">Barras con dashed + relleno hatched. Para programadores que leen rápido.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ TABLE ═══════════════════════ -->
+    <section class="section" id="table">
+      <div class="section-h">
+        <span class="eyebrow">16 · Patterns</span>
+        <span class="id">/table</span>
+      </div>
+      <h2>Tablas de datos</h2>
+      <p class="section-lede">Para reportes, exports y vistas administrativas. Cifras tabulares, encabezados monoespaciados.</p>
+
+      <div class="surface-table">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th style="width:90px">Sprint</th>
+              <th>Equipo</th>
+              <th>Tareas</th>
+              <th class="num">Velocity</th>
+              <th class="num">Cumplimiento</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style="font-family:var(--font-mono);color:var(--ink-2)">S 24</td><td>Plataforma</td><td>14 / 16</td><td class="num">42</td><td class="num">94.1%</td><td><span class="badge dot ok">On track</span></td></tr>
+            <tr><td style="font-family:var(--font-mono);color:var(--ink-2)">S 24</td><td>Billing</td><td>9 / 12</td><td class="num">28</td><td class="num">75.0%</td><td><span class="badge dot warn">At risk</span></td></tr>
+            <tr><td style="font-family:var(--font-mono);color:var(--ink-2)">S 24</td><td>Seguridad</td><td>5 / 9</td><td class="num">17</td><td class="num">55.5%</td><td><span class="badge dot err">Behind</span></td></tr>
+            <tr><td style="font-family:var(--font-mono);color:var(--ink-2)">S 24</td><td>Design</td><td>11 / 11</td><td class="num">36</td><td class="num">100%</td><td><span class="badge dot ok">Done</span></td></tr>
+            <tr><td style="font-family:var(--font-mono);color:var(--ink-2)">S 24</td><td>Data</td><td>6 / 8</td><td class="num">22</td><td class="num">75.0%</td><td><span class="badge dot info">In review</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ FEEDBACK ═══════════════════════ -->
+    <section class="section" id="feedback">
+      <div class="section-h">
+        <span class="eyebrow">17 · Patterns</span>
+        <span class="id">/feedback</span>
+      </div>
+      <h2>Feedback al usuario</h2>
+      <p class="section-lede">Toasts discretos, estados vacíos honestos, atajos siempre visibles.</p>
+
+      <div class="grid cols-2">
+        <div class="canvas" style="background-image:none;padding:32px;display:flex;align-items:center;justify-content:center">
+          <div class="toast">
+            <div class="ic"><svg class="i i-14"><use href="#i-check"/></svg></div>
+            <div class="body">
+              <div class="ttl">Proyecto archivado</div>
+              <div class="msg">«Auditoría perimetral Q2» se movió a archivados. <a style="color:var(--p-600);text-decoration:underline">Deshacer</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty">
+          <div class="glyph"><svg class="i i-24"><use href="#i-folder"/></svg></div>
+          <div style="font:500 16px/1.3 var(--font-sans);color:var(--ink);margin-bottom:6px">Sin proyectos en este espacio</div>
+          <div class="spec" style="max-width:36ch;margin:0 auto 14px">Crea tu primer proyecto o importa una plantilla del catálogo de KTP.</div>
+          <div class="row" style="justify-content:center">
+            <button class="btn btn-primary btn-sm"><svg class="i i-14"><use href="#i-plus"/></svg> Nuevo proyecto</button>
+            <button class="btn btn-secondary btn-sm">Importar plantilla</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid cols-3" style="margin-top:16px">
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">Atajos</div>
+          <div class="stack" style="gap:8px">
+            <div class="row"><span class="kbd">⌘</span><span class="kbd">K</span><span class="spec" style="margin-left:8px;color:var(--ink-1)">Command palette</span></div>
+            <div class="row"><span class="kbd">N</span><span class="spec" style="margin-left:8px;color:var(--ink-1)">Nueva tarea</span></div>
+            <div class="row"><span class="kbd">G</span><span class="kbd">P</span><span class="spec" style="margin-left:8px;color:var(--ink-1)">Ir a proyectos</span></div>
+            <div class="row"><span class="kbd">G</span><span class="kbd">T</span><span class="spec" style="margin-left:8px;color:var(--ink-1)">Ir a Gantt</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">Loading / skeleton</div>
+          <div class="stack" style="gap:8px">
+            <div style="height:12px;border-radius:4px;background:linear-gradient(90deg,var(--surface-3),var(--surface-2),var(--surface-3));background-size:200% 100%;animation:shimmer 1.4s linear infinite"></div>
+            <div style="height:12px;width:70%;border-radius:4px;background:linear-gradient(90deg,var(--surface-3),var(--surface-2),var(--surface-3));background-size:200% 100%;animation:shimmer 1.4s linear infinite .15s"></div>
+            <div style="height:12px;width:45%;border-radius:4px;background:linear-gradient(90deg,var(--surface-3),var(--surface-2),var(--surface-3));background-size:200% 100%;animation:shimmer 1.4s linear infinite .3s"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:10px">Inline help</div>
+          <div class="note" style="margin:0">Esta vista está en beta. Tus comentarios viajan directo a <code style="font-family:var(--font-mono);color:var(--ink-1)">#design-ops</code>.</div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="section" style="border-top: 1px solid var(--line);padding-bottom:24px">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="row" style="gap:14px">
+          <div class="logo-mark" style="width:24px;height:24px"></div>
+          <div class="spec" style="color:var(--ink-2)">Project Workgroup · DS v0.1 · 10 mayo 2026</div>
+        </div>
+        <div class="spec">Sistema interno · KTP · prepared by design-ops</div>
+      </div>
+    </footer>
+
+  </main>
+</div>
+
+<style>
+@keyframes shimmer{ 0%{ background-position: 200% 0 } 100%{ background-position: -200% 0 } }
+</style>
+
+<div id="tweaks-root"></div>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+
+</body>
+</html>

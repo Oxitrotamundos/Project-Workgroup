@@ -1,0 +1,66 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        bg: 'var(--bg)',
+        'bg-subtle': 'var(--bg-subtle)',
+        surface: 'var(--surface)',
+        'surface-2': 'var(--surface-2)',
+        'surface-3': 'var(--surface-3)',
+        ink: 'var(--ink)',
+        'ink-1': 'var(--ink-1)',
+        'ink-2': 'var(--ink-2)',
+        'ink-3': 'var(--ink-3)',
+        'ink-4': 'var(--ink-4)',
+        line: 'var(--line)',
+        'line-2': 'var(--line-2)',
+        'line-strong': 'var(--line-strong)',
+        primary: {
+          50: 'var(--p-50)',
+          100: 'var(--p-100)',
+          200: 'var(--p-200)',
+          300: 'var(--p-300)',
+          400: 'var(--p-400)',
+          500: 'var(--p-500)',
+          600: 'var(--p-600)',
+          700: 'var(--p-700)',
+          800: 'var(--p-800)',
+        },
+        ok: { fg: 'var(--ok-fg)', bg: 'var(--ok-bg)', line: 'var(--ok-line)' },
+        warn: { fg: 'var(--warn-fg)', bg: 'var(--warn-bg)', line: 'var(--warn-line)' },
+        err: { fg: 'var(--err-fg)', bg: 'var(--err-bg)', line: 'var(--err-line)' },
+        info: { fg: 'var(--info-fg)', bg: 'var(--info-bg)', line: 'var(--info-line)' },
+      },
+      fontFamily: {
+        sans: 'var(--font-sans)',
+        mono: 'var(--font-mono)',
+        display: 'var(--font-display)',
+      },
+      borderRadius: {
+        xs: 'var(--r-xs)',
+        sm: 'var(--r-sm)',
+        md: 'var(--r-md)',
+        lg: 'var(--r-lg)',
+        xl: 'var(--r-xl)',
+        '2xl': 'var(--r-2xl)',
+      },
+      boxShadow: {
+        1: 'var(--sh-1)',
+        2: 'var(--sh-2)',
+        3: 'var(--sh-3)',
+        4: 'var(--sh-4)',
+      },
+      transitionDuration: {
+        fast: 'var(--dur-fast)',
+        DEFAULT: 'var(--dur)',
+        slow: 'var(--dur-slow)',
+      },
+    },
+  },
+  plugins: [],
+}
