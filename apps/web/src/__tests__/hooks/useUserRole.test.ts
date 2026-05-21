@@ -4,13 +4,11 @@ import { useUserRole } from '../../hooks/useUserRole'
 import { UserService } from '../../services/userService'
 import { useAuth } from '../../contexts/AuthContext'
 
-// Mock de dependencias
 vi.mock('../../services/userService')
 vi.mock('../../contexts/AuthContext')
 
 const mockUseAuth = vi.mocked(useAuth)
 
-// Mock data
 const mockUser = {
   id: 'test-uid',
   uid: 'test-uid',
@@ -33,11 +31,11 @@ describe('useUserRole Hook', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     
-    // Setup default mocks
     mockUseAuth.mockReturnValue({
       user: mockUser,
       loading: false,
       signIn: vi.fn(),
+      signInWithGoogle: vi.fn(),
       signUp: vi.fn(),
       signOut: vi.fn(),
       logout: vi.fn(),
@@ -69,6 +67,7 @@ describe('useUserRole Hook', () => {
         user: mockAdminUser,
         loading: false,
         signIn: vi.fn(),
+        signInWithGoogle: vi.fn(),
         signUp: vi.fn(),
         signOut: vi.fn(),
         logout: vi.fn(),
@@ -96,7 +95,7 @@ describe('useUserRole Hook', () => {
         expect(result.current.loading).toBe(false)
       })
       
-      expect(result.current.userRole).toBe('member') // Rol por defecto
+      expect(result.current.userRole).toBe('member')
       expect(result.current.error).toBeNull()
     })
   })
@@ -107,6 +106,7 @@ describe('useUserRole Hook', () => {
         user: null,
         loading: false,
         signIn: vi.fn(),
+        signInWithGoogle: vi.fn(),
         signUp: vi.fn(),
         signOut: vi.fn(),
         logout: vi.fn(),
@@ -119,7 +119,6 @@ describe('useUserRole Hook', () => {
       expect(result.current.userRole).toBeNull()
       expect(result.current.error).toBeNull()
       
-      // No debe hacer llamadas sin usuario
       expect(UserService.getUser).not.toHaveBeenCalled()
     })
 
@@ -128,6 +127,7 @@ describe('useUserRole Hook', () => {
         user: null,
         loading: true,
         signIn: vi.fn(),
+        signInWithGoogle: vi.fn(),
         signUp: vi.fn(),
         signOut: vi.fn(),
         logout: vi.fn(),
@@ -140,7 +140,6 @@ describe('useUserRole Hook', () => {
       expect(result.current.userRole).toBeNull()
       expect(result.current.error).toBeNull()
       
-      // No debe hacer llamadas mientras auth está cargando
       expect(UserService.getUser).not.toHaveBeenCalled()
     })
   })
@@ -156,7 +155,7 @@ describe('useUserRole Hook', () => {
         expect(result.current.loading).toBe(false)
       })
       
-      expect(result.current.userRole).toBe('member') // Rol por defecto en caso de error
+      expect(result.current.userRole).toBe('member')
       expect(result.current.error).toBe('Error al obtener el rol del usuario')
     })
 
@@ -172,7 +171,7 @@ describe('useUserRole Hook', () => {
       })
       
       expect(result.current.error).toBe('Error al obtener el rol del usuario')
-      expect(result.current.userRole).toBe('member') // Rol por defecto
+      expect(result.current.userRole).toBe('member')
     })
   })
 
@@ -186,7 +185,7 @@ describe('useUserRole Hook', () => {
         expect(result.current.loading).toBe(false)
       })
       
-      expect(result.current.userRole).toBe('member') // Rol por defecto
+      expect(result.current.userRole).toBe('member')
       expect(result.current.error).toBeNull()
     })
 

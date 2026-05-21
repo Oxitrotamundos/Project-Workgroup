@@ -5,7 +5,6 @@ import { ProjectService } from '../../services/projectService'
 import { useUserRole } from '../../hooks/useUserRole'
 import { useAuth } from '../../contexts/AuthContext'
 
-// Mock de dependencias
 vi.mock('../../services/projectService')
 vi.mock('../../hooks/useUserRole')
 vi.mock('../../contexts/AuthContext')
@@ -13,7 +12,6 @@ vi.mock('../../contexts/AuthContext')
 const mockUseUserRole = vi.mocked(useUserRole)
 const mockUseAuth = vi.mocked(useAuth)
 
-// Mock data
 const mockUser = {
   id: 'test-uid',
   uid: 'test-uid',
@@ -56,11 +54,11 @@ describe('useProjects Hook', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     
-    // Setup default mocks
     mockUseAuth.mockReturnValue({
       user: mockUser,
       loading: false,
       signIn: vi.fn(),
+      signInWithGoogle: vi.fn(),
       signUp: vi.fn(),
       signOut: vi.fn(),
       logout: vi.fn(),
@@ -76,7 +74,6 @@ describe('useProjects Hook', () => {
       isMember: true
     })
     
-    // Mock ProjectService methods
     ProjectService.getUserProjects = vi.fn().mockResolvedValue({
       items: mockProjects,
       hasMore: false,
@@ -143,7 +140,6 @@ describe('useProjects Hook', () => {
       
       expect(result.current.loading).toBe(true)
       
-      // No debe hacer llamadas mientras el rol está cargando
       expect(ProjectService.getUserProjects).not.toHaveBeenCalled()
       expect(ProjectService.getAllProjects).not.toHaveBeenCalled()
     })
@@ -154,7 +150,6 @@ describe('useProjects Hook', () => {
       const errorMessage = 'Error al cargar proyectos'
       ProjectService.getUserProjects = vi.fn().mockRejectedValue(new Error(errorMessage))
       
-      // Asegurar que user y userRole estén disponibles para que se ejecute la carga
       mockUseAuth.mockReturnValue({
         user: {
           id: 'test-uid',
@@ -166,6 +161,7 @@ describe('useProjects Hook', () => {
         },
         loading: false,
         signIn: vi.fn(),
+        signInWithGoogle: vi.fn(),
         signUp: vi.fn(),
         signOut: vi.fn(),
         logout: vi.fn(),
@@ -194,7 +190,6 @@ describe('useProjects Hook', () => {
     it('debe manejar errores de permisos', async () => {
       ProjectService.getUserProjects = vi.fn().mockRejectedValue(new Error('Permission denied'))
       
-      // Asegurar que user y userRole estén disponibles para que se ejecute la carga
       mockUseAuth.mockReturnValue({
         user: {
           id: 'test-uid',
@@ -206,6 +201,7 @@ describe('useProjects Hook', () => {
         },
         loading: false,
         signIn: vi.fn(),
+        signInWithGoogle: vi.fn(),
         signUp: vi.fn(),
         signOut: vi.fn(),
         logout: vi.fn(),
@@ -237,6 +233,7 @@ describe('useProjects Hook', () => {
         user: null,
         loading: false,
         signIn: vi.fn(),
+        signInWithGoogle: vi.fn(),
         signUp: vi.fn(),
         signOut: vi.fn(),
         logout: vi.fn(),
@@ -249,7 +246,6 @@ describe('useProjects Hook', () => {
       expect(result.current.projects).toEqual([])
       expect(result.current.error).toBeNull()
       
-      // No debe hacer llamadas sin usuario
       expect(ProjectService.getUserProjects).not.toHaveBeenCalled()
       expect(ProjectService.getAllProjects).not.toHaveBeenCalled()
     })
@@ -257,7 +253,6 @@ describe('useProjects Hook', () => {
     it('debe limpiar estado al desmontar', () => {
       const { unmount } = renderHook(() => useProjects())
       
-      // El hook debería limpiar cualquier estado pendiente
       expect(() => unmount()).not.toThrow()
     })
   })
@@ -270,7 +265,6 @@ describe('useProjects Hook', () => {
         expect(result.current.loading).toBe(false)
       })
       
-      // Solo debe haber una llamada inicial
       expect(ProjectService.getUserProjects).toHaveBeenCalledTimes(1)
     })
   })

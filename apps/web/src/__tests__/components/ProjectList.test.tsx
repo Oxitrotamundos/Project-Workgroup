@@ -96,6 +96,7 @@ describe('ProjectList Component', () => {
       signIn: vi.fn(),
       signUp: vi.fn(),
       signOut: vi.fn(),
+      signInWithGoogle: vi.fn(),
       logout: vi.fn(),
       resetPassword: vi.fn()
     })
@@ -145,7 +146,7 @@ describe('ProjectList Component', () => {
       renderProjectList({ loading: true, projects: [] })
       
       const skeletons = screen.getAllByTestId('project-skeleton')
-      expect(skeletons).toHaveLength(8) // Según la configuración del componente
+      expect(skeletons).toHaveLength(8)
     })
 
     it('debe mostrar estado vacío cuando no hay proyectos', () => {
@@ -240,7 +241,6 @@ describe('ProjectList Component', () => {
       
       renderProjectList()
       
-      // Los administradores pueden ver todos los botones
       const viewButtons = screen.getAllByLabelText('Ver proyecto')
       const editButtons = screen.getAllByLabelText('Editar proyecto')
       const deleteButtons = screen.getAllByLabelText('Eliminar proyecto')
@@ -261,11 +261,9 @@ describe('ProjectList Component', () => {
       
       renderProjectList()
       
-      // Los miembros solo pueden ver proyectos
       const viewButtons = screen.getAllByLabelText('Ver proyecto')
       expect(viewButtons.length).toBeGreaterThan(0)
       
-      // No deben ver botones de editar/eliminar en proyectos que no son suyos
       expect(screen.queryByLabelText('Eliminar proyecto')).not.toBeInTheDocument()
     })
   })
@@ -298,7 +296,6 @@ describe('ProjectList Component', () => {
         } as any
       }
       
-      // Configurar como admin para mostrar 'Todos los Proyectos'
       mockUseUserRole.mockReturnValue({
         ...defaultUseUserRoleReturn,
         userRole: 'admin',
@@ -327,7 +324,6 @@ describe('ProjectList Component', () => {
         user: null
       }
       
-      // Configurar como admin para mostrar 'Todos los Proyectos'
       mockUseUserRole.mockReturnValue({
         ...defaultUseUserRoleReturn,
         userRole: 'admin',
@@ -348,7 +344,6 @@ describe('ProjectList Component', () => {
         onLoadMore={vi.fn()}
       />, { authProps })
       
-      // El componente debería manejar gracefully el caso de usuario no autenticado
       expect(screen.getByText('Todos los Proyectos')).toBeInTheDocument()
     })
   })
