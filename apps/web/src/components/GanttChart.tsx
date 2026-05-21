@@ -28,7 +28,6 @@ import { LocaleProvider } from './LocaleProvider';
 import { setupAutoLocalization } from '../utils/ganttLocalizer';
 import { applyBarTooltips } from '../utils/ganttBarTooltips';
 import { GanttTimeline } from './GanttTimeline';
-import GanttSnapOverlay from './GanttSnapOverlay';
 import { useProjectSettings } from '../contexts/ProjectSettingsContext';
 
 import coreLocaleEs from 'wx-core-locales/locales/es';
@@ -303,60 +302,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     ];
   }, []);
 
-  const dayDiff = (next: Date, prev: Date): number => {
-    const d = (next.getTime() - prev.getTime()) / 1000 / 60 / 60 / 24;
-    return Math.ceil(Math.abs(d));
-  };
-
-  const collectProgressFromKids = useCallback(
-    (id: number | string): [number, number] => {
-      let totalProgress = 0;
-      let totalDuration = 0;
-      const api = apiRef.current;
-      if (!api) return [0, 0];
-      const task = api.getTask(id);
-      if (!task) return [0, 0];
-      const kids = task.data ?? [];
-      kids.forEach((kid: GanttTask) => {
-        if (kid.type !== 'milestone' && kid.type !== 'summary') {
-          const duration = kid.duration || dayDiff(kid.end, kid.start);
-          totalDuration += duration;
-          totalProgress += duration * (kid.progress ?? 0);
-        }
-        const [p, d] = collectProgressFromKids(kid.id);
-        totalProgress += p;
-        totalDuration += d;
-      });
-      return [totalProgress, totalDuration];
-    },
-    [apiRef],
-  );
-
-  const recalcSummaryProgress = useCallback(
-    (id: number | string, self = false) => {
-      const api = apiRef.current;
-      if (!api) return;
-      const state = api.getState();
-      const tasksLib = state?.tasks as unknown as { getSummaryId?: (id: number | string) => number | string };
-      const task = api.getTask(id);
-      if (!task || task.type === 'milestone') return;
-      const summary =
-        self && task.type === 'summary'
-          ? id
-          : tasksLib && typeof tasksLib.getSummaryId === 'function'
-          ? tasksLib.getSummaryId(id)
-          : undefined;
-      if (!summary) return;
-      const summaryTask = api.getTask(summary);
-      const [totalProgress, totalDuration] = collectProgressFromKids(summary);
-      const progress = totalDuration === 0 ? 0 : Math.round(totalProgress / totalDuration);
-      const current = Math.round(Number(summaryTask?.progress ?? 0));
-      if (current === progress) return;
-      api.exec('update-task', { id: summary, task: { progress }, _silent: true });
-    },
-    [apiRef, collectProgressFromKids],
-  );
-
   const handleAddTaskFromToolbar = async () => {
     try {
       await taskManager.createTask({
@@ -464,19 +409,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
         dataProvider.setGanttApi(api);
       }
 
-      api.on('update-task', ({ id }) => recalcSummaryProgress(id));
-      api.on('delete-task', ({ source }) => {
-        if (source !== undefined) recalcSummaryProgress(source, true);
-      });
-      api.on('copy-task', ({ id }) => recalcSummaryProgress(id));
-      api.on('move-task', ({ id, source, inProgress }) => {
-        if (inProgress) return;
-        const movedTask = api.getTask(id);
-        if (movedTask && source !== undefined && movedTask.parent !== source) {
-          recalcSummaryProgress(source, true);
-        }
-        recalcSummaryProgress(id);
-      });
       api.on('scroll-chart', (ev: { left?: number; top?: number }) => {
         setScrollLeft(ev.left ?? 0);
       });
@@ -496,7 +428,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         });
       }
     },
-    [apiRef, dataProvider, locale, recalcSummaryProgress],
+    [apiRef, dataProvider, locale],
   );
 
   useEffect(() => {
@@ -670,11 +602,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
               {...({ lengthUnit: 'hour' } as { lengthUnit: 'hour' })}
             />
           </Willow>
-          <GanttSnapOverlay
-            api={toolbarApi}
-            calendar={calendar}
-            containerRef={containerRef}
-          />
         </div>
         <GanttTimeline
           scrollLeft={scrollLeft}

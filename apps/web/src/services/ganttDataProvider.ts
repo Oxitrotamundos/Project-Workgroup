@@ -31,6 +31,14 @@ const toIsoDateTime = (value: Date | string | undefined | null): string | undefi
   return undefined;
 };
 
+const sameIsoDate = (a?: string, b?: string): boolean => {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return false;
+  const ta = new Date(a).getTime();
+  const tb = new Date(b).getTime();
+  return Number.isFinite(ta) && Number.isFinite(tb) && ta === tb;
+};
+
 export const toGanttId = (id: string | number | bigint | null | undefined): GanttId | undefined => {
   if (id === undefined || id === null || id === '') return undefined;
   if (typeof id === 'number') return id;
@@ -88,7 +96,7 @@ export class GanttDataProvider {
   private dataChangeTimer: ReturnType<typeof setTimeout> | null = null;
   private openStateDebounceMs = 350;
   private openStateTimer: ReturnType<typeof setTimeout> | null = null;
-  private throttleMs = 150;
+  private throttleMs = 0;
   private pendingActions: Map<string, PendingQueuedAction> = new Map();
 
   constructor(projectId: string) {
@@ -118,8 +126,8 @@ export class GanttDataProvider {
         cached.version === fresh.version &&
         cached.duration === fresh.duration &&
         cached.estimatedHours === fresh.estimatedHours &&
-        cached.startDate === fresh.startDate &&
-        cached.endDate === fresh.endDate &&
+        sameIsoDate(cached.startDate, fresh.startDate) &&
+        sameIsoDate(cached.endDate, fresh.endDate) &&
         cached.status === fresh.status &&
         cached.progress === fresh.progress &&
         cached.name === fresh.name &&
@@ -221,11 +229,13 @@ export class GanttDataProvider {
       this.markTaskUpdated(updated);
       const ganttTask = this.toGanttTask(updated);
       if (ganttTask && this._ganttApi && ganttTask.id !== undefined) {
-        this._ganttApi.exec('update-task', {
-          id: ganttTask.id,
-          task: ganttTask,
-          _silent: true,
-        });
+        if (!this.ganttTaskMatches(ganttTask.id, ganttTask)) {
+          this._ganttApi.exec('update-task', {
+            id: ganttTask.id,
+            task: ganttTask,
+            _silent: true,
+          });
+        }
       }
     }
   }
@@ -444,16 +454,32 @@ export class GanttDataProvider {
     }
   }
 
+  private ganttTaskMatches(currentId: GanttId, candidate: GanttTask): boolean {
+    const cur = this._ganttApi?.getTask?.(currentId);
+    if (!cur) return false;
+    const sameMs = (a?: Date, b?: Date) =>
+      a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
+    return (
+      sameMs(cur.start, candidate.start) &&
+      sameMs(cur.end, candidate.end) &&
+      cur.progress === candidate.progress &&
+      cur.text === candidate.text &&
+      cur.type === candidate.type
+    );
+  }
+
   private applyEntityUpdate(taskId: string, fresh: Task, summariesPatched?: SummaryPatch[]): void {
     this.taskCache.set(taskId, fresh);
     this.markTaskUpdated(fresh);
     const ganttTask = this.toGanttTask(fresh);
     if (ganttTask && this._ganttApi && ganttTask.id !== undefined) {
-      this._ganttApi.exec('update-task', {
-        id: ganttTask.id,
-        task: ganttTask,
-        _silent: true,
-      });
+      if (!this.ganttTaskMatches(ganttTask.id, ganttTask)) {
+        this._ganttApi.exec('update-task', {
+          id: ganttTask.id,
+          task: ganttTask,
+          _silent: true,
+        });
+      }
     }
     this.applySummaryPatches(summariesPatched);
   }

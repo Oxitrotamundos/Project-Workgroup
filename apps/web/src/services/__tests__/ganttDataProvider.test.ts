@@ -100,6 +100,31 @@ describe('GanttDataProvider actions', () => {
     expect(TaskService.getDescendants).not.toHaveBeenCalled();
   });
 
+  it('treats equivalent ISO date strings as same in syncFromTasks', async () => {
+    const provider = new GanttDataProvider('p1');
+    const initial = baseTask({
+      startDate: '2026-01-01T08:30:00.000Z',
+      endDate: '2026-01-02T08:30:00.000Z',
+    });
+    provider.syncFromData([initial], []);
+    const api = {
+      getTask: vi.fn(() => ({ id: 1, start: new Date(initial.startDate), end: new Date(initial.endDate) })),
+      exec: vi.fn(),
+    } as any;
+    provider.setGanttApi(api);
+
+    const sameMoment = baseTask({
+      startDate: '2026-01-01T08:30:00Z',
+      endDate: '2026-01-02T08:30:00Z',
+    });
+    provider.syncFromData([sameMoment], []);
+
+    expect(api.exec).not.toHaveBeenCalledWith(
+      'update-task',
+      expect.objectContaining({ id: 1 }),
+    );
+  });
+
   it('batches expand/collapse persistence through open-states', async () => {
     const provider = new GanttDataProvider('p1');
     provider.syncFromData([

@@ -6,9 +6,12 @@ import type {
   TaskType
 } from '../types/domain';
 import type {
+  BulkTaskOpenStateResponse,
   BulkTaskUpdateResponse,
   PropagationPreview,
   SummaryPatch,
+  TaskMutationResponse,
+  UpdateTaskPositionDto,
   UpdateTaskDto,
 } from '@project-workgroup/shared';
 
@@ -20,6 +23,11 @@ export interface BulkUpdateItem {
 
 export interface BulkUpdateResult {
   tasks: Task[];
+  summariesPatched: SummaryPatch[];
+}
+
+export interface TaskMutationResult {
+  task: Task;
   summariesPatched: SummaryPatch[];
 }
 
@@ -54,6 +62,11 @@ const toDomain = (r: any): Task => ({
   version: typeof r.version === 'number' ? r.version : undefined,
   createdAt: r.createdAt ?? '',
   updatedAt: r.updatedAt ?? '',
+});
+
+const toMutationResult = (r: TaskMutationResponse | any): TaskMutationResult => ({
+  task: toDomain(r),
+  summariesPatched: Array.isArray(r?.summariesPatched) ? r.summariesPatched : [],
 });
 
 export class TaskService {
@@ -112,8 +125,15 @@ export class TaskService {
   }
 
   static async updateTask(id: string, data: UpdateTaskDto): Promise<Task> {
-    const result = await apiClient.enqueuePatch<any>(`/v1/tasks/${id}`, data as Record<string, unknown>);
-    return toDomain(result);
+    return (await this.updateTaskWithMeta(id, data)).task;
+  }
+
+  static async updateTaskWithMeta(id: string, data: UpdateTaskDto): Promise<TaskMutationResult> {
+    const result = await apiClient.enqueuePatch<TaskMutationResponse>(
+      `/v1/tasks/${id}`,
+      data as Record<string, unknown>,
+    );
+    return toMutationResult(result);
   }
 
   static async getDescendants(projectId: string, rootId: string): Promise<Task[]> {
@@ -148,10 +168,18 @@ export class TaskService {
   }
 
   static async updateTaskProgress(id: string, progress: number, expectedVersion?: number): Promise<Task> {
+    return (await this.updateTaskProgressWithMeta(id, progress, expectedVersion)).task;
+  }
+
+  static async updateTaskProgressWithMeta(
+    id: string,
+    progress: number,
+    expectedVersion?: number,
+  ): Promise<TaskMutationResult> {
     const body: Record<string, unknown> = { progress };
     if (typeof expectedVersion === 'number') body.expectedVersion = expectedVersion;
-    const result = await apiClient.patch<any>(`/v1/tasks/${id}/progress`, body);
-    return toDomain(result);
+    const result = await apiClient.patch<TaskMutationResponse>(`/v1/tasks/${id}/progress`, body);
+    return toMutationResult(result);
   }
 
   static async addTaskDependency(_taskId: string, _dependencyId: string): Promise<void> {
@@ -169,6 +197,16 @@ export class TaskService {
   static async updateTaskExpandState(taskId: string, isOpen: boolean): Promise<Task> {
     const result = await apiClient.patch<any>(`/v1/tasks/${taskId}`, { open: isOpen });
     return toDomain(result);
+  }
+
+  static async updateOpenStates(
+    projectId: string,
+    states: Array<{ id: string; open: boolean; expectedVersion?: number }>,
+  ): Promise<BulkTaskOpenStateResponse> {
+    return apiClient.patch<BulkTaskOpenStateResponse>(
+      `/v1/projects/${projectId}/tasks/open-states`,
+      { states },
+    );
   }
 
   static async bulkUpdate(projectId: string, updates: BulkUpdateItem[]): Promise<BulkUpdateResult> {
@@ -215,6 +253,17 @@ export class TaskService {
     if (typeof expectedVersion === 'number') body.expectedVersion = expectedVersion;
     const result = await apiClient.patch<any>(`/v1/tasks/${movedTaskId}/order`, body);
     return toDomain(result);
+  }
+
+  static async updateTaskPosition(
+    movedTaskId: string,
+    data: UpdateTaskPositionDto,
+  ): Promise<TaskMutationResult> {
+    const result = await apiClient.patch<TaskMutationResponse>(
+      `/v1/tasks/${movedTaskId}/position`,
+      data,
+    );
+    return toMutationResult(result);
   }
 }
 
