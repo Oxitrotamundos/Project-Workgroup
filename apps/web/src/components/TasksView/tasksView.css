@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────────────
-   TasksView — adopts the Project Workgroup Design System tokens.
+   TasksView — adAdopta el sistema de diseño de Project Workgroup.
    Class names (.tv-*) preserved for compatibility with TaskListView,
    NewTaskRow and TasksView components.
    ───────────────────────────────────────────────────────────────────── */
@@ -176,6 +176,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tv-name-button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.tv-name-button:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .tv-type-mark {

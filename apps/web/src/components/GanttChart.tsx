@@ -11,11 +11,16 @@ import type {
   GanttScale,
   GanttTask,
   GanttLink,
+  GanttId,
   ToolbarItem,
 } from 'wx-react-gantt';
-import type { Task } from '../types/domain';
+import type { Task, TaskLink } from '../types/domain';
 import type { WorkingCalendarResponse } from '@project-workgroup/shared';
-import { GanttDataProvider, type GanttDataChangePayload } from '../services/ganttDataProvider';
+import {
+  GanttDataProvider,
+  type GanttDataChangePayload,
+  type GanttLinkChangePayload,
+} from '../services/ganttDataProvider';
 import { taskManager } from '../services/taskManager';
 import { calendarService } from '../services/calendarService';
 import { createHighlightTime } from '../services/workingCalendarMarkers';
@@ -23,6 +28,8 @@ import { LocaleProvider } from './LocaleProvider';
 import { setupAutoLocalization } from '../utils/ganttLocalizer';
 import { applyBarTooltips } from '../utils/ganttBarTooltips';
 import { GanttTimeline } from './GanttTimeline';
+import GanttSnapOverlay from './GanttSnapOverlay';
+import { useProjectSettings } from '../contexts/ProjectSettingsContext';
 
 import coreLocaleEs from 'wx-core-locales/locales/es';
 import ganttLocaleEs from '../locales/gantt-es';
@@ -49,26 +56,39 @@ const setupGlobalLocalization = () => {
 
 interface GanttChartProps {
   tasks?: Task[];
+  links?: TaskLink[];
   projectId: string;
   loading?: boolean;
   error?: string | null;
   apiRef?: React.RefObject<GanttApi | null>;
   onAddTask?: () => void;
   onTasksChanged?: (payload: GanttDataChangePayload) => void;
+  onLinksChanged?: (payload: GanttLinkChangePayload) => void;
+  calendar?: WorkingCalendarResponse | null;
+  onSelectTask?: (taskId: string) => void;
 }
 
 const GanttChart: React.FC<GanttChartProps> = ({
   tasks,
+  links = [],
   projectId,
   loading = false,
   error = null,
   apiRef: externalApiRef,
   onAddTask,
   onTasksChanged,
+  onLinksChanged,
+  calendar: calendarFromProps,
+  onSelectTask,
 }) => {
   const internalApiRef = useRef<GanttApi | null>(null);
   const apiRef = externalApiRef ?? internalApiRef;
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const onSelectTaskRef = useRef<((taskId: string) => void) | undefined>(onSelectTask);
+  const dataProviderRef = useRef<GanttDataProvider | null>(null);
+  React.useEffect(() => {
+    onSelectTaskRef.current = onSelectTask;
+  }, [onSelectTask]);
   const [pxPerDay, setPxPerDay] = useState(30);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [toolbarApi, setToolbarApi] = useState<GanttApi | null>(null);
@@ -78,15 +98,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
     links: [],
   });
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
-  const [calendar, setCalendar] = useState<WorkingCalendarResponse | null>(null);
+  const [calendarLocal, setCalendarLocal] = useState<WorkingCalendarResponse | null>(null);
+  const calendar = calendarFromProps ?? calendarLocal;
   const errorBannerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localizationCleanupRef = useRef<(() => void) | null>(null);
   const initListenersInstalledRef = useRef(false);
-
-  const loadGanttData = useCallback(async (provider: GanttDataProvider) => {
-    const data = await provider.getData();
-    setGanttData(data);
-  }, []);
 
   useEffect(() => {
     setupGlobalLocalization();
@@ -104,9 +120,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!projectId || dataProvider) return;
+    if (!projectId) return;
 
     const provider = new GanttDataProvider(projectId);
+    dataProviderRef.current = provider;
 
     provider.setOnError(({ message }) => {
       setErrorBanner(message);
@@ -114,14 +131,12 @@ const GanttChart: React.FC<GanttChartProps> = ({
       errorBannerTimeoutRef.current = setTimeout(() => setErrorBanner(null), 4000);
     });
 
-    const handleTaskManagerEvent = async (eventData: { action: string; projectId: string }) => {
+    const handleTaskManagerEvent = async (eventData: { action: string; projectId: string; taskId?: string; task?: Task }) => {
       if (eventData.projectId !== projectId) return;
-      if (eventData.action === 'task-created' || eventData.action === 'task-deleted') {
-        try {
-          await loadGanttData(provider);
-        } catch (e) {
-          console.error('GanttChart: error recargando datos tras evento externo', e);
-        }
+      if (eventData.action === 'task-created' && eventData.task) {
+        onTasksChanged?.({ updated: [eventData.task], deleted: [], refresh: true });
+      } else if (eventData.action === 'task-deleted' && eventData.taskId) {
+        onTasksChanged?.({ updated: [], deleted: [eventData.taskId], refresh: true });
       }
     };
 
@@ -137,16 +152,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
         errorBannerTimeoutRef.current = null;
       }
       initListenersInstalledRef.current = false;
+      dataProviderRef.current = null;
+      setDataProvider(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
-
-  useEffect(() => {
-    if (!dataProvider) return;
-    loadGanttData(dataProvider).catch((e) =>
-      console.error('GanttChart: error cargando datos iniciales', e),
-    );
-  }, [dataProvider, loadGanttData]);
+  }, [projectId, onTasksChanged]);
 
   useEffect(() => {
     if (!dataProvider) return;
@@ -157,28 +166,38 @@ const GanttChart: React.FC<GanttChartProps> = ({
   }, [dataProvider, onTasksChanged]);
 
   useEffect(() => {
-    if (!dataProvider || !tasks) return;
-    dataProvider.syncFromTasks(tasks);
-  }, [dataProvider, tasks]);
+    if (!dataProvider) return;
+    dataProvider.setOnLinkChange(onLinksChanged ? (payload) => onLinksChanged(payload) : null);
+    return () => {
+      dataProvider.setOnLinkChange(null);
+    };
+  }, [dataProvider, onLinksChanged]);
+
+  useEffect(() => {
+    if (!dataProvider) return;
+    setGanttData(dataProvider.syncFromData(tasks ?? [], links));
+  }, [dataProvider, tasks, links]);
 
   useEffect(() => {
     if (!projectId) return;
+    if (calendarFromProps !== undefined) return;
     let cancelled = false;
     calendarService
       .getForProject(projectId)
       .then((cal) => {
-        if (!cancelled) setCalendar(cal);
+        if (!cancelled) setCalendarLocal(cal);
       })
       .catch((e) => console.error('GanttChart: error cargando calendario', e));
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, calendarFromProps]);
 
   const highlightTime = React.useMemo(() => createHighlightTime(calendar), [calendar]);
+  const { isDays } = useProjectSettings();
 
   const { scales, cellWidth, zoomLevel, zoomLabel } = React.useMemo(() => {
-    const tiers = [
+    const allTiers = [
       { level: 0, label: 'Año',         max: 0.5,      factor: 365,    scales: [{ unit: 'year', step: 1, format: 'yyyy' }] },
       { level: 1, label: 'Año / Trim.', max: 2,        factor: 91,     scales: [{ unit: 'year', step: 1, format: 'yyyy' }, { unit: 'quarter', step: 1, format: "'T'Q" }] },
       { level: 2, label: 'Trim. / Mes', max: 8,        factor: 30,     scales: [{ unit: 'quarter', step: 1, format: "'T'Q yyyy" }, { unit: 'month', step: 1, format: 'MMM' }] },
@@ -187,6 +206,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
       { level: 5, label: 'Día / 6h',    max: 400,      factor: 0.25,   scales: [{ unit: 'day', step: 1, format: 'EEE d MMM' }, { unit: 'hour', step: 6, format: 'HH:mm' }] },
       { level: 6, label: 'Día / Hora',  max: Infinity, factor: 1 / 24, scales: [{ unit: 'day', step: 1, format: 'EEE d MMM' }, { unit: 'hour', step: 1, format: 'HH:mm' }] },
     ] as const;
+    const tiers = isDays ? allTiers.filter((t) => t.level <= 4) : allTiers;
     const tier = tiers.find((t) => pxPerDay <= t.max) ?? tiers[tiers.length - 1];
     return {
       scales: tier.scales as unknown as GanttScale[],
@@ -194,7 +214,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
       zoomLevel: tier.level,
       zoomLabel: tier.label,
     };
-  }, [pxPerDay]);
+  }, [pxPerDay, isDays]);
 
   const locale = React.useMemo(() => ({ ...coreLocaleEs, ...ganttLocaleEs }), []);
 
@@ -219,15 +239,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
         header: 'Estado',
         align: 'center',
         flexGrow: 1,
-        template: (task: GanttTask) => {
-          try {
-            if (!task) return '—';
-            const full = dataProvider?.getFullTaskDataByGanttId(task.id);
-            const status = full?.status ?? '';
-            return STATUS_LABEL[status] ?? '—';
-          } catch {
-            return '';
-          }
+        template: (_v: unknown, task: GanttTask & { status?: string }) => {
+          return STATUS_LABEL[task.status ?? ''] ?? '—';
         },
       },
       {
@@ -235,16 +248,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
         header: 'Esfuerzo',
         align: 'center',
         flexGrow: 1,
-        template: (task: GanttTask) => {
-          try {
-            if (!task || task.type === 'milestone') return '—';
-            const full = dataProvider?.getFullTaskDataByGanttId(task.id);
-            const hours = Number(full?.estimatedHours ?? task.estimatedHours ?? 0);
-            if (!Number.isFinite(hours) || hours <= 0) return '—';
-            return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h`;
-          } catch {
-            return '';
-          }
+        template: (_v: unknown, task: GanttTask) => {
+          if (task.type === 'milestone') return '—';
+          const hours = Number(task.estimatedHours ?? 0);
+          if (!Number.isFinite(hours) || hours <= 0) return '—';
+          return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h`;
         },
       },
       {
@@ -252,31 +260,35 @@ const GanttChart: React.FC<GanttChartProps> = ({
         header: 'Duración',
         align: 'center',
         flexGrow: 1,
-        template: (task: GanttTask) => {
-          try {
-            if (!task || task.type === 'milestone') return '—';
-            const full = dataProvider?.getFullTaskDataByGanttId(task.id);
-            const labDays = Number(full?.duration ?? task.duration ?? 0);
-            const labText = !Number.isFinite(labDays) || labDays <= 0
-              ? '0'
-              : Number.isInteger(labDays) ? `${labDays}` : labDays.toFixed(1);
-            const start = task.start instanceof Date ? task.start : null;
-            const end = task.end instanceof Date ? task.end : null;
-            if (!start || !end) return `${labText}d lab`;
-            const natDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86_400_000));
-            return `${labText}d lab / ${natDays}d nat`;
-          } catch {
-            return '';
-          }
+        template: (_v: unknown, task: GanttTask) => {
+          if (task.type === 'milestone') return '—';
+          const labDays = Number(task.duration ?? 0);
+          const labText = !Number.isFinite(labDays) || labDays <= 0
+            ? '0'
+            : Number.isInteger(labDays) ? `${labDays}` : labDays.toFixed(1);
+          const start = task.start instanceof Date ? task.start : null;
+          const end = task.end instanceof Date ? task.end : null;
+          if (!start || !end) return `${labText}d lab`;
+          const natDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86_400_000));
+          return `${labText}d lab / ${natDays}d nat`;
         },
       },
-      { id: 'progress', header: 'Progreso', align: 'center', flexGrow: 1 },
+      {
+        id: 'progress',
+        header: 'Progreso',
+        align: 'center',
+        flexGrow: 1,
+        template: (_v: unknown, task: GanttTask) => {
+          const value = Math.max(0, Math.min(100, Math.round(Number(task.progress) || 0)));
+          return `${value}%`;
+        },
+      },
       {
         id: 'action',
         header: 'Acciones',
         align: 'center',
         width: 50,
-        template: (task: GanttTask) => `
+        template: (_v: unknown, task: GanttTask) => `
           <div class="task-actions">
             <button
               class="add-child-btn"
@@ -289,7 +301,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         `,
       },
     ];
-  }, [dataProvider]);
+  }, []);
 
   const dayDiff = (next: Date, prev: Date): number => {
     const d = (next.getTime() - prev.getTime()) / 1000 / 60 / 60 / 24;
@@ -468,6 +480,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
       api.on('scroll-chart', (ev: { left?: number; top?: number }) => {
         setScrollLeft(ev.left ?? 0);
       });
+      api.on('select-task', (ev: { id?: GanttId }) => {
+        if (ev.id === undefined || ev.id === null) return;
+        const realId = dataProvider?.getTaskIdFromGanttId?.(ev.id) ?? String(ev.id);
+        if (realId) onSelectTaskRef.current?.(realId);
+      });
       if (dataProvider) {
         api.on('open-task', ({ id, _fromRestore }) => {
           if (_fromRestore) return;
@@ -489,18 +506,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }, 50);
     return () => clearTimeout(t);
   }, [apiRef, dataProvider, initGantt]);
-
-  useEffect(() => {
-    if (!dataProvider) return;
-    const interval = setInterval(() => {
-      const api = apiRef.current;
-      if (!api) return;
-      dataProvider.reconcileExpansionStates(api).catch((e) =>
-        console.error('GanttChart: reconcileExpansionStates falló', e),
-      );
-    }, 10_000);
-    return () => clearInterval(interval);
-  }, [apiRef, dataProvider]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -650,7 +655,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
             {errorBanner}
           </div>
         )}
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 relative">
           <Willow>
             <Toolbar api={toolbarApi} items={toolbarItems} />
             <Gantt
@@ -665,6 +670,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
               {...({ lengthUnit: 'hour' } as { lengthUnit: 'hour' })}
             />
           </Willow>
+          <GanttSnapOverlay
+            api={toolbarApi}
+            calendar={calendar}
+            containerRef={containerRef}
+          />
         </div>
         <GanttTimeline
           scrollLeft={scrollLeft}

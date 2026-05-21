@@ -3,6 +3,7 @@ import type { Task, TaskStatus, TaskPriority, TaskType } from '../../types/domai
 import InlineMenu from './InlineMenu';
 import NewTaskRow from './NewTaskRow';
 import type { NewTaskInput, AssigneeOption } from './NewTaskRow';
+import { useProjectSettings } from '../../contexts/ProjectSettingsContext';
 
 type SortKey = 'order' | 'name' | 'startDate' | 'endDate' | 'estimatedHours' | 'progress' | 'priority' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -102,6 +103,23 @@ const localInputToIso = (value: string): string | null => {
   return dt.toISOString();
 };
 
+const isoToDateInput = (iso: string): string => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+};
+
+const dateInputToIso = (value: string): string | null => {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, y, mo, d] = match;
+  const dt = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), 0, 0, 0));
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString();
+};
+
 const formatHours = (n: number | undefined): string => {
   if (!Number.isFinite(n ?? NaN)) return '—';
   const v = n as number;
@@ -147,10 +165,12 @@ interface Props {
   tasks: Task[];
   onCreate?: (input: NewTaskInput) => Promise<void>;
   onUpdate?: (taskId: string, patch: InlinePatch, expectedVersion?: number) => Promise<void>;
+  onSelectTask?: (taskId: string) => void;
   assignees?: AssigneeOption[];
 }
 
-const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees }) => {
+const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, onSelectTask, assignees }) => {
+  const { isDays } = useProjectSettings();
   const [sortKey, setSortKey] = useState<SortKey>('order');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [creating, setCreating] = useState(false);
@@ -265,7 +285,8 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
   const startDateEdit = (task: Task, field: DateField) => {
     if (!onUpdate || task.type === 'summary') return;
     const source = field === 'startDate' ? task.startDate : task.endDate;
-    setDateEdit({ taskId: task.id, field, value: isoToLocalInput(source) });
+    const initial = isDays ? isoToDateInput(source) : isoToLocalInput(source);
+    setDateEdit({ taskId: task.id, field, value: initial });
   };
 
   const commitDateEdit = async (task: Task) => {
@@ -273,7 +294,7 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
     const { field, value } = dateEdit;
     setDateEdit(null);
     if (!value) return;
-    const iso = localInputToIso(value);
+    const iso = isDays ? dateInputToIso(value) : localInputToIso(value);
     if (!iso) {
       setError('Fecha inválida');
       return;
@@ -344,9 +365,11 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
               <th className="tv-th tv-th--right tv-th-sortable" onClick={() => toggleSort('endDate')} style={{ width: 160 }}>
                 Fin <SortArrow active={sortKey === 'endDate'} dir={sortDir} />
               </th>
-              <th className="tv-th tv-th--right tv-th-sortable" onClick={() => toggleSort('estimatedHours')} style={{ width: 90 }}>
-                Horas <SortArrow active={sortKey === 'estimatedHours'} dir={sortDir} />
-              </th>
+              {!isDays && (
+                <th className="tv-th tv-th--right tv-th-sortable" onClick={() => toggleSort('estimatedHours')} style={{ width: 90 }}>
+                  Horas <SortArrow active={sortKey === 'estimatedHours'} dir={sortDir} />
+                </th>
+              )}
               <th className="tv-th tv-th-sortable" onClick={() => toggleSort('progress')} style={{ width: 150 }}>
                 Progreso <SortArrow active={sortKey === 'progress'} dir={sortDir} />
               </th>
@@ -393,7 +416,18 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
                   <td className="tv-td">
                     <div className="tv-name-cell" style={{ paddingLeft: depth * 22 }}>
                       {depth > 0 && <span className="tv-indent-line" aria-hidden="true" />}
-                      <span className="tv-name" title={task.name}>{task.name}</span>
+                      {onSelectTask ? (
+                        <button
+                          type="button"
+                          className="tv-name tv-name-button"
+                          title={`Abrir detalles de ${task.name}`}
+                          onClick={() => onSelectTask(task.id)}
+                        >
+                          {task.name}
+                        </button>
+                      ) : (
+                        <span className="tv-name" title={task.name}>{task.name}</span>
+                      )}
                       {typeMark && (
                         <span className="tv-type-mark" data-type={task.type}>{typeMark}</span>
                       )}
@@ -425,7 +459,7 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
                   <td className="tv-td tv-td--mono tv-td--num">
                     {dateEdit?.taskId === task.id && dateEdit.field === 'startDate' ? (
                       <input
-                        type="datetime-local"
+                        type={isDays ? 'date' : 'datetime-local'}
                         className="tv-date-input"
                         value={dateEdit.value}
                         autoFocus
@@ -458,7 +492,7 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
                   <td className="tv-td tv-td--mono tv-td--num">
                     {dateEdit?.taskId === task.id && dateEdit.field === 'endDate' ? (
                       <input
-                        type="datetime-local"
+                        type={isDays ? 'date' : 'datetime-local'}
                         className="tv-date-input"
                         value={dateEdit.value}
                         autoFocus
@@ -488,42 +522,44 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, assignees })
                       formatDate(task.endDate)
                     )}
                   </td>
-                  <td className="tv-td tv-td--num">
-                    {hoursEdit?.taskId === task.id ? (
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.5}
-                        className="tv-hours-input"
-                        value={hoursEdit.value}
-                        autoFocus
-                        onFocus={(e) => e.currentTarget.select()}
-                        onChange={(e) => setHoursEdit({ taskId: task.id, value: e.target.value })}
-                        onBlur={() => commitHoursEdit(task)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            (e.currentTarget as HTMLInputElement).blur();
-                          } else if (e.key === 'Escape') {
-                            e.preventDefault();
-                            setHoursEdit(null);
-                          }
-                        }}
-                        aria-label="Editar horas estimadas"
-                      />
-                    ) : onUpdate ? (
-                      <button
-                        type="button"
-                        className="tv-trigger tv-hours-trigger"
-                        onClick={() => startHoursEdit(task)}
-                        aria-label={`Editar horas, actual ${formatHours(task.estimatedHours)}`}
-                      >
-                        {formatHours(task.estimatedHours)}
-                      </button>
-                    ) : (
-                      formatHours(task.estimatedHours)
-                    )}
-                  </td>
+                  {!isDays && (
+                    <td className="tv-td tv-td--num">
+                      {hoursEdit?.taskId === task.id ? (
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          className="tv-hours-input"
+                          value={hoursEdit.value}
+                          autoFocus
+                          onFocus={(e) => e.currentTarget.select()}
+                          onChange={(e) => setHoursEdit({ taskId: task.id, value: e.target.value })}
+                          onBlur={() => commitHoursEdit(task)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              (e.currentTarget as HTMLInputElement).blur();
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              setHoursEdit(null);
+                            }
+                          }}
+                          aria-label="Editar horas estimadas"
+                        />
+                      ) : onUpdate ? (
+                        <button
+                          type="button"
+                          className="tv-trigger tv-hours-trigger"
+                          onClick={() => startHoursEdit(task)}
+                          aria-label={`Editar horas, actual ${formatHours(task.estimatedHours)}`}
+                        >
+                          {formatHours(task.estimatedHours)}
+                        </button>
+                      ) : (
+                        formatHours(task.estimatedHours)
+                      )}
+                    </td>
+                  )}
                   <td className="tv-td">
                     {progressEdit?.taskId === task.id ? (
                       <div className="tv-progress tv-progress--editing">

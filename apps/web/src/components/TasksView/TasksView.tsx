@@ -1,9 +1,11 @@
-import { useState, useCallback } from 'react';
-import type { Task, TaskPriority, TaskStatus } from '../../types/domain';
-import type { GanttDataChangePayload } from '../../services/ganttDataProvider';
+import { useMemo, useState, useCallback } from 'react';
+import type { Task, TaskLink, TaskPriority, TaskStatus } from '../../types/domain';
+import type { GanttDataChangePayload, GanttLinkChangePayload } from '../../services/ganttDataProvider';
+import type { WorkingCalendarResponse } from '@project-workgroup/shared';
 import GanttChart from '../GanttChart';
 import TaskListView from './TaskListView';
 import TasksFooter from './TasksFooter';
+import TaskSidebar from '../TaskSidebar/TaskSidebar';
 import { useTaskStats } from './useTaskStats';
 import type { NewTaskInput, AssigneeOption } from './NewTaskRow';
 import './tasksView.css';
@@ -14,6 +16,7 @@ const STORAGE_KEY = 'pwg.tasksView.mode';
 
 interface Props {
   tasks: Task[];
+  links?: TaskLink[];
   projectId: string;
   loading?: boolean;
   error?: string | null;
@@ -23,6 +26,8 @@ interface Props {
   onUpdateTask?: (
     taskId: string,
     patch: {
+      name?: string;
+      description?: string;
       status?: TaskStatus;
       priority?: TaskPriority;
       estimatedHours?: number;
@@ -33,12 +38,15 @@ interface Props {
     expectedVersion?: number,
   ) => Promise<void>;
   onTasksChanged?: (payload: GanttDataChangePayload) => void;
+  onLinksChanged?: (payload: GanttLinkChangePayload) => void;
   assignees?: AssigneeOption[];
+  calendar?: WorkingCalendarResponse | null;
   initialMode?: TasksViewMode;
 }
 
 const TasksView: React.FC<Props> = ({
   tasks,
+  links,
   projectId,
   loading,
   error,
@@ -47,7 +55,9 @@ const TasksView: React.FC<Props> = ({
   onCreateTask,
   onUpdateTask,
   onTasksChanged,
+  onLinksChanged,
   assignees,
+  calendar,
   initialMode,
 }) => {
   const [mode, setModeState] = useState<TasksViewMode>(() => {
@@ -63,6 +73,16 @@ const TasksView: React.FC<Props> = ({
   }, []);
 
   const stats = useTaskStats(tasks);
+
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const selectedTask = useMemo(
+    () => (selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) ?? null : null),
+    [selectedTaskId, tasks],
+  );
+  const handleSelectTask = useCallback((taskId: string) => {
+    setSelectedTaskId(taskId);
+  }, []);
+  const handleCloseSidebar = useCallback(() => setSelectedTaskId(null), []);
 
   return (
     <section className="tv tv-frame" aria-label="Tareas del proyecto">
@@ -104,20 +124,38 @@ const TasksView: React.FC<Props> = ({
           <div className="tv-gantt-frame">
             <GanttChart
               tasks={tasks}
+              links={links}
               projectId={projectId}
               loading={loading}
               error={error}
               apiRef={apiRef}
               onAddTask={onAddTask}
               onTasksChanged={onTasksChanged}
+              onLinksChanged={onLinksChanged}
+              calendar={calendar}
+              onSelectTask={handleSelectTask}
             />
           </div>
         ) : (
-          <TaskListView tasks={tasks} onCreate={onCreateTask} onUpdate={onUpdateTask} assignees={assignees} />
+          <TaskListView
+            tasks={tasks}
+            onCreate={onCreateTask}
+            onUpdate={onUpdateTask}
+            onSelectTask={handleSelectTask}
+            assignees={assignees}
+          />
         )}
       </div>
 
       <TasksFooter stats={stats} />
+      <TaskSidebar
+        task={selectedTask}
+        open={selectedTask !== null}
+        onClose={handleCloseSidebar}
+        onSave={async (taskId, patch, expectedVersion) => {
+          if (onUpdateTask) await onUpdateTask(taskId, patch, expectedVersion);
+        }}
+      />
     </section>
   );
 };
