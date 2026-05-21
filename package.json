@@ -25,6 +25,10 @@
     "concurrently": "^9.0.0"
   },
   "pnpm": {
+    "overrides": {
+      "protobufjs": ">=7.4.0",
+      "fast-xml-parser": ">=4.5.3"
+    },
     "onlyBuiltDependencies": [
       "@nestjs/core",
       "@prisma/client",

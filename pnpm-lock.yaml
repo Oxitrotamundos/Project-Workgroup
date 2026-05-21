@@ -4,6 +4,10 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  protobufjs: '>=7.4.0'
+  fast-xml-parser: '>=4.5.3'
+
 importers:
 
   .:
