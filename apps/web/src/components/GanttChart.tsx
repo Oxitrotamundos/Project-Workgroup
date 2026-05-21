@@ -33,34 +33,6 @@ import { useProjectSettings } from '../contexts/ProjectSettingsContext';
 import coreLocaleEs from 'wx-core-locales/locales/es';
 import ganttLocaleEs from '../locales/gantt-es';
 
-declare global {
-  interface Window {
-    wx?: {
-      locales?: Record<string, Record<string, unknown>>;
-      locale?: string;
-      i18n?: {
-        setLocale: (locale: string) => void;
-        setTranslations?: (locale: string, translations: Record<string, unknown>) => void;
-      };
-      setLocale?: (locale: string, translations: Record<string, unknown>) => void;
-    };
-    wxLocale?: string;
-    wxLocales?: Record<string, Record<string, unknown>>;
-    addChildTask?: (parentId: number | string) => void;
-  }
-}
-
-const setupGlobalLocalization = () => {
-  if (typeof window === 'undefined') return;
-  window.wx = window.wx || {};
-  window.wx.locales = window.wx.locales || {};
-  window.wx.locales['es'] = { ...coreLocaleEs, ...ganttLocaleEs };
-  window.wx.locale = 'es';
-  if (window.wx.i18n) window.wx.i18n.setLocale('es');
-  window.wxLocale = 'es';
-  window.wxLocales = window.wx.locales;
-};
-
 interface GanttChartProps {
   tasks?: Task[];
   links?: TaskLink[];
@@ -112,7 +84,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const initListenersInstalledRef = useRef(false);
 
   useEffect(() => {
-    setupGlobalLocalization();
     const timeoutId = setTimeout(() => {
       const cleanup = setupAutoLocalization();
       localizationCleanupRef.current = cleanup;
@@ -296,18 +267,14 @@ const GanttChart: React.FC<GanttChartProps> = ({
         align: 'center',
         width: 50,
         template: (_v: unknown, task: GanttTask) => {
-          const escapedTaskId = JSON.stringify(String(task.id)).replace(/"/g, '&quot;');
+          const taskId = String(task.id)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;');
           return `
-          <div class="task-actions">
-            <button
-              class="add-child-btn"
-              onclick="window.addChildTask(${escapedTaskId})"
-              title="Agregar subtarea"
-            >
-              +
-            </button>
-          </div>
-        `;
+            <div class="task-actions">
+              <button class="add-child-btn" type="button" data-task-id="${taskId}" title="Agregar subtarea">+</button>
+            </div>
+          `;
         },
       },
     ];
@@ -364,10 +331,16 @@ const GanttChart: React.FC<GanttChartProps> = ({
   );
 
   useEffect(() => {
-    window.addChildTask = addChildTask;
-    return () => {
-      delete window.addChildTask;
+    const root = containerRef.current;
+    if (!root) return;
+    const onClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>('.add-child-btn');
+      if (!target) return;
+      const id = target.dataset.taskId;
+      if (id != null) void addChildTask(id);
     };
+    root.addEventListener('click', onClick);
+    return () => root.removeEventListener('click', onClick);
   }, [addChildTask]);
 
   useEffect(() => {
