@@ -11,7 +11,8 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CreateWorkloadDto, WorkloadQueryDto } from '@project-workgroup/shared';
-import { AuthGuard } from '../auth/auth.guard';
+import { AuthGuard, AuthUser } from '../auth/auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { ProjectMembershipGuard } from '../auth/project-membership.guard';
 import { RequireProject } from '../auth/require-project.decorator';
 import { WorkloadService } from './workload.service';
@@ -45,7 +46,7 @@ export class WorkloadController {
 
   @Delete('workload/:id')
   @HttpCode(204)
-  async remove(@Param('id') id: string) {
-    await this.workload.remove(BigInt(id));
+  async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    await this.workload.remove(BigInt(id), user);
   }
 }

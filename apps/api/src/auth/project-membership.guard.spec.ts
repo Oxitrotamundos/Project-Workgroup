@@ -2,10 +2,15 @@ import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ProjectMembershipGuard } from './project-membership.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { RequireProjectMetadata } from './require-project.decorator';
 
-const buildCtx = (user: any, params: any, param: string | undefined) => {
+const buildCtx = (
+  user: any,
+  params: any,
+  meta: RequireProjectMetadata | undefined,
+) => {
   const reflector = {
-    getAllAndOverride: jest.fn().mockReturnValue(param),
+    getAllAndOverride: jest.fn().mockReturnValue(meta),
   } as unknown as Reflector;
   const ctx = {
     getHandler: () => ({}),
@@ -32,7 +37,7 @@ describe('ProjectMembershipGuard', () => {
     const { reflector, ctx } = buildCtx(
       { id: 1n, role: 'admin' },
       { id: '5' },
-      'id',
+      { paramName: 'id' },
     );
     const prisma = {
       project: { findUnique: jest.fn() },
@@ -47,7 +52,7 @@ describe('ProjectMembershipGuard', () => {
     const { reflector, ctx } = buildCtx(
       { id: 7n, role: 'member' },
       { id: '5' },
-      'id',
+      { paramName: 'id' },
     );
     const prisma = {
       project: { findUnique: jest.fn().mockResolvedValue({ ownerId: 7n }) },
@@ -62,12 +67,12 @@ describe('ProjectMembershipGuard', () => {
     const { reflector, ctx } = buildCtx(
       { id: 8n, role: 'member' },
       { id: '5' },
-      'id',
+      { paramName: 'id' },
     );
     const prisma = {
       project: { findUnique: jest.fn().mockResolvedValue({ ownerId: 1n }) },
       projectMember: {
-        findUnique: jest.fn().mockResolvedValue({ userId: 8n }),
+        findUnique: jest.fn().mockResolvedValue({ projectRole: 'contributor' }),
       },
     } as unknown as PrismaService;
     expect(
@@ -79,7 +84,7 @@ describe('ProjectMembershipGuard', () => {
     const { reflector, ctx } = buildCtx(
       { id: 9n, role: 'member' },
       { id: '5' },
-      'id',
+      { paramName: 'id' },
     );
     const prisma = {
       project: { findUnique: jest.fn().mockResolvedValue({ ownerId: 1n }) },
@@ -88,5 +93,132 @@ describe('ProjectMembershipGuard', () => {
     await expect(
       new ProjectMembershipGuard(reflector, prisma).canActivate(ctx),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  describe('minRole enforcement', () => {
+    it('forbids viewer when minRole=manager', async () => {
+      const { reflector, ctx } = buildCtx(
+        { id: 8n, role: 'member' },
+        { id: '5' },
+        { paramName: 'id', minRole: 'manager' },
+      );
+      const prisma = {
+        project: { findUnique: jest.fn().mockResolvedValue({ ownerId: 1n }) },
+        projectMember: {
+          findUnique: jest.fn().mockResolvedValue({ projectRole: 'viewer' }),
+        },
+      } as unknown as PrismaService;
+      await expect(
+        new ProjectMembershipGuard(reflector, prisma).canActivate(ctx),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('forbids contributor when minRole=manager', async () => {
+      const { reflector, ctx } = buildCtx(
+        { id: 8n, role: 'member' },
+        { id: '5' },
+        { paramName: 'id', minRole: 'manager' },
+      );
+      const prisma = {
+        project: { findUnique: jest.fn().mockResolvedValue({ ownerId: 1n }) },
+        projectMember: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValue({ projectRole: 'contributor' }),
+        },
+      } as unknown as PrismaService;
+      await expect(
+        new ProjectMembershipGuard(reflector, prisma).canActivate(ctx),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('allows manager when minRole=manager', async () => {
+      const { reflector, ctx } = buildCtx(
+        { id: 8n, role: 'member' },
+        { id: '5' },
+        { paramName: 'id', minRole: 'manager' },
+      );
+      const prisma = {
+        project: { findUnique: jest.fn().mockResolvedValue({ ownerId: 1n }) },
+        projectMember: {
+          findUnique: jest.fn().mockResolvedValue({ projectRole: 'manager' }),
+        },
+      } as unknown as PrismaService;
+      expect(
+        await new ProjectMembershipGuard(reflector, prisma).canActivate(ctx),
+      ).toBe(true);
+    });
+
+    it('allows admin globally without consulting membership when minRole is set', async () => {
+      const { reflector, ctx } = buildCtx(
+        { id: 1n, role: 'admin' },
+        { id: '5' },
+        { paramName: 'id', minRole: 'manager' },
+      );
+      const findProject = jest.fn();
+      const findMember = jest.fn();
+      const prisma = {
+        project: { findUnique: findProject },
+        projectMember: { findUnique: findMember },
+      } as unknown as PrismaService;
+      expect(
+        await new ProjectMembershipGuard(reflector, prisma).canActivate(ctx),
+      ).toBe(true);
+      expect(findProject).not.toHaveBeenCalled();
+      expect(findMember).not.toHaveBeenCalled();
+    });
+
+    it('allows owner without consulting membership role when minRole is set', async () => {
+      const { reflector, ctx } = buildCtx(
+        { id: 7n, role: 'member' },
+        { id: '5' },
+        { paramName: 'id', minRole: 'manager' },
+      );
+      const findMember = jest.fn();
+      const prisma = {
+        project: { findUnique: jest.fn().mockResolvedValue({ ownerId: 7n }) },
+        projectMember: { findUnique: findMember },
+      } as unknown as PrismaService;
+      expect(
+        await new ProjectMembershipGuard(reflector, prisma).canActivate(ctx),
+      ).toBe(true);
+      expect(findMember).not.toHaveBeenCalled();
+    });
+
+    it('allows contributor when minRole=contributor', async () => {
+      const { reflector, ctx } = buildCtx(
+        { id: 8n, role: 'member' },
+        { id: '5' },
+        { paramName: 'id', minRole: 'contributor' },
+      );
+      const prisma = {
+        project: { findUnique: jest.fn().mockResolvedValue({ ownerId: 1n }) },
+        projectMember: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValue({ projectRole: 'contributor' }),
+        },
+      } as unknown as PrismaService;
+      expect(
+        await new ProjectMembershipGuard(reflector, prisma).canActivate(ctx),
+      ).toBe(true);
+    });
+
+    it('forbids viewer when minRole=contributor', async () => {
+      const { reflector, ctx } = buildCtx(
+        { id: 8n, role: 'member' },
+        { id: '5' },
+        { paramName: 'id', minRole: 'contributor' },
+      );
+      const prisma = {
+        project: { findUnique: jest.fn().mockResolvedValue({ ownerId: 1n }) },
+        projectMember: {
+          findUnique: jest.fn().mockResolvedValue({ projectRole: 'viewer' }),
+        },
+      } as unknown as PrismaService;
+      await expect(
+        new ProjectMembershipGuard(reflector, prisma).canActivate(ctx),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
 });

@@ -24,6 +24,7 @@ export class ProjectMembersController {
   constructor(private readonly members: ProjectMembersService) {}
 
   @Post()
+  @RequireProject('projectId', { minRole: 'manager' })
   async add(
     @Param('projectId') projectId: string,
     @Body() dto: AddProjectMemberDto,
@@ -38,6 +39,7 @@ export class ProjectMembersController {
 
   @Delete(':userId')
   @HttpCode(204)
+  @RequireProject('projectId', { minRole: 'manager' })
   async remove(
     @Param('projectId') projectId: string,
     @Param('userId') userId: string,

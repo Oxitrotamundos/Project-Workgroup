@@ -1,10 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateWorkloadDto,
   WorkloadQueryDto,
   WorkloadResponse,
 } from '@project-workgroup/shared';
+import { AuthUser } from '../auth/auth.guard';
 
 @Injectable()
 export class WorkloadService {
@@ -74,9 +79,29 @@ export class WorkloadService {
     return rows.map((w) => this.toResponse(w));
   }
 
-  async remove(id: bigint): Promise<void> {
+  async remove(id: bigint, user: AuthUser): Promise<void> {
     const w = await this.prisma.workload.findUnique({ where: { id } });
     if (!w) throw new NotFoundException('workload entry not found');
+    await this.assertProjectAccess(w.projectId, user);
     await this.prisma.workload.delete({ where: { id } });
+  }
+
+  private async assertProjectAccess(
+    projectId: bigint,
+    user: AuthUser,
+  ): Promise<void> {
+    if (user.role === 'admin') return;
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { ownerId: true },
+    });
+    if (!project) throw new NotFoundException('project not found');
+    if (project.ownerId === user.id) return;
+
+    const membership = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId: user.id } },
+    });
+    if (!membership) throw new ForbiddenException('not a project member');
   }
 }

@@ -1,14 +1,23 @@
-import request from 'supertest';
+import request = require('supertest');
 import { bootE2E, E2EHandle } from './e2e-setup';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AuthGuard } from '../src/auth/auth.guard';
+
+interface MockUser {
+  id: bigint;
+  role: 'admin' | 'pm' | 'member';
+  firebaseUid: null;
+  via: 'api_key';
+}
 
 describe('Workload (e2e)', () => {
   let handle: E2EHandle;
   let prisma: PrismaService;
   let ownerId: bigint;
+  let outsiderId: bigint;
   let projectId: bigint;
   let taskId: bigint;
+  let currentUser: MockUser;
 
   beforeAll(async () => {
     handle = await bootE2E({
@@ -17,12 +26,7 @@ describe('Workload (e2e)', () => {
         value: {
           canActivate: (ctx: any) => {
             const req = ctx.switchToHttp().getRequest();
-            req.user = {
-              id: ownerId,
-              role: 'admin',
-              firebaseUid: null,
-              via: 'api_key',
-            };
+            req.user = currentUser;
             return true;
           },
         },
@@ -38,6 +42,15 @@ describe('Workload (e2e)', () => {
       },
     });
     ownerId = owner.id;
+    const outsider = await prisma.user.create({
+      data: {
+        firebaseUid: 'wl-outsider-uid',
+        email: 'wl-outsider@example.com',
+        displayName: 'WL Outsider',
+        role: 'member',
+      },
+    });
+    outsiderId = outsider.id;
     const project = await prisma.project.create({
       data: {
         name: 'Workload Test Project',
@@ -64,9 +77,24 @@ describe('Workload (e2e)', () => {
       },
     });
     taskId = task.id;
+    currentUser = {
+      id: ownerId,
+      role: 'admin',
+      firebaseUid: null,
+      via: 'api_key',
+    };
   }, 180_000);
 
   afterAll(() => handle.close());
+
+  beforeEach(() => {
+    currentUser = {
+      id: ownerId,
+      role: 'admin',
+      firebaseUid: null,
+      via: 'api_key',
+    };
+  });
 
   it('POST /v1/projects/:id/workload → 201 creates workload entry', async () => {
     const res = await request(handle.app.getHttpServer())
@@ -102,5 +130,56 @@ describe('Workload (e2e)', () => {
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBe(1);
     expect(res.body[0].date).toBe('2026-01-15');
+  });
+
+  it('DELETE /v1/workload/:id → 403 when caller is not a project member', async () => {
+    const created = await prisma.workload.create({
+      data: {
+        userId: ownerId,
+        taskId,
+        projectId,
+        date: new Date('2026-03-01'),
+        allocatedHours: '4',
+      },
+    });
+
+    currentUser = {
+      id: outsiderId,
+      role: 'member',
+      firebaseUid: null,
+      via: 'api_key',
+    };
+
+    const res = await request(handle.app.getHttpServer())
+      .delete(`/v1/workload/${created.id}`)
+      .set('Authorization', 'Bearer fake-token');
+    expect(res.status).toBe(403);
+
+    const stillThere = await prisma.workload.findUnique({
+      where: { id: created.id },
+    });
+    expect(stillThere).not.toBeNull();
+  });
+
+  it('DELETE /v1/workload/:id → 204 when caller is project owner', async () => {
+    const created = await prisma.workload.create({
+      data: {
+        userId: ownerId,
+        taskId,
+        projectId,
+        date: new Date('2026-04-01'),
+        allocatedHours: '4',
+      },
+    });
+
+    const res = await request(handle.app.getHttpServer())
+      .delete(`/v1/workload/${created.id}`)
+      .set('Authorization', 'Bearer fake-token');
+    expect(res.status).toBe(204);
+
+    const removed = await prisma.workload.findUnique({
+      where: { id: created.id },
+    });
+    expect(removed).toBeNull();
   });
 });

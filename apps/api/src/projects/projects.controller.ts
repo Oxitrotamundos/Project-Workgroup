@@ -47,7 +47,7 @@ export class ProjectsController {
 
   @Patch(':id')
   @UseGuards(ProjectMembershipGuard)
-  @RequireProject('id')
+  @RequireProject('id', { minRole: 'manager' })
   async update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
     return this.projects.update(BigInt(id), dto);
   }
@@ -55,7 +55,7 @@ export class ProjectsController {
   @Delete(':id')
   @HttpCode(204)
   @UseGuards(ProjectMembershipGuard)
-  @RequireProject('id')
+  @RequireProject('id', { minRole: 'manager' })
   async remove(@Param('id') id: string) {
     await this.projects.remove(BigInt(id));
   }

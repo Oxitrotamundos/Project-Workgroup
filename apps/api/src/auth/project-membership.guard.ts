@@ -7,8 +7,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import type { ProjectRole } from '@project-workgroup/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { REQUIRE_PROJECT_KEY } from './require-project.decorator';
+import {
+  REQUIRE_PROJECT_KEY,
+  RequireProjectMetadata,
+} from './require-project.decorator';
+
+const PROJECT_ROLE_RANK: Record<ProjectRole, number> = {
+  viewer: 1,
+  contributor: 2,
+  manager: 3,
+};
 
 @Injectable()
 export class ProjectMembershipGuard implements CanActivate {
@@ -18,11 +28,11 @@ export class ProjectMembershipGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const paramName = this.reflector.getAllAndOverride<string | undefined>(
-      REQUIRE_PROJECT_KEY,
-      [context.getHandler(), context.getClass()],
-    );
-    if (!paramName) return true;
+    const meta = this.reflector.getAllAndOverride<
+      RequireProjectMetadata | undefined
+    >(REQUIRE_PROJECT_KEY, [context.getHandler(), context.getClass()]);
+    if (!meta) return true;
+    const { paramName, minRole } = meta;
     const req = context.switchToHttp().getRequest<{
       user?: { id: bigint; role: string };
       params: Record<string, string>;
@@ -38,13 +48,21 @@ export class ProjectMembershipGuard implements CanActivate {
     }
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
+      select: { ownerId: true },
     });
     if (!project) throw new NotFoundException('project not found');
     if (project.ownerId === req.user?.id) return true;
     const membership = await this.prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId: req.user!.id } },
+      select: { projectRole: true },
     });
     if (!membership) throw new ForbiddenException('not a project member');
+    if (minRole) {
+      const userRank = PROJECT_ROLE_RANK[membership.projectRole as ProjectRole];
+      const requiredRank = PROJECT_ROLE_RANK[minRole];
+      if (userRank < requiredRank)
+        throw new ForbiddenException('insufficient project role');
+    }
     return true;
   }
 }
