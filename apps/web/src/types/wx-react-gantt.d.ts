@@ -49,7 +49,7 @@ declare module 'wx-react-gantt' {
     flexGrow?: number;
     align?: 'left' | 'center' | 'right';
     width?: number;
-    template?: (task: GanttTask) => string;
+    template?: (value: unknown, task: GanttTask, col: GanttColumn) => string;
   }
 
   export interface GanttActionPayloadMap {
@@ -74,6 +74,7 @@ declare module 'wx-react-gantt' {
       inProgress?: boolean;
       _rollback?: boolean;
       _silent?: boolean;
+      _addTaskSync?: boolean;
     };
     'delete-task': {
       id: GanttId;
