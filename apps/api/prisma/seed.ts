@@ -19,7 +19,7 @@ async function main() {
     },
   });
 
-  console.log(`Seeded admin ${email} (firebaseUid=${firebaseUid})`);
+  console.log('Seeded admin user');
 }
 
 main()

@@ -287,17 +287,20 @@ const GanttChart: React.FC<GanttChartProps> = ({
         header: 'Acciones',
         align: 'center',
         width: 50,
-        template: (_v: unknown, task: GanttTask) => `
+        template: (_v: unknown, task: GanttTask) => {
+          const escapedTaskId = JSON.stringify(String(task.id)).replace(/"/g, '&quot;');
+          return `
           <div class="task-actions">
             <button
               class="add-child-btn"
-              onclick="window.addChildTask('${String(task.id).replace(/'/g, "\\'")}')"
+              onclick="window.addChildTask(${escapedTaskId})"
               title="Agregar subtarea"
             >
               +
             </button>
           </div>
-        `,
+        `;
+        },
       },
     ];
   }, []);
