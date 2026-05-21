@@ -24,7 +24,14 @@ describe('ProjectsService settings', () => {
     return module.get(ProjectsService);
   };
 
-  const settingsRow = (overrides: Partial<{ projectId: bigint; timeGranularity: string; createdAt: Date; updatedAt: Date }> = {}) => ({
+  const settingsRow = (
+    overrides: Partial<{
+      projectId: bigint;
+      timeGranularity: string;
+      createdAt: Date;
+      updatedAt: Date;
+    }> = {},
+  ) => ({
     projectId: 1n,
     timeGranularity: 'hours',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -34,7 +41,9 @@ describe('ProjectsService settings', () => {
 
   it('getSettings returns existing settings when present', async () => {
     const prisma = makePrisma();
-    prisma.projectSettings.findUnique.mockResolvedValue(settingsRow({ timeGranularity: 'days' }));
+    prisma.projectSettings.findUnique.mockResolvedValue(
+      settingsRow({ timeGranularity: 'days' }),
+    );
     const service = await makeService(prisma);
 
     const result = await service.getSettings(1n);
@@ -59,10 +68,14 @@ describe('ProjectsService settings', () => {
   it('updateSettings upserts the granularity', async () => {
     const prisma = makePrisma();
     prisma.project.findUnique.mockResolvedValue({ id: 1n });
-    prisma.projectSettings.upsert.mockResolvedValue(settingsRow({ timeGranularity: 'days' }));
+    prisma.projectSettings.upsert.mockResolvedValue(
+      settingsRow({ timeGranularity: 'days' }),
+    );
     const service = await makeService(prisma);
 
-    const result = await service.updateSettings(1n, { timeGranularity: 'days' });
+    const result = await service.updateSettings(1n, {
+      timeGranularity: 'days',
+    });
     expect(result.timeGranularity).toBe('days');
     expect(prisma.projectSettings.upsert).toHaveBeenCalledWith({
       where: { projectId: 1n },

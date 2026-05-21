@@ -198,6 +198,70 @@
         ]
       }
     },
+    "/projects/{projectId}/settings": {
+      "get": {
+        "operationId": "ProjectsController_getSettings",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "operationId": "ProjectsController_updateSettings",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/projects/{projectId}/members": {
       "post": {
         "operationId": "ProjectMembersController_add",
@@ -400,6 +464,44 @@
         ]
       }
     },
+    "/projects/{projectId}/tasks/open-states": {
+      "patch": {
+        "operationId": "TasksController_updateOpenStates",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkTaskOpenStateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
     "/tasks/{id}": {
       "get": {
         "operationId": "TasksController_getById",
@@ -547,6 +649,44 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/tasks/{id}/position": {
+      "patch": {
+        "operationId": "TasksController_updatePosition",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskPositionDto"
               }
             }
           }
@@ -1352,6 +1492,10 @@
         "type": "object",
         "properties": {}
       },
+      "UpdateProjectSettingsDto": {
+        "type": "object",
+        "properties": {}
+      },
       "AddProjectMemberDto": {
         "type": "object",
         "properties": {}
@@ -1364,6 +1508,10 @@
         "type": "object",
         "properties": {}
       },
+      "BulkTaskOpenStateDto": {
+        "type": "object",
+        "properties": {}
+      },
       "UpdateTaskDto": {
         "type": "object",
         "properties": {}
@@ -1373,6 +1521,10 @@
         "properties": {}
       },
       "UpdateOrderDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateTaskPositionDto": {
         "type": "object",
         "properties": {}
       },

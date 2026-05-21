@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
   OnApplicationBootstrap,
@@ -63,7 +62,7 @@ export class CalendarService implements OnApplicationBootstrap {
       where: { scope: 'global' },
     });
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const calendar = existing
         ? await tx.workingCalendar.update({
             where: { id: existing.id },

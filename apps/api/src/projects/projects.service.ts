@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateProjectDto,
@@ -116,7 +120,9 @@ export class ProjectsService {
     });
     if (existing) return this.toSettingsResponse(existing);
 
-    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
     if (!project) throw new NotFoundException('project not found');
     const created = await this.prisma.projectSettings.create({
       data: { projectId, timeGranularity: 'hours' },
@@ -134,7 +140,9 @@ export class ProjectsService {
     ) {
       throw new BadRequestException('invalid timeGranularity');
     }
-    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
     if (!project) throw new NotFoundException('project not found');
 
     const updated = await this.prisma.projectSettings.upsert({
@@ -144,7 +152,9 @@ export class ProjectsService {
         timeGranularity: dto.timeGranularity ?? 'hours',
       },
       update: {
-        ...(dto.timeGranularity !== undefined && { timeGranularity: dto.timeGranularity }),
+        ...(dto.timeGranularity !== undefined && {
+          timeGranularity: dto.timeGranularity,
+        }),
       },
     });
     return this.toSettingsResponse(updated);

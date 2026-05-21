@@ -124,10 +124,10 @@ function processElement(element: Element): void {
   );
 
   const nodesToProcess: Node[] = [];
-  let node;
+  let node: Node | null;
 
   // Recopilar todos los nodos primero para evitar problemas de modificación durante la iteración
-  while (node = walker.nextNode()) {
+  while ((node = walker.nextNode())) {
     nodesToProcess.push(node);
   }
 

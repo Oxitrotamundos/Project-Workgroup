@@ -78,7 +78,11 @@ export class TasksController {
     @Body() dto: BulkTaskOpenStateDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.tasks.updateOpenStates(this.id(projectId, 'projectId'), dto, user);
+    return this.tasks.updateOpenStates(
+      this.id(projectId, 'projectId'),
+      dto,
+      user,
+    );
   }
 
   @Get('tasks/:id')

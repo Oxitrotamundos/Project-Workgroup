@@ -455,7 +455,11 @@ describe('TasksService', () => {
     prisma.task.update.mockResolvedValue(after);
     const resolver = makeResolver();
     const scheduling = makeScheduling();
-    const service = new TasksService(prisma, resolver as any, scheduling as any);
+    const service = new TasksService(
+      prisma,
+      resolver as any,
+      scheduling as any,
+    );
 
     const result = await service.update(
       10n,
@@ -491,7 +495,12 @@ describe('TasksService', () => {
 
     const result = await service.updateOpenStates(
       1n,
-      { states: [{ id: '10', open: false }, { id: '11', open: true }] },
+      {
+        states: [
+          { id: '10', open: false },
+          { id: '11', open: true },
+        ],
+      },
       admin,
     );
 

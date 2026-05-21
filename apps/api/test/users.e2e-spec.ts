@@ -1,4 +1,4 @@
-import request = require('supertest');
+import request from 'supertest';
 import { bootE2E, E2EHandle } from './e2e-setup';
 import { PrismaService } from '../src/prisma/prisma.service';
 

@@ -75,7 +75,14 @@ type TaskRow = {
 
 type SummaryCalcRow = Pick<
   TaskRow,
-  'id' | 'parentId' | 'startDate' | 'endDate' | 'duration' | 'progress' | 'type' | 'estimatedHours'
+  | 'id'
+  | 'parentId'
+  | 'startDate'
+  | 'endDate'
+  | 'duration'
+  | 'progress'
+  | 'type'
+  | 'estimatedHours'
 >;
 type SummaryStats = {
   startDate: Date | null;
@@ -163,7 +170,9 @@ export class TasksService {
       dto.estimatedHours !== undefined;
     const workloadTouched = scheduleTouched || dto.assigneeId !== undefined;
     const summariesTouched =
-      scheduleTouched || dto.progress !== undefined || dto.parentId !== undefined;
+      scheduleTouched ||
+      dto.progress !== undefined ||
+      dto.parentId !== undefined;
     const versioned =
       dto.name !== undefined ||
       dto.description !== undefined ||
@@ -196,7 +205,10 @@ export class TasksService {
       endDateTime: endDate,
       calendar,
     });
-    return { hoursPerDay: calendar.hoursPerDay || 8, workload: result.workload };
+    return {
+      hoursPerDay: calendar.hoursPerDay || 8,
+      workload: result.workload,
+    };
   }
 
   private parseEstimatedHours(raw: string | undefined): number | undefined {
@@ -575,7 +587,8 @@ export class TasksService {
             fallbackCount++;
           }
           const ownHours = Number(task.estimatedHours.toString());
-          if (Number.isFinite(ownHours) && ownHours > 0) estimatedHours += ownHours;
+          if (Number.isFinite(ownHours) && ownHours > 0)
+            estimatedHours += ownHours;
         }
       } else {
         for (const child of children) {
@@ -605,7 +618,13 @@ export class TasksService {
     const patches: SummaryPatch[] = [];
     const previousById = new Map<
       string,
-      { startDate: Date; endDate: Date; duration: string; progress: number; estimatedHours: string }
+      {
+        startDate: Date;
+        endDate: Date;
+        duration: string;
+        progress: number;
+        estimatedHours: string;
+      }
     >();
     for (const task of tasks) {
       if (task.type === 'summary') {
@@ -788,13 +807,14 @@ export class TasksService {
           dto.estimatedHours,
         )
       : null;
-    const workloadOnly = !schedule && plan.workloadTouched
-      ? await this.computeWorkloadFromCurrentRange(
-          existing.projectId,
-          existing.startDate,
-          existing.endDate,
-        )
-      : null;
+    const workloadOnly =
+      !schedule && plan.workloadTouched
+        ? await this.computeWorkloadFromCurrentRange(
+            existing.projectId,
+            existing.startDate,
+            existing.endDate,
+          )
+        : null;
 
     const parentId = await this.validateParent(
       existing.projectId,
@@ -858,7 +878,8 @@ export class TasksService {
           const patched = plan.summariesTouched
             ? await this.recalculateProjectSummaries(existing.projectId, tx)
             : [];
-          const fresh = (await tx.task.findUnique({ where: { id } })) ?? updated;
+          const fresh =
+            (await tx.task.findUnique({ where: { id } })) ?? updated;
           return { fresh, patched };
         },
         {
@@ -887,7 +908,8 @@ export class TasksService {
     const hoursPerDay =
       schedule?.hoursPerDay ??
       workloadOnly?.hoursPerDay ??
-      (await this.calendarResolver.resolveForProject(existing.projectId)).hoursPerDay;
+      (await this.calendarResolver.resolveForProject(existing.projectId))
+        .hoursPerDay;
     return this.toMutationResponse(refreshed!, hoursPerDay, summariesPatched);
   }
 
@@ -916,7 +938,8 @@ export class TasksService {
             existing.projectId,
             tx,
           );
-          const fresh = (await tx.task.findUnique({ where: { id } })) ?? updated;
+          const fresh =
+            (await tx.task.findUnique({ where: { id } })) ?? updated;
           return { fresh, patched };
         },
         {
@@ -1383,13 +1406,14 @@ export class TasksService {
                 data.estimatedHours,
               )
             : null;
-          const workloadOnly = !schedule && plan.workloadTouched
-            ? await this.computeWorkloadFromCurrentRange(
-                existing.projectId,
-                existing.startDate,
-                existing.endDate,
-              )
-            : null;
+          const workloadOnly =
+            !schedule && plan.workloadTouched
+              ? await this.computeWorkloadFromCurrentRange(
+                  existing.projectId,
+                  existing.startDate,
+                  existing.endDate,
+                )
+              : null;
           const parentId = await this.validateParent(
             existing.projectId,
             itemId,
