@@ -78,7 +78,7 @@ export const useTasks = (projectId?: string, filters?: TaskFilters): UseTasksRet
 
   return {
     tasks: query.data ?? [],
-    loading: query.isLoading || query.isFetching,
+    loading: query.isLoading && !query.data,
     error: query.error instanceof Error ? query.error.message : null,
     createTask,
     updateTask,

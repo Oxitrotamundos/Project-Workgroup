@@ -1,25 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Task, TaskFilters } from '../../types/domain';
-import type { UpdateTaskDto, SummaryPatch } from '@project-workgroup/shared';
+import type { UpdateTaskDto } from '@project-workgroup/shared';
 import { TaskService, type BulkUpdateItem, type BulkUpdateResult } from '../../services/taskService';
+import { TaskLinkService } from '../../services/taskLinkService';
 import { taskKeys } from './taskQueryKeys';
-
-const applySummariesPatched = (prev: Task[] | undefined, patches: SummaryPatch[]): Task[] | undefined => {
-  if (!prev || patches.length === 0) return prev;
-  const byId = new Map(patches.map((p) => [p.id, p]));
-  return prev.map((t) => {
-    const patch = byId.get(t.id);
-    if (!patch) return t;
-    return {
-      ...t,
-      startDate: patch.startDate,
-      endDate: patch.endDate,
-      duration: Number(patch.duration) || t.duration,
-      progress: patch.progress,
-      version: patch.version,
-    };
-  });
-};
+import type { TaskLink } from '../../types/domain';
+import { applySummaryPatches } from '../../lib/summaryPatches';
 
 const replaceOrInsertTask = (prev: Task[] | undefined, fresh: Task): Task[] => {
   if (!prev) return [fresh];
@@ -36,6 +22,17 @@ export function useProjectTasksQuery(projectId: string | undefined, filters?: Ta
     queryFn: () => {
       if (!projectId) return Promise.resolve([] as Task[]);
       return TaskService.getProjectTasks(projectId, filters);
+    },
+    enabled: Boolean(projectId),
+  });
+}
+
+export function useProjectTaskLinksQuery(projectId: string | undefined) {
+  return useQuery({
+    queryKey: taskKeys.linksByProject(projectId),
+    queryFn: () => {
+      if (!projectId) return Promise.resolve([] as TaskLink[]);
+      return TaskLinkService.getProjectLinks(projectId);
     },
     enabled: Boolean(projectId),
   });
@@ -132,7 +129,7 @@ export function useBulkUpdateTasksMutation(projectId: string | undefined) {
     },
     onSuccess: (result) => {
       queryClient.setQueryData<Task[]>(queryKey, (prev) => {
-        const patched = applySummariesPatched(prev, result.summariesPatched);
+        const patched = applySummaryPatches(prev, result.summariesPatched);
         return result.tasks.reduce<Task[] | undefined>(
           (acc, task) => replaceOrInsertTask(acc, task),
           patched,
