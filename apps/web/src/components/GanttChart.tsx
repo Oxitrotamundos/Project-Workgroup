@@ -35,9 +35,17 @@ import ganttLocaleEs from '../locales/gantt-es';
 
 declare global {
   interface Window {
-    wx?: any;
+    wx?: {
+      locales?: Record<string, Record<string, unknown>>;
+      locale?: string;
+      i18n?: {
+        setLocale: (locale: string) => void;
+        setTranslations?: (locale: string, translations: Record<string, unknown>) => void;
+      };
+      setLocale?: (locale: string, translations: Record<string, unknown>) => void;
+    };
     wxLocale?: string;
-    wxLocales?: any;
+    wxLocales?: Record<string, Record<string, unknown>>;
     addChildTask?: (parentId: number | string) => void;
   }
 }

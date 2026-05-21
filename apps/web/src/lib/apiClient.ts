@@ -127,7 +127,7 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
     const match = TASK_BASE_RE.exec(path);
     if (!match) return null;
     try {
-      const data = await asJson<any>(await doFetch('GET', match[1]));
+      const data = await asJson<{ version?: number }>(await doFetch('GET', match[1]));
       return typeof data?.version === 'number' ? data.version : null;
     } catch {
       return null;
@@ -224,18 +224,7 @@ export function createApiClient(opts: ApiClientOptions): ApiClient {
   const withIdempotencyKey = (init?: RequestInit): RequestInit => {
     const headers = new Headers(init?.headers);
     if (!headers.has('idempotency-key')) {
-      const uuid = typeof crypto !== 'undefined'
-        ? ('randomUUID' in crypto
-            ? crypto.randomUUID()
-            : (() => {
-                const bytes = new Uint8Array(16);
-                crypto.getRandomValues(bytes);
-                bytes[6] = (bytes[6] & 0x0f) | 0x40;
-                bytes[8] = (bytes[8] & 0x3f) | 0x80;
-                const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0'));
-                return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
-              })())
-        : `${Date.now().toString(36)}-idempotency-key`;
+      const uuid = crypto.randomUUID();
       headers.set('idempotency-key', uuid);
     }
     return { ...init, headers };

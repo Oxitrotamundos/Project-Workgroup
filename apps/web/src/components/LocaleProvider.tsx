@@ -6,7 +6,7 @@ import ganttLocaleEs from '../locales/gantt-es';
 // Contexto de localización
 interface LocaleContextType {
   locale: string;
-  translations: any;
+  translations: Record<string, unknown>;
 }
 
 const LocaleContext = createContext<LocaleContextType>({
@@ -20,7 +20,7 @@ export const useLocale = () => {
 };
 
 // Función para configurar la localización global
-const setupGlobalWXLocale = (translations: any) => {
+const setupGlobalWXLocale = (translations: Record<string, unknown>) => {
   if (typeof window !== 'undefined') {
     // Configurar wx global
     window.wx = window.wx || {};
@@ -36,7 +36,7 @@ const setupGlobalWXLocale = (translations: any) => {
     if (window.wx.i18n) {
       try {
         window.wx.i18n.setLocale('es');
-        window.wx.i18n.setTranslations('es', translations);
+        window.wx.i18n.setTranslations?.('es', translations);
       } catch (error) {
         console.warn('Error configurando wx.i18n:', error);
       }
@@ -96,14 +96,5 @@ export const LocaleProvider: React.FC<LocaleProviderProps> = ({
     </LocaleContext.Provider>
   );
 };
-
-// Declaraciones globales para TypeScript
-declare global {
-  interface Window {
-    wx?: any;
-    wxLocale?: string;
-    wxLocales?: any;
-  }
-}
 
 export default LocaleProvider;
