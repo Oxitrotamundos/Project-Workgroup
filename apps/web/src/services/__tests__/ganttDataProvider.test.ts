@@ -148,6 +148,30 @@ describe('GanttDataProvider actions', () => {
       { id: '2', open: false, expectedVersion: 1 },
     ]);
   });
+
+  it('syncFromTasks refleja altas (id nuevo) y bajas (id ausente) en el store de forma imperativa', () => {
+    const provider = new GanttDataProvider('p1');
+    // Estado inicial: tareas 1 y 2 (el api se conecta después, igual que en runtime).
+    provider.syncFromData([baseTask({ id: '1' }), baseTask({ id: '2', name: 'Two' })], []);
+    const api = {
+      getTask: vi.fn(() => undefined),
+      exec: vi.fn(),
+    } as any;
+    provider.setGanttApi(api);
+
+    // Llega un dataset con alta de '3' y baja de '2', SIN regenerar la prop de <Gantt>.
+    provider.syncFromTasks([baseTask({ id: '1' }), baseTask({ id: '3', name: 'Three' })]);
+
+    // Alta → exec 'update-task' para el id nuevo (3); baja → exec 'delete-task' para el ausente (2).
+    expect(api.exec).toHaveBeenCalledWith(
+      'update-task',
+      expect.objectContaining({ id: 3, _silent: true }),
+    );
+    expect(api.exec).toHaveBeenCalledWith(
+      'delete-task',
+      expect.objectContaining({ id: 2, _silent: true }),
+    );
+  });
 });
 
 describe('toGanttId', () => {

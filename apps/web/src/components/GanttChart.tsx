@@ -27,6 +27,7 @@ import { createHighlightTime } from '../services/workingCalendarMarkers';
 import { LocaleProvider } from './LocaleProvider';
 import { setupAutoLocalization } from '../utils/ganttLocalizer';
 import { applyBarTooltips } from '../utils/ganttBarTooltips';
+import { computeStructuralKey } from '../utils/ganttStructuralKey';
 import { GanttTimeline } from './GanttTimeline';
 import { useProjectSettings } from '../contexts/ProjectSettingsContext';
 
@@ -76,6 +77,13 @@ const GanttChart: React.FC<GanttChartProps> = ({
     tasks: [],
     links: [],
   });
+  // Derivado "live" para el minimapa (GanttTimeline): se actualiza en cada mutación,
+  // independiente de la prop CONGELADA de <Gantt>, para reflejar posiciones sin causar reset.
+  const [timelineTasks, setTimelineTasks] = useState<GanttTask[]>([]);
+  // Detección de reset intencional: regenerar la prop de <Gantt> solo al cambiar de provider
+  // (proyecto) o cuando cambia el conjunto de IDs (altas/bajas), no en cambios de campos.
+  const lastProviderRef = useRef<GanttDataProvider | null>(null);
+  const lastStructuralKeyRef = useRef<string | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [calendarLocal, setCalendarLocal] = useState<WorkingCalendarResponse | null>(null);
   const calendar = calendarFromProps ?? calendarLocal;
@@ -153,7 +161,27 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
   useEffect(() => {
     if (!dataProvider) return;
-    setGanttData(dataProvider.syncFromData(tasks ?? [], links));
+    const incomingTasks = tasks ?? [];
+    const incomingLinks = links ?? [];
+
+    // syncFromData sincroniza el store de wx-react-gantt de forma imperativa
+    // (exec 'update-task'/'delete-task' con _silent, sin reset) y devuelve el snapshot.
+    const snapshot = dataProvider.syncFromData(incomingTasks, incomingLinks);
+
+    // El minimapa siempre refleja lo último (no afecta la prop de <Gantt>).
+    setTimelineTasks(snapshot.tasks);
+
+    // Solo regeneramos la prop de <Gantt> (que dispara A.init → reset del store) cuando
+    // realmente cambió la estructura: nuevo provider (proyecto) o alta/baja de tareas/links.
+    // Los cambios de campos (arrastrar, redimensionar, editar) se reflejan vía el sync
+    // imperativo de arriba, manteniendo la referencia estable → sin rubber banding.
+    const structuralKey = computeStructuralKey(incomingTasks, incomingLinks);
+    const providerChanged = lastProviderRef.current !== dataProvider;
+    if (providerChanged || lastStructuralKeyRef.current !== structuralKey) {
+      lastProviderRef.current = dataProvider;
+      lastStructuralKeyRef.current = structuralKey;
+      setGanttData(snapshot);
+    }
   }, [dataProvider, tasks, links]);
 
   useEffect(() => {
@@ -453,7 +481,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
       if (timeoutId !== null) clearTimeout(timeoutId);
       observer.disconnect();
     };
-  }, [apiRef, ganttData.tasks]);
+  }, [apiRef, dataProvider]);
 
   if (loading) {
     return (
@@ -510,7 +538,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
     );
   }
 
-  if (!loading && ganttData.tasks.length === 0) {
+  if (!loading && (tasks?.length ?? 0) === 0) {
     return (
       <div className="flex items-center justify-center h-full" style={{ background: 'var(--surface)' }}>
         <div className="text-center max-w-md p-6">
@@ -590,7 +618,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         <GanttTimeline
           scrollLeft={scrollLeft}
           api={apiRef.current}
-          tasks={ganttData.tasks}
+          tasks={timelineTasks}
           zoomLevel={zoomLevel}
           zoomLabel={zoomLabel}
         />
