@@ -11,6 +11,7 @@ vi.mock('../taskService', () => ({
     updateTask: vi.fn(),
     updateTaskOrder: vi.fn(),
     getDescendants: vi.fn(),
+    bulkUpdate: vi.fn(),
   },
 }));
 
@@ -171,6 +172,145 @@ describe('GanttDataProvider actions', () => {
       'delete-task',
       expect.objectContaining({ id: 2, _silent: true }),
     );
+  });
+
+  it('mueve una summary como grupo: desplaza y persiste solo las hojas con el delta', async () => {
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData(
+      [
+        baseTask({ id: 'S', name: 'Summary', type: 'summary', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-10T00:00:00.000Z' }),
+        baseTask({ id: 'A', parentId: 'S', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-02T00:00:00.000Z' }),
+        baseTask({ id: 'B', parentId: 'S', startDate: '2026-01-03T00:00:00.000Z', endDate: '2026-01-04T00:00:00.000Z' }),
+        baseTask({ id: 'S2', name: 'Sub', type: 'summary', parentId: 'S', startDate: '2026-01-05T00:00:00.000Z', endDate: '2026-01-10T00:00:00.000Z' }),
+        baseTask({ id: 'C', parentId: 'S2', startDate: '2026-01-05T00:00:00.000Z', endDate: '2026-01-10T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn() } as any;
+    provider.setGanttApi(api);
+    vi.mocked(TaskService.bulkUpdate).mockResolvedValue({ tasks: [], summariesPatched: [] });
+
+    // Move de +7 días (la summary va de 2026-01-01 a 2026-01-08).
+    const result = provider.send('update-task', {
+      id: 'S',
+      task: { start: new Date('2026-01-08T00:00:00.000Z'), end: new Date('2026-01-17T00:00:00.000Z') },
+    });
+    await vi.advanceTimersByTimeAsync(200);
+    await expect(result).resolves.toMatchObject({ success: true });
+
+    expect(TaskService.bulkUpdate).toHaveBeenCalledTimes(1);
+    const [proj, updates] = vi.mocked(TaskService.bulkUpdate).mock.calls[0];
+    expect(proj).toBe('p1');
+    expect(updates.map((u) => u.id).sort()).toEqual(['A', 'B', 'C']); // solo hojas, no S ni S2
+    const a = updates.find((u) => u.id === 'A')!;
+    expect(a.data.startDate).toBe('2026-01-08T00:00:00.000Z');
+    expect(a.data.endDate).toBe('2026-01-09T00:00:00.000Z');
+    expect(a.expectedVersion).toBe(1);
+  });
+
+  it('suprime los update-task con eventSource (propagación interna de wx) sin persistir', async () => {
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData([baseTask({ id: 'A' })], []);
+
+    const result = await provider.send('update-task', {
+      id: 'A',
+      task: { start: new Date('2026-02-01T00:00:00.000Z'), end: new Date('2026-02-02T00:00:00.000Z') },
+      eventSource: 'update-task',
+    });
+
+    expect(result).toMatchObject({ success: true });
+    expect(TaskService.bulkUpdate).not.toHaveBeenCalled();
+    expect(TaskService.updateTaskWithMeta).not.toHaveBeenCalled();
+  });
+
+  it('mover una hoja individual (sin eventSource) sigue persistiendo vía updateTaskWithMeta', async () => {
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData([baseTask({ id: 'A', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-02T00:00:00.000Z' })], []);
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn() } as any;
+    provider.setGanttApi(api);
+    vi.mocked(TaskService.updateTaskWithMeta).mockResolvedValue({ task: baseTask({ id: 'A', version: 2 }), summariesPatched: [] });
+
+    const result = provider.send('update-task', {
+      id: 'A',
+      task: { start: new Date('2026-01-08T00:00:00.000Z'), end: new Date('2026-01-09T00:00:00.000Z') },
+    });
+    await vi.advanceTimersByTimeAsync(200);
+    await expect(result).resolves.toMatchObject({ success: true });
+
+    expect(TaskService.updateTaskWithMeta).toHaveBeenCalledWith(
+      'A',
+      expect.objectContaining({ startDate: '2026-01-08T00:00:00.000Z', endDate: '2026-01-09T00:00:00.000Z' }),
+    );
+    expect(TaskService.bulkUpdate).not.toHaveBeenCalled();
+  });
+
+  it('no persiste el resize de una summary (solo cambia un extremo)', async () => {
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData(
+      [
+        baseTask({ id: 'S', type: 'summary', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-10T00:00:00.000Z' }),
+        baseTask({ id: 'A', parentId: 'S' }),
+      ],
+      [],
+    );
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn() } as any;
+    provider.setGanttApi(api);
+
+    const result = provider.send('update-task', { id: 'S', task: { end: new Date('2026-01-20T00:00:00.000Z') } });
+    await vi.advanceTimersByTimeAsync(200);
+    await expect(result).resolves.toMatchObject({ success: true });
+
+    expect(TaskService.bulkUpdate).not.toHaveBeenCalled();
+  });
+
+  it('divide en lotes de 200 cuando hay más de 200 hojas', async () => {
+    const tasks = [baseTask({ id: 'S', type: 'summary', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-10T00:00:00.000Z' })];
+    for (let i = 0; i < 250; i++) {
+      tasks.push(baseTask({ id: `L${i}`, parentId: 'S', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-02T00:00:00.000Z' }));
+    }
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData(tasks, []);
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn() } as any;
+    provider.setGanttApi(api);
+    vi.mocked(TaskService.bulkUpdate).mockResolvedValue({ tasks: [], summariesPatched: [] });
+
+    const result = provider.send('update-task', {
+      id: 'S',
+      task: { start: new Date('2026-01-08T00:00:00.000Z'), end: new Date('2026-01-17T00:00:00.000Z') },
+    });
+    await vi.advanceTimersByTimeAsync(200);
+    await expect(result).resolves.toMatchObject({ success: true });
+
+    expect(TaskService.bulkUpdate).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(TaskService.bulkUpdate).mock.calls.map((c) => c[1].length)).toEqual([200, 50]);
+  });
+
+  it('ante error en el bulk, revierte visualmente las hojas y emite onError', async () => {
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData(
+      [
+        baseTask({ id: 'S', type: 'summary', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-10T00:00:00.000Z' }),
+        baseTask({ id: 'A', parentId: 'S', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-02T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn() } as any;
+    provider.setGanttApi(api);
+    const onError = vi.fn();
+    provider.setOnError(onError);
+    vi.mocked(TaskService.bulkUpdate).mockRejectedValue(new Error('version conflict'));
+
+    const result = provider.send('update-task', {
+      id: 'S',
+      task: { start: new Date('2026-01-08T00:00:00.000Z'), end: new Date('2026-01-17T00:00:00.000Z') },
+    });
+    // Adjuntar el handler de rechazo ANTES de avanzar los timers para no dejar la rejection huérfana.
+    const rejected = expect(result).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(200);
+    await rejected;
+
+    expect(onError).toHaveBeenCalled();
+    expect(api.exec).toHaveBeenCalledWith('update-task', expect.objectContaining({ _rollback: true }));
   });
 });
 
