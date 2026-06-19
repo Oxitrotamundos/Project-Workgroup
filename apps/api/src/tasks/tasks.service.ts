@@ -27,6 +27,8 @@ import {
   UpdateTaskPositionDto,
   UpdateProgressDto,
   UpdateTaskDto,
+  computeSummaryBounds,
+  SummaryBoundsNode,
 } from '@project-workgroup/shared';
 import { AuthUser } from '../auth/auth.guard';
 import {
@@ -85,8 +87,6 @@ type SummaryCalcRow = Pick<
   | 'estimatedHours'
 >;
 type SummaryStats = {
-  startDate: Date | null;
-  endDate: Date | null;
   weightedProgress: number;
   progressWeight: number;
   fallbackProgress: number;
@@ -552,31 +552,35 @@ export class TasksService {
       else childrenByParent.set(key, [task]);
     }
 
+    // Fechas (start/end) de cada summary: regla compartida con el Gantt web (packages/shared).
+    const boundsMap = computeSummaryBounds(
+      tasks.map(
+        (t): SummaryBoundsNode => ({
+          id: t.id.toString(),
+          parentId: t.parentId?.toString() ?? null,
+          type: t.type,
+          start: t.startDate?.getTime() ?? null,
+          end: t.endDate?.getTime() ?? null,
+        }),
+      ),
+    );
+
     const memo = new Map<string, SummaryStats>();
 
+    // Progreso y horas agregados del subárbol (las fechas vienen de boundsMap).
     const collect = (task: SummaryCalcRow): SummaryStats => {
       const key = task.id.toString();
       const cached = memo.get(key);
       if (cached) return cached;
 
       const children = childrenByParent.get(key) ?? [];
-      let startDate: Date | null = null;
-      let endDate: Date | null = null;
       let weightedProgress = 0;
       let progressWeight = 0;
       let fallbackProgress = 0;
       let fallbackCount = 0;
       let estimatedHours = 0;
 
-      const includeBounds = (start: Date | null, end: Date | null) => {
-        if (start && (!startDate || start.getTime() < startDate.getTime()))
-          startDate = start;
-        if (end && (!endDate || end.getTime() > endDate.getTime()))
-          endDate = end;
-      };
-
       if (children.length === 0) {
-        includeBounds(task.startDate, task.endDate);
         if (task.type !== 'summary') {
           const weight = Number(task.duration.toString());
           if (weight > 0) {
@@ -591,15 +595,8 @@ export class TasksService {
             estimatedHours += ownHours;
         }
       } else {
-        // Una task/milestone con subtareas también aporta su PROPIA fecha: su barra es real en el
-        // Gantt (p. ej. una cadena padre→subtarea). Solo los summaries derivan sus fechas
-        // exclusivamente de los descendientes, sin fecha propia.
-        if (task.type !== 'summary') {
-          includeBounds(task.startDate, task.endDate);
-        }
         for (const child of children) {
           const childStats = collect(child);
-          includeBounds(childStats.startDate, childStats.endDate);
           weightedProgress += childStats.weightedProgress;
           progressWeight += childStats.progressWeight;
           fallbackProgress += childStats.fallbackProgress;
@@ -609,8 +606,6 @@ export class TasksService {
       }
 
       const result = {
-        startDate,
-        endDate,
         weightedProgress,
         progressWeight,
         fallbackProgress,
@@ -646,9 +641,10 @@ export class TasksService {
 
     for (const summary of tasks.filter((task) => task.type === 'summary')) {
       const stats = collect(summary);
-      const hasChildren =
-        (childrenByParent.get(summary.id.toString()) ?? []).length > 0;
-      if (!hasChildren || !stats.startDate || !stats.endDate) continue;
+      const bounds = boundsMap.get(summary.id.toString());
+      if (!bounds) continue;
+      const startDate = new Date(bounds.start);
+      const endDate = new Date(bounds.end);
 
       const progress =
         stats.progressWeight > 0
@@ -660,8 +656,7 @@ export class TasksService {
       const duration = Math.max(
         0,
         Math.ceil(
-          (stats.endDate.getTime() - stats.startDate.getTime()) /
-            (1000 * 60 * 60 * 24),
+          (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
         ),
       ).toString();
 
@@ -669,8 +664,8 @@ export class TasksService {
       const prev = previousById.get(summary.id.toString());
       const unchanged =
         prev &&
-        prev.startDate.getTime() === stats.startDate.getTime() &&
-        prev.endDate.getTime() === stats.endDate.getTime() &&
+        prev.startDate.getTime() === startDate.getTime() &&
+        prev.endDate.getTime() === endDate.getTime() &&
         prev.duration === duration &&
         prev.progress === clampedProgress &&
         Number(prev.estimatedHours) === Number(aggregatedHours);
@@ -679,8 +674,8 @@ export class TasksService {
       const updated = await client.task.update({
         where: { id: summary.id },
         data: {
-          startDate: stats.startDate,
-          endDate: stats.endDate,
+          startDate,
+          endDate,
           duration,
           progress: clampedProgress,
           estimatedHours: new Prisma.Decimal(aggregatedHours),
