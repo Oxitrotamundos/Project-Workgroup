@@ -251,6 +251,24 @@ describe('GanttDataProvider actions', () => {
     expect(grandparent.start.toISOString()).toBe('2026-01-05T00:00:00.000Z');
     expect(grandparent.end.toISOString()).toBe('2026-03-15T00:00:00.000Z');
   });
+
+  it('un summary abarca a una tarea intermedia con subtareas (cadena padre→subtarea)', () => {
+    const provider = new GanttDataProvider('p1');
+    const data = provider.syncFromData(
+      [
+        // Cadena lineal: summary 300 → task 301 (intermedia, con subtarea) → task 302.
+        // La única "hoja" es 302; 301 tiene fecha propia real y NO debe ignorarse.
+        baseTask({ id: '300', name: 'S', type: 'summary', startDate: '2026-03-01T00:00:00.000Z', endDate: '2026-03-02T00:00:00.000Z' }),
+        baseTask({ id: '301', name: 'Padre', type: 'task', parentId: '300', startDate: '2026-01-10T00:00:00.000Z', endDate: '2026-01-20T00:00:00.000Z' }),
+        baseTask({ id: '302', name: 'Sub', type: 'task', parentId: '301', startDate: '2026-02-05T00:00:00.000Z', endDate: '2026-02-15T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const summary = data.tasks.find((t) => String(t.id) === '300')!;
+    // Debe abarcar a 301 (intermedia) y a 302: min(301.start)=2026-01-10, max(302.end)=2026-02-15.
+    expect(summary.start.toISOString()).toBe('2026-01-10T00:00:00.000Z');
+    expect(summary.end.toISOString()).toBe('2026-02-15T00:00:00.000Z');
+  });
 });
 
 describe('toGanttId', () => {

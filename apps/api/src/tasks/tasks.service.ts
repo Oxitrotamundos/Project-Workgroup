@@ -591,6 +591,12 @@ export class TasksService {
             estimatedHours += ownHours;
         }
       } else {
+        // Una task/milestone con subtareas también aporta su PROPIA fecha: su barra es real en el
+        // Gantt (p. ej. una cadena padre→subtarea). Solo los summaries derivan sus fechas
+        // exclusivamente de los descendientes, sin fecha propia.
+        if (task.type !== 'summary') {
+          includeBounds(task.startDate, task.endDate);
+        }
         for (const child of children) {
           const childStats = collect(child);
           includeBounds(childStats.startDate, childStats.endDate);

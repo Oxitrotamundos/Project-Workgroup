@@ -361,15 +361,16 @@ export class GanttDataProvider {
       const children = childrenByParent.get(id);
       if (!children) return;
       for (const child of children) {
-        const grandchildren = childrenByParent.get(child.id);
-        if (grandchildren && grandchildren.length > 0) {
-          visit(child.id);
-          continue;
+        // Toda tarea NO-summary aporta su propia fecha, tenga o no subtareas: su barra es real
+        // (p. ej. una cadena padre→subtarea). Solo los summaries derivan sus fechas de los hijos.
+        if (child.type !== 'summary') {
+          const s = child.startDate ? new Date(child.startDate).getTime() : NaN;
+          const e = child.endDate ? new Date(child.endDate).getTime() : NaN;
+          if (Number.isFinite(s)) minStart = minStart === null ? s : Math.min(minStart, s);
+          if (Number.isFinite(e)) maxEnd = maxEnd === null ? e : Math.max(maxEnd, e);
         }
-        const s = child.startDate ? new Date(child.startDate).getTime() : NaN;
-        const e = child.endDate ? new Date(child.endDate).getTime() : NaN;
-        if (Number.isFinite(s)) minStart = minStart === null ? s : Math.min(minStart, s);
-        if (Number.isFinite(e)) maxEnd = maxEnd === null ? e : Math.max(maxEnd, e);
+        // Recurre siempre: una task puede tener subtareas anidadas.
+        visit(child.id);
       }
     };
     visit(summaryId);
