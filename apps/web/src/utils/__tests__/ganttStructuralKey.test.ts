@@ -81,4 +81,11 @@ describe('computeStructuralKey', () => {
     const added = computeStructuralKey([task('1'), task('2')], [link('10'), link('11')]);
     expect(added).not.toBe(base);
   });
+
+  it('cambia ante un re-parent (mismo conjunto de IDs, distinto parentId)', () => {
+    const before = computeStructuralKey([task('1'), task('2', { parentId: '1' })], []);
+    // La tarea 2 pasa de hija de 1 a la raíz: misma lista de IDs, jerarquía distinta → reconstruir árbol.
+    const after = computeStructuralKey([task('1'), task('2', { parentId: undefined })], []);
+    expect(after).not.toBe(before);
+  });
 });
