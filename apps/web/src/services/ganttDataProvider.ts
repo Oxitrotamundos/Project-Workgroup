@@ -98,6 +98,10 @@ export class GanttDataProvider {
   private openStateTimer: ReturnType<typeof setTimeout> | null = null;
   private throttleMs = 0;
   private pendingActions: Map<string, PendingQueuedAction> = new Map();
+  // Hojas que wx desplaza al arrastrar una summary (propagación interna). Se agrupan en un único
+  // bulkUpdate para evitar N requests concurrentes que chocan al recalcular summaries en el backend.
+  private pendingLeafShifts: Map<string, BulkUpdateItem> = new Map();
+  private leafFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(projectId: string) {
     this.projectId = projectId;
@@ -331,6 +335,49 @@ export class GanttDataProvider {
     return this.toGanttData(tasks, links);
   }
 
+  /**
+   * Rango de un summary derivado de sus HOJAS descendientes (mín start, máx end). Un summary es un
+   * contenedor: su barra debe abarcar a sus hijas. Recorre el subárbol por parentId y solo considera
+   * las hojas (las sub-summaries se derivan de las suyas). Devuelve null si no hay hojas con fecha.
+   */
+  private computeSummaryBounds(
+    summaryId: string,
+    allTasks: Task[],
+  ): { start: Date; end: Date } | null {
+    const childrenByParent = new Map<string, Task[]>();
+    for (const t of allTasks) {
+      if (t.parentId === undefined || t.parentId === null) continue;
+      const list = childrenByParent.get(t.parentId);
+      if (list) list.push(t);
+      else childrenByParent.set(t.parentId, [t]);
+    }
+
+    let minStart: number | null = null;
+    let maxEnd: number | null = null;
+    const visited = new Set<string>();
+    const visit = (id: string): void => {
+      if (visited.has(id)) return;
+      visited.add(id);
+      const children = childrenByParent.get(id);
+      if (!children) return;
+      for (const child of children) {
+        const grandchildren = childrenByParent.get(child.id);
+        if (grandchildren && grandchildren.length > 0) {
+          visit(child.id);
+          continue;
+        }
+        const s = child.startDate ? new Date(child.startDate).getTime() : NaN;
+        const e = child.endDate ? new Date(child.endDate).getTime() : NaN;
+        if (Number.isFinite(s)) minStart = minStart === null ? s : Math.min(minStart, s);
+        if (Number.isFinite(e)) maxEnd = maxEnd === null ? e : Math.max(maxEnd, e);
+      }
+    };
+    visit(summaryId);
+
+    if (minStart === null || maxEnd === null) return null;
+    return { start: new Date(minStart), end: new Date(maxEnd) };
+  }
+
   private toGanttTask(task: Task, allTasks?: Task[]): GanttTask | null {
     if (!task.id || !task.name) return null;
 
@@ -344,6 +391,17 @@ export class GanttDataProvider {
     } catch {
       startDate = new Date();
       endDate = new Date(Date.now() + 86_400_000);
+    }
+
+    // Un summary es un contenedor: su barra debe abarcar a sus hijas. Derivamos su rango de las
+    // hojas descendientes en vez de confiar en task.startDate/endDate (que el backend puede tener
+    // desincronizado). Así el summary siempre abarca a sus hijas al cargar y al recargar.
+    if (task.type === 'summary' && allTasks) {
+      const bounds = this.computeSummaryBounds(task.id, allTasks);
+      if (bounds) {
+        startDate = bounds.start;
+        endDate = bounds.end;
+      }
     }
 
     if (task.type !== 'milestone' && endDate.getTime() <= startDate.getTime()) {
@@ -413,15 +471,15 @@ export class GanttDataProvider {
   }
 
   async send(action: string, data: unknown): Promise<unknown> {
-
     if (this.isUiOnlyEvent(data)) return { success: true };
     if (action === 'drag-task') return { success: true };
 
-    // Los update-task con `eventSource` son propagaciones internas de wx-react-gantt
-    // (moveSummaryKids/resetSummaryDates al manipular una summary). El movimiento de una
-    // summary se persiste de forma explícita y atómica en handleSummaryGroupMove; dejar pasar
-    // estos eventos por-hijo causaría doble escritura y N requests concurrentes.
+    // Al arrastrar una summary, wx propaga el movimiento emitiendo un update-task por cada
+    // descendiente con `eventSource`. Persistirlos uno a uno dispara N requests concurrentes que
+    // chocan al recalcular los mismos summaries en el backend (y se revierten). En su lugar
+    // agrupamos las HOJAS en un único bulkUpdate; las summaries intermedias se ignoran (se derivan).
     if (action === 'update-task' && (data as { eventSource?: unknown }).eventSource !== undefined) {
+      this.bufferPropagatedLeaf(data as GanttActionPayloadMap['update-task']);
       return { success: true };
     }
 
@@ -459,6 +517,57 @@ export class GanttDataProvider {
     } catch (error) {
       console.error('GanttDataProvider: error procesando acción', action, error);
       throw error;
+    }
+  }
+
+  /** Acumula una hoja desplazada por la propagación de wx (move de summary) para un bulk posterior. */
+  private bufferPropagatedLeaf(data: GanttActionPayloadMap['update-task']): void {
+    const taskData: Partial<GanttTask> = data.task && typeof data.task === 'object' ? data.task : {};
+    // Las summaries intermedias se derivan de sus hijas en el backend; no se persisten.
+    if (taskData.type === 'summary') return;
+    const taskId = this.resolveTaskId(data.id);
+    if (!taskId) return;
+    const startDate = toIsoDateTime(taskData.start);
+    if (startDate === undefined) return;
+    const update: UpdateTaskDto = { startDate };
+    const endDate = toIsoDateTime(taskData.end);
+    if (taskData.type !== 'milestone' && endDate !== undefined) update.endDate = endDate;
+    const cached = this.taskCache.get(taskId);
+    this.pendingLeafShifts.set(taskId, { id: taskId, data: update, expectedVersion: cached?.version });
+    this.scheduleLeafFlush();
+  }
+
+  private scheduleLeafFlush(): void {
+    if (this.leafFlushTimer !== null) clearTimeout(this.leafFlushTimer);
+    this.leafFlushTimer = setTimeout(() => {
+      this.leafFlushTimer = null;
+      void this.flushLeafShifts();
+    }, 60);
+  }
+
+  /** Persiste en un único bulkUpdate (chunked ≤200) las hojas desplazadas por el move de una summary. */
+  private async flushLeafShifts(): Promise<void> {
+    if (this.pendingLeafShifts.size === 0) return;
+    const items = Array.from(this.pendingLeafShifts.values());
+    this.pendingLeafShifts.clear();
+    try {
+      const CHUNK_SIZE = 200;
+      const updatedTasks: Task[] = [];
+      let summariesPatched: SummaryPatch[] = [];
+      for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+        const result = await TaskService.bulkUpdate(this.projectId, items.slice(i, i + CHUNK_SIZE));
+        updatedTasks.push(...result.tasks);
+        summariesPatched = result.summariesPatched;
+      }
+      for (const task of updatedTasks) this.applyEntityUpdate(task.id, task);
+      this.applySummaryPatches(summariesPatched);
+    } catch (error) {
+      console.error('GanttDataProvider: error guardando el grupo de la summary', error);
+      this.emitMetric('rollback', { action: 'summary-group-move', count: items.length });
+      this.onError?.({
+        message: 'No se pudo guardar el movimiento del grupo. Recarga para ver el estado real.',
+        cause: error,
+      });
     }
   }
 
@@ -552,20 +661,6 @@ export class GanttDataProvider {
     const cachedForVersion = this.taskCache.get(taskId);
     const isSummary = (taskData.type ?? cachedForVersion?.type) === 'summary';
 
-    // Mover una summary = mover su grupo. Las fechas de una summary se derivan de sus hijas en
-    // el backend, así que persistir la summary directamente no tiene efecto. En su lugar
-    // desplazamos y guardamos todas las hojas descendientes (handleSummaryGroupMove). Un move
-    // trae start Y end; un resize trae solo uno (wx ya lo ignora para summaries).
-    if (
-      isSummary &&
-      taskData.start != null &&
-      taskData.end != null &&
-      cachedForVersion?.startDate &&
-      cachedForVersion?.endDate
-    ) {
-      return this.handleSummaryGroupMove(taskId, taskData, cachedForVersion);
-    }
-
     const updateData: UpdateTaskDto = {};
 
     const nextName = taskData.text;
@@ -644,119 +739,6 @@ export class GanttDataProvider {
       }
       const message = 'No se pudo guardar el cambio. Se revirtió.';
       this.emitMetric('rollback', { action: 'update-task', taskId, message });
-      this.onError?.({ message, cause: error });
-      throw error;
-    }
-  }
-
-  /**
-   * Hojas descendientes (tareas sin hijos) de `rootId` según el taskCache. Las summaries
-   * intermedias se omiten porque sus fechas se derivan de las hojas en el backend.
-   */
-  private collectLeafDescendants(rootId: string): Task[] {
-    const childrenByParent = new Map<string, Task[]>();
-    for (const task of this.taskCache.values()) {
-      const parentId = task.parentId;
-      if (parentId === undefined || parentId === null) continue;
-      const siblings = childrenByParent.get(parentId);
-      if (siblings) siblings.push(task);
-      else childrenByParent.set(parentId, [task]);
-    }
-
-    const leaves: Task[] = [];
-    const visited = new Set<string>();
-    const stack: string[] = [rootId];
-    while (stack.length > 0) {
-      const id = stack.pop() as string;
-      if (visited.has(id)) continue;
-      visited.add(id);
-      const children = childrenByParent.get(id);
-      if (!children || children.length === 0) {
-        if (id !== rootId) {
-          const task = this.taskCache.get(id);
-          if (task) leaves.push(task);
-        }
-        continue;
-      }
-      for (const child of children) stack.push(child.id);
-    }
-    return leaves;
-  }
-
-  /**
-   * Mueve una summary como grupo: desplaza todas sus hojas descendientes el mismo delta y lo
-   * persiste con un único bulkUpdate (chunked ≤200). El backend recalcula la summary desde las
-   * hojas. Mantiene la posición libre (no realinea al calendario laboral).
-   */
-  private async handleSummaryGroupMove(
-    summaryId: string,
-    taskData: Partial<GanttTask>,
-    cachedSummary: Task,
-  ): Promise<unknown> {
-    const newStartIso = toIsoDateTime(taskData.start);
-    const newEndIso = toIsoDateTime(taskData.end);
-    if (newStartIso === undefined || newEndIso === undefined) return { success: true };
-
-    const deltaStartMs = new Date(newStartIso).getTime() - new Date(cachedSummary.startDate).getTime();
-    const deltaEndMs = new Date(newEndIso).getTime() - new Date(cachedSummary.endDate).getTime();
-    if (!Number.isFinite(deltaStartMs)) return { success: true };
-    // Un move puro desplaza ambos extremos por igual; si difieren, es un resize (no soportado).
-    if (Math.abs(deltaStartMs - deltaEndMs) > 1000) return { success: true };
-    if (deltaStartMs === 0) return { success: true };
-
-    const leaves = this.collectLeafDescendants(summaryId);
-    if (leaves.length === 0) return { success: true };
-
-    const snapshots = leaves.map((leaf) => ({
-      id: leaf.id,
-      start: leaf.startDate ? new Date(leaf.startDate) : undefined,
-      end: leaf.endDate ? new Date(leaf.endDate) : undefined,
-    }));
-
-    const items: BulkUpdateItem[] = leaves.map((leaf) => {
-      const data: UpdateTaskDto = {
-        startDate: new Date(new Date(leaf.startDate).getTime() + deltaStartMs).toISOString(),
-      };
-      if (leaf.type !== 'milestone' && leaf.endDate) {
-        data.endDate = new Date(new Date(leaf.endDate).getTime() + deltaStartMs).toISOString();
-      }
-      return { id: leaf.id, data, expectedVersion: leaf.version };
-    });
-
-    try {
-      const CHUNK_SIZE = 200;
-      const updatedTasks: Task[] = [];
-      let summariesPatched: SummaryPatch[] = [];
-      for (let i = 0; i < items.length; i += CHUNK_SIZE) {
-        const chunk = items.slice(i, i + CHUNK_SIZE);
-        const result = await TaskService.bulkUpdate(this.projectId, chunk);
-        updatedTasks.push(...result.tasks);
-        summariesPatched = result.summariesPatched;
-      }
-      for (const task of updatedTasks) {
-        this.applyEntityUpdate(task.id, task);
-      }
-      this.applySummaryPatches(summariesPatched);
-      return { success: true };
-    } catch (error) {
-      console.error('GanttDataProvider: error moviendo el grupo de la summary, revirtiendo', error);
-      if (this._ganttApi) {
-        for (const snap of snapshots) {
-          const ganttId = toGanttId(snap.id);
-          if (ganttId === undefined) continue;
-          try {
-            this._ganttApi.exec('update-task', {
-              id: ganttId,
-              task: { start: snap.start, end: snap.end },
-              _rollback: true,
-            });
-          } catch (rollbackError) {
-            console.error('GanttDataProvider: error en rollback de hoja', rollbackError);
-          }
-        }
-      }
-      const message = 'No se pudo mover el grupo. Se revirtió.';
-      this.emitMetric('rollback', { action: 'summary-group-move', summaryId, message });
       this.onError?.({ message, cause: error });
       throw error;
     }
@@ -1027,6 +1009,12 @@ export class GanttDataProvider {
       this.openStateTimer = null;
       void this.flushOpenStates();
     }
+    if (this.leafFlushTimer !== null) {
+      clearTimeout(this.leafFlushTimer);
+      this.leafFlushTimer = null;
+      void this.flushLeafShifts();
+    }
+    this.pendingLeafShifts.clear();
     this.onDataChange = null;
     this.onLinkChange = null;
     this._ganttApi = null;

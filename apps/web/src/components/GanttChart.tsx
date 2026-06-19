@@ -416,40 +416,38 @@ const GanttChart: React.FC<GanttChartProps> = ({
       if (initListenersInstalledRef.current) return;
       initListenersInstalledRef.current = true;
 
-      if (dataProvider) {
-        if (typeof api.setNext === 'function') api.setNext(dataProvider);
-        dataProvider.setGanttApi(api);
-      }
-
+      // La conexión del provider (api.setNext) se hace en un effect dedicado más abajo, NO aquí:
+      // el <Gantt> puede montarse antes de que exista el dataProvider, y ponerla tras este guard
+      // dejaría el provider sin conectar (ninguna mutación se persistiría). Los listeners leen
+      // dataProviderRef.current para usar siempre el provider vigente.
       api.on('scroll-chart', (ev: { left?: number; top?: number }) => {
         setScrollLeft(ev.left ?? 0);
       });
       api.on('select-task', (ev: { id?: GanttId }) => {
         if (ev.id === undefined || ev.id === null) return;
-        const realId = dataProvider?.getTaskIdFromGanttId?.(ev.id) ?? String(ev.id);
+        const realId = dataProviderRef.current?.getTaskIdFromGanttId?.(ev.id) ?? String(ev.id);
         if (realId) onSelectTaskRef.current?.(realId);
       });
-      if (dataProvider) {
-        api.on('open-task', ({ id, _fromRestore }) => {
-          if (_fromRestore) return;
-          dataProvider.handleExpandCollapseState({ id, isOpen: true });
-        });
-        api.on('close-task', ({ id, _fromRestore }) => {
-          if (_fromRestore) return;
-          dataProvider.handleExpandCollapseState({ id, isOpen: false });
-        });
-      }
+      api.on('open-task', ({ id, _fromRestore }) => {
+        if (_fromRestore) return;
+        dataProviderRef.current?.handleExpandCollapseState({ id, isOpen: true });
+      });
+      api.on('close-task', ({ id, _fromRestore }) => {
+        if (_fromRestore) return;
+        dataProviderRef.current?.handleExpandCollapseState({ id, isOpen: false });
+      });
     },
-    [apiRef, dataProvider, locale],
+    [apiRef, locale],
   );
 
+  // Conecta el provider a la API del Gantt en cuanto AMBOS existan, y re-conecta si cualquiera
+  // cambia (el <Gantt> puede montarse antes que el provider, o re-montarse). Sin esta conexión,
+  // GanttDataProvider.send no recibe los eventos del Gantt y ninguna mutación se persiste.
   useEffect(() => {
-    if (!apiRef.current || !dataProvider) return;
-    const t = setTimeout(() => {
-      if (apiRef.current) initGantt(apiRef.current);
-    }, 50);
-    return () => clearTimeout(t);
-  }, [apiRef, dataProvider, initGantt]);
+    if (!toolbarApi || !dataProvider) return;
+    if (typeof toolbarApi.setNext === 'function') toolbarApi.setNext(dataProvider);
+    dataProvider.setGanttApi(toolbarApi);
+  }, [toolbarApi, dataProvider]);
 
   useEffect(() => {
     if (!containerRef.current) return;

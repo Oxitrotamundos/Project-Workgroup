@@ -692,8 +692,8 @@ export class TasksService {
       });
       patches.push({
         id: updated.id.toString(),
-        startDate: updated.startDate.toISOString().slice(0, 10),
-        endDate: updated.endDate.toISOString().slice(0, 10),
+        startDate: updated.startDate.toISOString(),
+        endDate: updated.endDate.toISOString(),
         duration: updated.duration.toString(),
         progress: updated.progress,
         estimatedHours: updated.estimatedHours.toString(),
