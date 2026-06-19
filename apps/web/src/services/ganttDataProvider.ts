@@ -8,6 +8,11 @@ import type {
   UpdateTaskLinkData,
 } from '../types/domain';
 import type { SummaryPatch, UpdateTaskDto } from '@project-workgroup/shared';
+import {
+  computeSummaryBounds,
+  type SummaryBoundsNode,
+  type SummaryBounds,
+} from '@project-workgroup/shared/utils/summary-bounds';
 import { wouldCreateCycle, type CycleEdge } from '../utils/cycleDetector';
 import { mergeSummaryPatchIntoTask } from '../lib/summaryPatches';
 import type {
@@ -191,8 +196,9 @@ export class GanttDataProvider {
 
   private toGanttData(tasks: Task[], links: TaskLink[]): GanttDataProviderData {
     const childrenByParent = this.buildChildrenIndex(tasks);
+    const summaryBounds = computeSummaryBounds(tasks.map((task) => this.toBoundsNode(task)));
     const ganttTasks = tasks
-      .map((task) => this.toGanttTask(task, childrenByParent))
+      .map((task) => this.toGanttTask(task, childrenByParent, summaryBounds))
       .filter((t): t is GanttTask => t !== null);
 
     const ganttLinks = links
@@ -348,44 +354,27 @@ export class GanttDataProvider {
     return childrenByParent;
   }
 
-  /**
-   * Rango de un summary derivado de sus HOJAS descendientes (mín start, máx end). Un summary es un
-   * contenedor: su barra debe abarcar a sus hijas. Recorre el subárbol por parentId y solo considera
-   * las hojas (las sub-summaries se derivan de las suyas). Devuelve null si no hay hojas con fecha.
-   */
-  private computeSummaryBounds(
-    summaryId: string,
-    childrenByParent: Map<string, Task[]>,
-  ): { start: Date; end: Date } | null {
-    let minStart: number | null = null;
-    let maxEnd: number | null = null;
-    const visited = new Set<string>();
-    const visit = (id: string): void => {
-      // Guard de ciclos: un parentId corrupto (ciclo) no debe colgar el recorrido.
-      if (visited.has(id)) return;
-      visited.add(id);
-      const children = childrenByParent.get(id);
-      if (!children) return;
-      for (const child of children) {
-        // Toda tarea NO-summary aporta su propia fecha, tenga o no subtareas: su barra es real
-        // (p. ej. una cadena padre→subtarea). Solo los summaries derivan sus fechas de los hijos.
-        if (child.type !== 'summary') {
-          const s = child.startDate ? new Date(child.startDate).getTime() : NaN;
-          const e = child.endDate ? new Date(child.endDate).getTime() : NaN;
-          if (Number.isFinite(s)) minStart = minStart === null ? s : Math.min(minStart, s);
-          if (Number.isFinite(e)) maxEnd = maxEnd === null ? e : Math.max(maxEnd, e);
-        }
-        // Recurre siempre: una task puede tener subtareas anidadas.
-        visit(child.id);
-      }
+  /** Adapta una Task del dominio al nodo genérico que consume computeSummaryBounds (shared). */
+  private toBoundsNode(task: Task): SummaryBoundsNode {
+    const ms = (value?: string): number | null => {
+      if (!value) return null;
+      const time = new Date(value).getTime();
+      return Number.isFinite(time) ? time : null;
     };
-    visit(summaryId);
-
-    if (minStart === null || maxEnd === null) return null;
-    return { start: new Date(minStart), end: new Date(maxEnd) };
+    return {
+      id: task.id,
+      parentId: task.parentId ?? null,
+      type: task.type,
+      start: ms(task.startDate),
+      end: ms(task.endDate),
+    };
   }
 
-  private toGanttTask(task: Task, childrenByParent?: Map<string, Task[]>): GanttTask | null {
+  private toGanttTask(
+    task: Task,
+    childrenByParent?: Map<string, Task[]>,
+    summaryBounds?: Map<string, SummaryBounds>,
+  ): GanttTask | null {
     if (!task.id || !task.name) return null;
 
     let startDate: Date;
@@ -400,14 +389,14 @@ export class GanttDataProvider {
       endDate = new Date(Date.now() + 86_400_000);
     }
 
-    // Un summary es un contenedor: su barra debe abarcar a sus hijas. Derivamos su rango de las
-    // hojas descendientes en vez de confiar en task.startDate/endDate (que el backend puede tener
-    // desincronizado). Así el summary siempre abarca a sus hijas al cargar y al recargar.
-    if (task.type === 'summary' && childrenByParent) {
-      const bounds = this.computeSummaryBounds(task.id, childrenByParent);
+    // Un summary es un contenedor: su barra abarca a sus hijas. El rango se deriva de los descendientes
+    // (regla compartida con el backend) en vez de confiar en task.startDate/endDate, que el backend
+    // puede tener desincronizado.
+    if (task.type === 'summary' && summaryBounds) {
+      const bounds = summaryBounds.get(task.id);
       if (bounds) {
-        startDate = bounds.start;
-        endDate = bounds.end;
+        startDate = new Date(bounds.start);
+        endDate = new Date(bounds.end);
       }
     }
 

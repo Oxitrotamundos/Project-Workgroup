@@ -10,6 +10,11 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@project-workgroup/shared": ["../../packages/shared/dist/index.d.ts"],
+      "@project-workgroup/shared/*": ["../../packages/shared/dist/*"]
+    },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",

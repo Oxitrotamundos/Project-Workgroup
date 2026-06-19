@@ -8,3 +8,5 @@ export * from './dto/api-key.dto';
 export * from './dto/calendar.dto';
 export { wouldCreateCycle } from './utils/cycle-detector';
 export type { Edge } from './utils/cycle-detector';
+export { computeSummaryBounds } from './utils/summary-bounds';
+export type { SummaryBoundsNode, SummaryBounds } from './utils/summary-bounds';
