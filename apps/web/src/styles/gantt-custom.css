@@ -537,6 +537,21 @@
   opacity: 0.8;
 }
 
+/* Tooltip en vivo durante el arrastre/redimensión: centrado sobre el ancla y por encima de la barra */
+.gantt-drag-tooltip {
+  position: absolute;
+  z-index: 60;
+  transform: translate(-50%, calc(-100% - 8px));
+  background: var(--p-600);
+  color: var(--ink-on-primary);
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
+  font: 600 11px var(--font-mono);
+  white-space: nowrap;
+  box-shadow: var(--sh-2);
+  pointer-events: none;
+}
+
 /* ─── Dark mode overrides ──────────────────────────────────────
    wx-react-gantt usa clases internas con fondos hardcodeados que no
    leen variables CSS. Las sobrescribimos con tokens del DS.

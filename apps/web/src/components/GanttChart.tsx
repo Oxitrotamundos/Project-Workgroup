@@ -27,6 +27,7 @@ import { createHighlightTime } from '../services/workingCalendarMarkers';
 import { LocaleProvider } from './LocaleProvider';
 import { setupAutoLocalization } from '../utils/ganttLocalizer';
 import { applyBarTooltips } from '../utils/ganttBarTooltips';
+import { GanttDragTooltip, type DragTooltipContext } from '../utils/ganttDragTooltip';
 import { computeStructuralKey } from '../utils/ganttStructuralKey';
 import { GanttTimeline } from './GanttTimeline';
 import { useProjectSettings } from '../contexts/ProjectSettingsContext';
@@ -90,6 +91,8 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const errorBannerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localizationCleanupRef = useRef<(() => void) | null>(null);
   const initListenersInstalledRef = useRef(false);
+  const dragTooltipRef = useRef<GanttDragTooltip | null>(null);
+  const dragCtxRef = useRef<DragTooltipContext>({ pxPerDay: 30, lengthUnit: 'day' });
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -226,6 +229,11 @@ const GanttChart: React.FC<GanttChartProps> = ({
       lengthUnit,
     };
   }, [pxPerDay, isDays]);
+
+  // El listener de drag se registra una sola vez; lee de esta ref el zoom vigente.
+  useEffect(() => {
+    dragCtxRef.current = { pxPerDay, lengthUnit };
+  }, [pxPerDay, lengthUnit]);
 
   const locale = React.useMemo(() => ({ ...coreLocaleEs, ...ganttLocaleEs }), []);
 
@@ -441,6 +449,10 @@ const GanttChart: React.FC<GanttChartProps> = ({
         if (_fromRestore) return;
         dataProviderRef.current?.handleExpandCollapseState({ id, isOpen: false });
       });
+      // Solo feedback visual (no persiste): muestra el destino mientras se arrastra/redimensiona.
+      api.on('drag-task', (ev) => {
+        dragTooltipRef.current?.onDrag(ev, api, dragCtxRef.current);
+      });
     },
     [apiRef, locale],
   );
@@ -485,6 +497,17 @@ const GanttChart: React.FC<GanttChartProps> = ({
       observer.disconnect();
     };
   }, [apiRef, dataProvider]);
+
+  // Tooltip en vivo durante el arrastre: se monta cuando el contenedor del Gantt existe.
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const tooltip = new GanttDragTooltip(containerRef.current);
+    dragTooltipRef.current = tooltip;
+    return () => {
+      tooltip.destroy();
+      dragTooltipRef.current = null;
+    };
+  }, [toolbarApi, dataProvider]);
 
   if (loading) {
     return (
