@@ -202,7 +202,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const highlightTime = React.useMemo(() => createHighlightTime(calendar), [calendar]);
   const { isDays } = useProjectSettings();
 
-  const { scales, cellWidth, zoomLevel, zoomLabel } = React.useMemo(() => {
+  const { scales, cellWidth, zoomLevel, zoomLabel, lengthUnit } = React.useMemo(() => {
     const allTiers = [
       { level: 0, label: 'Año',         max: 0.5,      factor: 365,    scales: [{ unit: 'year', step: 1, format: 'yyyy' }] },
       { level: 1, label: 'Año / Trim.', max: 2,        factor: 91,     scales: [{ unit: 'year', step: 1, format: 'yyyy' }, { unit: 'quarter', step: 1, format: "'T'Q" }] },
@@ -214,11 +214,16 @@ const GanttChart: React.FC<GanttChartProps> = ({
     ] as const;
     const tiers = isDays ? allTiers.filter((t) => t.level <= 4) : allTiers;
     const tier = tiers.find((t) => pxPerDay <= t.max) ?? tiers[tiers.length - 1];
+    // lengthUnit controla el snap nativo de wx al soltar: si la escala visible llega a horas
+    // cuadra a la hora; si no, al inicio del día (evita un snap horario torpe a zoom lejano).
+    const lowerUnit = tier.scales[tier.scales.length - 1].unit;
+    const lengthUnit: 'hour' | 'day' = lowerUnit === 'hour' ? 'hour' : 'day';
     return {
       scales: tier.scales as unknown as GanttScale[],
       cellWidth: Math.max(8, Math.round(pxPerDay * tier.factor)),
       zoomLevel: tier.level,
       zoomLabel: tier.label,
+      lengthUnit,
     };
   }, [pxPerDay, isDays]);
 
@@ -609,7 +614,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
               markers={markers}
               cellWidth={cellWidth}
               highlightTime={highlightTime}
-              {...({ lengthUnit: 'hour' } as { lengthUnit: 'hour' })}
+              lengthUnit={lengthUnit}
             />
           </Willow>
         </div>

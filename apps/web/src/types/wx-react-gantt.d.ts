@@ -167,6 +167,7 @@ declare module 'wx-react-gantt' {
     end?: Date;
     cellWidth?: number;
     cellHeight?: number;
+    lengthUnit?: 'minute' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
     readonly?: boolean;
     highlightTime?: (date: Date, unit: string) => string;
     init?: (api: GanttApi) => void;
