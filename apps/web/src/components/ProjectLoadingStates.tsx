@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, AlertTriangle, FolderX } from 'lucide-react';
+import type { Project } from '../types/domain';
 
 interface LoadingStateProps {
   message?: string;
@@ -88,7 +89,7 @@ export const NotFoundState: React.FC<NotFoundStateProps> = ({
 interface ProjectStateManagerProps {
   loading: boolean;
   error: string | null;
-  project: any | null;
+  project: Project | null;
   children: React.ReactNode;
   onRetry?: () => void;
 }

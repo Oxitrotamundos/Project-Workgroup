@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import type { Task, TaskLink, TaskPriority, TaskStatus } from '../../types/domain';
 import type { GanttDataChangePayload, GanttLinkChangePayload } from '../../services/ganttDataProvider';
+import type { GanttApi } from 'wx-react-gantt';
 import type { WorkingCalendarResponse } from '@project-workgroup/shared';
 import GanttChart from '../GanttChart';
 import TaskListView from './TaskListView';
@@ -20,7 +21,7 @@ interface Props {
   projectId: string;
   loading?: boolean;
   error?: string | null;
-  apiRef?: React.MutableRefObject<any>;
+  apiRef?: React.RefObject<GanttApi | null>;
   onAddTask?: () => void;
   onCreateTask?: (input: NewTaskInput) => Promise<void>;
   onUpdateTask?: (

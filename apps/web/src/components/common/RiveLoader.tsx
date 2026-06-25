@@ -31,7 +31,7 @@ const RiveLoader: React.FC<RiveLoaderProps> = memo(({
     onLoad: () => {
       // Acelerar la animación 25x para que dure menos tiempo
       if (rive) {
-        (rive as any).speed = 25.0;
+        Object.assign(rive, { speed: 25.0 });
       }
     },
     onLoop: () => {

@@ -169,8 +169,8 @@ export default function CalendarSettingsPage() {
           ? `Calendario global guardado (${updated.hoursPerDay} h/día). Las tareas heredadas se reagendaron automáticamente.`
           : `Guardado (${updated.hoursPerDay} h/día efectivas). Tareas del proyecto reagendadas.`,
       );
-    } catch (e: any) {
-      setError(e?.message ?? 'No se pudo guardar el calendario');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el calendario');
     } finally {
       setSaving(false);
     }
@@ -192,8 +192,8 @@ export default function CalendarSettingsPage() {
         setHolidays(fresh.holidays.map((h) => ({ ...h })));
         setSuccess('Override eliminado. Ahora se usa el calendario global.');
       }
-    } catch (e: any) {
-      setError(e?.message ?? 'No se pudo eliminar el override');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'No se pudo eliminar el override');
     } finally {
       setSaving(false);
     }

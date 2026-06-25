@@ -23,11 +23,12 @@ import { applySummaryPatches } from '../lib/summaryPatches';
 import { calendarService } from '../services/calendarService';
 import type { WorkingCalendarResponse } from '@project-workgroup/shared';
 import type { Task, TaskLink, TaskPriority, TaskStatus, TaskType } from '../types/domain';
+import type { GanttApi } from 'wx-react-gantt';
 
 const ProjectView: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const ganttApiRef = useRef<any>(null);
+  const ganttApiRef = useRef<GanttApi | null>(null);
   const { user } = useAuth();
   const { updateNavigation } = useNavigation();
   const queryClient = useQueryClient();
