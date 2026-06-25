@@ -1,5 +1,6 @@
-import { apiClient } from '../lib/apiClient';
+import { apiClient, ApiError } from '../lib/apiClient';
 import { wouldCreateCycle, type CycleEdge } from '../utils/cycleDetector';
+import type { TaskLinkResponse } from '@project-workgroup/shared';
 import type {
   TaskLink,
   CreateTaskLinkData,
@@ -7,7 +8,7 @@ import type {
   TaskLinkFilters
 } from '../types/domain';
 
-const toDomain = (r: any): TaskLink => ({
+const toDomain = (r: TaskLinkResponse): TaskLink => ({
   id: r.id,
   projectId: r.projectId,
   sourceTaskId: r.sourceTaskId,
@@ -28,7 +29,7 @@ export class TaskLinkService {
     if (data.sourceTaskId === data.targetTaskId) {
       throw new Error('No se puede crear un enlace de una tarea a sí misma');
     }
-    const result = await apiClient.post<any>(`/v1/projects/${data.projectId}/task-links`, {
+    const result = await apiClient.post<TaskLinkResponse>(`/v1/projects/${data.projectId}/task-links`, {
       sourceTaskId: data.sourceTaskId,
       targetTaskId: data.targetTaskId,
       type: data.type,
@@ -38,17 +39,17 @@ export class TaskLinkService {
 
   static async getLink(id: string): Promise<TaskLink | null> {
     try {
-      const result = await apiClient.get<any>(`/v1/task-links/${id}`);
+      const result = await apiClient.get<TaskLinkResponse>(`/v1/task-links/${id}`);
       return toDomain(result);
-    } catch (error: any) {
-      if (error?.status === 404) return null;
+    } catch (error: unknown) {
+      if (error instanceof ApiError && error.status === 404) return null;
       throw error;
     }
   }
 
   static async getProjectLinks(projectId: string, _filters?: TaskLinkFilters): Promise<TaskLink[]> {
     try {
-      const result = await apiClient.get<any[]>(`/v1/projects/${projectId}/task-links`);
+      const result = await apiClient.get<TaskLinkResponse[]>(`/v1/projects/${projectId}/task-links`);
       return result.map(toDomain);
     } catch (error) {
       console.error('Error getting project links:', error);
@@ -58,7 +59,7 @@ export class TaskLinkService {
 
   static async getTaskSourceLinks(taskId: string): Promise<TaskLink[]> {
     try {
-      const result = await apiClient.get<any[]>(`/v1/tasks/${taskId}/source-links`);
+      const result = await apiClient.get<TaskLinkResponse[]>(`/v1/tasks/${taskId}/source-links`);
       return result.map(toDomain);
     } catch {
       return [];
@@ -67,7 +68,7 @@ export class TaskLinkService {
 
   static async getTaskTargetLinks(taskId: string): Promise<TaskLink[]> {
     try {
-      const result = await apiClient.get<any[]>(`/v1/tasks/${taskId}/target-links`);
+      const result = await apiClient.get<TaskLinkResponse[]>(`/v1/tasks/${taskId}/target-links`);
       return result.map(toDomain);
     } catch {
       return [];
@@ -75,7 +76,7 @@ export class TaskLinkService {
   }
 
   static async updateLink(id: string, data: UpdateTaskLinkData): Promise<TaskLink> {
-    const result = await apiClient.patch<any>(`/v1/task-links/${id}`, data);
+    const result = await apiClient.patch<TaskLinkResponse>(`/v1/task-links/${id}`, data);
     return toDomain(result);
   }
 

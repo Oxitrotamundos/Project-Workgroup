@@ -1,4 +1,4 @@
-import { apiClient } from '../lib/apiClient';
+import { apiClient, ApiError } from '../lib/apiClient';
 import type {
   Project,
   CreateProjectData,
@@ -7,11 +7,24 @@ import type {
   PaginatedResponse
 } from '../types/domain';
 import type {
+  ProjectResponse,
   ProjectSettingsResponse,
   UpdateProjectSettingsDto,
 } from '@project-workgroup/shared';
 
-const toDomain = (r: any): Project => ({
+// La API no incluye `members` en ProjectResponse; lo extendemos opcionalmente.
+type RawProject = ProjectResponse & { members?: string[] };
+
+interface RawProjectsPage {
+  items?: RawProject[];
+  total?: number;
+  hasMore?: boolean;
+  nextCursor?: string | null;
+  page?: number;
+  lastDoc?: unknown;
+}
+
+const toDomain = (r: RawProject): Project => ({
   id: r.id,
   name: r.name,
   description: r.description ?? '',
@@ -25,26 +38,25 @@ const toDomain = (r: any): Project => ({
   updatedAt: r.updatedAt ?? '',
 });
 
-const toPaginatedProjects = (res: any, pageSize: number): PaginatedResponse<Project> => {
-  const rawItems = Array.isArray(res) ? res : (res?.items ?? []);
-  const items = rawItems.map(toDomain);
-  const total = typeof res?.total === 'number' ? res.total : items.length;
-  const hasMore = typeof res?.hasMore === 'boolean' ? res.hasMore : Boolean(res?.nextCursor) || items.length > pageSize;
+const toPaginatedProjects = (res: RawProjectsPage, pageSize: number): PaginatedResponse<Project> => {
+  const items = (res.items ?? []).map(toDomain);
+  const total = typeof res.total === 'number' ? res.total : items.length;
+  const hasMore = typeof res.hasMore === 'boolean' ? res.hasMore : Boolean(res.nextCursor) || items.length > pageSize;
 
   return {
     items: items.slice(0, pageSize),
     total,
-    page: typeof res?.page === 'number' ? res.page : 1,
+    page: typeof res.page === 'number' ? res.page : 1,
     pageSize,
     hasMore,
-    lastDoc: res?.lastDoc ?? res?.nextCursor,
+    lastDoc: res.lastDoc ?? res.nextCursor ?? undefined,
   };
 };
 
 export class ProjectService {
 
   static async createProject(data: CreateProjectData): Promise<string> {
-    const result = await apiClient.post<any>('/v1/projects', {
+    const result = await apiClient.post<ProjectResponse>('/v1/projects', {
       name: data.name,
       description: data.description,
       startDate: data.startDate,
@@ -57,10 +69,10 @@ export class ProjectService {
 
   static async getProject(id: string): Promise<Project | null> {
     try {
-      const result = await apiClient.get<any>(`/v1/projects/${id}`);
+      const result = await apiClient.get<RawProject>(`/v1/projects/${id}`);
       return toDomain(result);
-    } catch (error: any) {
-      if (error?.status === 404) return null;
+    } catch (error: unknown) {
+      if (error instanceof ApiError && error.status === 404) return null;
       console.error('Error getting project:', error);
       throw new Error('Error al obtener el proyecto');
     }
@@ -72,7 +84,7 @@ export class ProjectService {
     pageSize: number = 10
   ): Promise<PaginatedResponse<Project>> {
     try {
-      const res = await apiClient.get<any>('/v1/projects');
+      const res = await apiClient.get<RawProjectsPage>('/v1/projects');
       return toPaginatedProjects(res, pageSize);
     } catch (error) {
       console.error('Error getting user projects:', error);
@@ -119,10 +131,10 @@ export class ProjectService {
   static async getAllProjects(
     _filters?: ProjectFilters,
     pageSize: number = 10,
-    _lastDoc?: any
+    _lastDoc?: unknown
   ): Promise<PaginatedResponse<Project>> {
     try {
-      const res = await apiClient.get<any>('/v1/projects');
+      const res = await apiClient.get<RawProjectsPage>('/v1/projects');
       return toPaginatedProjects(res, pageSize);
     } catch (error) {
       console.error('Error getting all projects:', error);

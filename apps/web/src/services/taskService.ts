@@ -1,4 +1,4 @@
-import { apiClient } from '../lib/apiClient';
+import { apiClient, ApiError } from '../lib/apiClient';
 import type {
   Task,
   CreateTaskData,
@@ -11,9 +11,14 @@ import type {
   PropagationPreview,
   SummaryPatch,
   TaskMutationResponse,
+  TaskResponse,
   UpdateTaskPositionDto,
   UpdateTaskDto,
 } from '@project-workgroup/shared';
+
+// Extiende TaskResponse para cubrir el campo `dependencies` que el dominio requiere
+// pero que la API no incluye explícitamente en su contrato tipado.
+type RawTask = TaskResponse & { dependencies?: string[] };
 
 export interface BulkUpdateItem {
   id: string;
@@ -37,17 +42,17 @@ const toNumber = (value: unknown, fallback = 0): number => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-const toDomain = (r: any): Task => ({
+const toDomain = (r: RawTask): Task => ({
   id: r.id,
   projectId: r.projectId,
   name: r.name,
-  description: r.description,
+  description: r.description ?? undefined,
   startDate: r.startDate ?? '',
   endDate: r.endDate ?? '',
   duration: toNumber(r.duration, 1),
   progress: r.progress ?? 0,
-  assigneeId: r.assigneeId,
-  parentId: r.parentId,
+  assigneeId: r.assigneeId ?? undefined,
+  parentId: r.parentId ?? undefined,
   dependencies: r.dependencies ?? [],
   tags: r.tags ?? [],
   priority: r.priority ?? 'medium',
@@ -64,7 +69,7 @@ const toDomain = (r: any): Task => ({
   updatedAt: r.updatedAt ?? '',
 });
 
-const toMutationResult = (r: TaskMutationResponse | any): TaskMutationResult => ({
+const toMutationResult = (r: TaskMutationResponse): TaskMutationResult => ({
   task: toDomain(r),
   summariesPatched: Array.isArray(r?.summariesPatched) ? r.summariesPatched : [],
 });
@@ -99,16 +104,16 @@ export class TaskService {
       body.estimatedHours = String(data.estimatedHours);
     }
 
-    const result = await apiClient.post<any>(`/v1/projects/${data.projectId}/tasks`, body);
+    const result = await apiClient.post<TaskResponse>(`/v1/projects/${data.projectId}/tasks`, body);
     return result.id;
   }
 
   static async getTask(id: string): Promise<Task | null> {
     try {
-      const result = await apiClient.get<any>(`/v1/tasks/${id}`);
+      const result = await apiClient.get<RawTask>(`/v1/tasks/${id}`);
       return toDomain(result);
-    } catch (error: any) {
-      if (error?.status === 404) return null;
+    } catch (error: unknown) {
+      if (error instanceof ApiError && error.status === 404) return null;
       console.error('Error getting task:', error);
       throw new Error('Error al obtener la tarea');
     }
@@ -116,7 +121,7 @@ export class TaskService {
 
   static async getProjectTasks(projectId: string, _filters?: TaskFilters): Promise<Task[]> {
     try {
-      const result = await apiClient.get<any[]>(`/v1/projects/${projectId}/tasks`);
+      const result = await apiClient.get<RawTask[]>(`/v1/projects/${projectId}/tasks`);
       return result.map(toDomain);
     } catch (error) {
       console.error('Error getting project tasks:', error);
@@ -195,7 +200,7 @@ export class TaskService {
   }
 
   static async updateTaskExpandState(taskId: string, isOpen: boolean): Promise<Task> {
-    const result = await apiClient.patch<any>(`/v1/tasks/${taskId}`, { open: isOpen });
+    const result = await apiClient.patch<TaskResponse>(`/v1/tasks/${taskId}`, { open: isOpen });
     return toDomain(result);
   }
 
@@ -251,7 +256,7 @@ export class TaskService {
       else body.afterTaskId = targetTaskId;
     }
     if (typeof expectedVersion === 'number') body.expectedVersion = expectedVersion;
-    const result = await apiClient.patch<any>(`/v1/tasks/${movedTaskId}/order`, body);
+    const result = await apiClient.patch<TaskResponse>(`/v1/tasks/${movedTaskId}/order`, body);
     return toDomain(result);
   }
 

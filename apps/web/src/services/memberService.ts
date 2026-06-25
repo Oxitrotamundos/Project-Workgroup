@@ -1,4 +1,5 @@
 import { apiClient } from '../lib/apiClient';
+import type { UserResponse, PagedResponse } from '@project-workgroup/shared';
 import type {
   UserSearchResult,
   MemberSearchFilters,
@@ -10,7 +11,7 @@ export class MemberService {
   static async searchUsers(filters: MemberSearchFilters): Promise<UserSearchResult[]> {
     try {
       const query = filters.query ? `?search=${encodeURIComponent(filters.query)}` : '';
-      const res = await apiClient.get<{ items: any[]; nextCursor: string | null }>(`/v1/users${query}`);
+      const res = await apiClient.get<PagedResponse<UserResponse>>(`/v1/users${query}`);
       let users: UserSearchResult[] = res.items.map(r => ({
         id: r.id,
         email: r.email,
@@ -35,7 +36,7 @@ export class MemberService {
 
   static async getProjectMembers(projectId: string): Promise<ProjectMember[]> {
     try {
-      const rows = await apiClient.get<Array<{ user: any; projectRole: string }>>(`/v1/projects/${projectId}/members`);
+      const rows = await apiClient.get<Array<{ user: UserResponse; projectRole: string }>>(`/v1/projects/${projectId}/members`);
       return rows.map(r => ({
         userId: r.user.id,
         email: r.user.email,
@@ -74,7 +75,7 @@ export class MemberService {
 
   static async getRecentlyAddedUsers(limitCount: number = 5): Promise<UserSearchResult[]> {
     try {
-      const res = await apiClient.get<{ items: any[]; nextCursor: string | null }>('/v1/users');
+      const res = await apiClient.get<PagedResponse<UserResponse>>('/v1/users');
       return res.items.slice(0, limitCount).map(r => ({
         id: r.id,
         email: r.email,

@@ -1,7 +1,8 @@
-import { apiClient } from '../lib/apiClient';
+import { apiClient, ApiError } from '../lib/apiClient';
 import type { User, CreateUserData, UpdateUserData } from '../types/domain';
+import type { UserResponse, PagedResponse } from '@project-workgroup/shared';
 
-const toDomain = (r: any): User => ({
+const toDomain = (r: UserResponse): User => ({
   id: r.id,
   email: r.email,
   displayName: r.displayName,
@@ -18,10 +19,10 @@ export class UserService {
 
   static async getUser(_uid: string): Promise<User | null> {
     try {
-      const result = await apiClient.get<any>('/v1/users/me');
+      const result = await apiClient.get<UserResponse>('/v1/users/me');
       return toDomain(result);
-    } catch (error: any) {
-      if (error?.status === 404) return null;
+    } catch (error: unknown) {
+      if (error instanceof ApiError && error.status === 404) return null;
       console.error('Error getting user:', error);
       return null;
     }
@@ -33,7 +34,7 @@ export class UserService {
 
   static async searchUsersByEmail(email: string): Promise<User[]> {
     try {
-      const res = await apiClient.get<{ items: any[]; nextCursor: string | null }>(
+      const res = await apiClient.get<PagedResponse<UserResponse>>(
         `/v1/users?search=${encodeURIComponent(email)}`
       );
       return res.items.map(toDomain);
@@ -45,7 +46,7 @@ export class UserService {
 
   static async getUsersByIds(_userIds: string[]): Promise<User[]> {
     try {
-      const res = await apiClient.get<{ items: any[]; nextCursor: string | null }>('/v1/users');
+      const res = await apiClient.get<PagedResponse<UserResponse>>('/v1/users');
       return res.items.map(toDomain);
     } catch (error) {
       console.error('Error getting users by IDs:', error);
@@ -64,7 +65,7 @@ export class UserService {
 
   static async getAllUsers(): Promise<User[]> {
     try {
-      const res = await apiClient.get<{ items: any[]; nextCursor: string | null }>('/v1/users');
+      const res = await apiClient.get<PagedResponse<UserResponse>>('/v1/users');
       return res.items.map(toDomain);
     } catch (error) {
       console.error('Error getting all users:', error);
@@ -73,7 +74,7 @@ export class UserService {
   }
 
   static async syncAfterLogin(): Promise<User> {
-    const result = await apiClient.post<any>('/v1/auth/sync', {});
+    const result = await apiClient.post<UserResponse>('/v1/auth/sync', {});
     return toDomain(result);
   }
 }
