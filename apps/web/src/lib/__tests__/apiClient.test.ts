@@ -3,7 +3,7 @@ import { ApiError, createApiClient } from '../apiClient';
 
 describe('apiClient', () => {
   beforeEach(() => {
-    (globalThis as any).fetch = vi.fn();
+    globalThis.fetch = vi.fn() as typeof globalThis.fetch;
   });
 
   afterEach(() => {
@@ -14,7 +14,7 @@ describe('apiClient', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } }),
     );
-    (globalThis as any).fetch = fetchMock;
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
     const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 'abc' });
     const res = await client.get<{ ok: boolean }>('/v1/users/me');
@@ -25,12 +25,12 @@ describe('apiClient', () => {
   });
 
   it('parses error envelope into ApiError', async () => {
-    (globalThis as any).fetch = vi.fn().mockResolvedValue(
+    globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ error: { code: 'not_found', message: 'nope' } }), {
         status: 404,
         headers: { 'content-type': 'application/json' },
       }),
-    );
+    ) as typeof globalThis.fetch;
     const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
     await expect(client.get('/x')).rejects.toMatchObject({
       name: 'ApiError',
@@ -41,7 +41,7 @@ describe('apiClient', () => {
   });
 
   it('returns undefined for 204 responses', async () => {
-    (globalThis as any).fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 })) as typeof globalThis.fetch;
     const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
     await expect(client.delete('/x')).resolves.toBeUndefined();
   });
@@ -55,7 +55,7 @@ describe('apiClient', () => {
           headers: { 'content-type': 'application/json' },
         }),
       );
-      (globalThis as any).fetch = fetchMock;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       const p1 = client.enqueuePatch<{ id: string }>('/v1/tasks/1', { name: 'A' });
@@ -79,7 +79,7 @@ describe('apiClient', () => {
           headers: { 'content-type': 'application/json' },
         }),
       );
-      (globalThis as any).fetch = fetchMock;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       const a = client.enqueuePatch('/v1/tasks/1', { name: 'A' });
@@ -99,7 +99,7 @@ describe('apiClient', () => {
           headers: { 'content-type': 'application/json' },
         }),
       );
-      (globalThis as any).fetch = fetchMock;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       const p = client.enqueuePatch('/v1/tasks/1', { name: 'A' });
@@ -111,12 +111,12 @@ describe('apiClient', () => {
 
     it('rejects all callers with the same error when the merged request fails', async () => {
       vi.useFakeTimers();
-      (globalThis as any).fetch = vi.fn().mockResolvedValue(
+      globalThis.fetch = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ error: { code: 'bad', message: 'no' } }), {
           status: 400,
           headers: { 'content-type': 'application/json' },
         }),
-      );
+      ) as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       const p1 = client.enqueuePatch('/v1/tasks/1', { name: 'A' });
@@ -142,7 +142,7 @@ describe('apiClient', () => {
             headers: { 'content-type': 'application/json' },
           }),
         );
-      (globalThis as any).fetch = fetchMock;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       const promise = client.get<{ ok: boolean }>('/v1/x');
@@ -153,7 +153,7 @@ describe('apiClient', () => {
 
     it('does not retry POST without Idempotency-Key on 503', async () => {
       const fetchMock = vi.fn().mockResolvedValueOnce(new Response('{}', { status: 503 }));
-      (globalThis as any).fetch = fetchMock;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       await expect(client.patch('/v1/tasks/1', { name: 'A' })).rejects.toBeInstanceOf(ApiError);
@@ -176,7 +176,7 @@ describe('apiClient', () => {
             headers: { 'content-type': 'application/json' },
           }),
         );
-      (globalThis as any).fetch = fetchMock;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       const result = await client.patch<{ id: string; version: number }>('/v1/tasks/1', {
@@ -209,7 +209,7 @@ describe('apiClient', () => {
             headers: { 'content-type': 'application/json' },
           }),
         );
-      (globalThis as any).fetch = fetchMock;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       const result = await client.patch<{ id: string; version: number }>('/v1/tasks/18', {
@@ -240,7 +240,7 @@ describe('apiClient', () => {
             headers: { 'content-type': 'application/json' },
           }),
         );
-      (globalThis as any).fetch = fetchMock;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       const result = await client.patch<{ id: string; version: number }>('/v1/tasks/1/progress', {
@@ -273,7 +273,7 @@ describe('apiClient', () => {
             headers: { 'content-type': 'application/json' },
           }),
         );
-      (globalThis as any).fetch = fetchMock;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       const result = await client.patch<{ id: string; version: number }>('/v1/tasks/1', {
@@ -308,7 +308,7 @@ describe('apiClient', () => {
             headers: { 'content-type': 'application/json' },
           }),
         );
-      (globalThis as any).fetch = fetchMock;
+      globalThis.fetch = fetchMock as typeof globalThis.fetch;
 
       const client = createApiClient({ baseUrl: 'http://api', tokenProvider: async () => 't' });
       await client.patch('/v1/tasks/1', { name: 'X', expectedVersion: 1 });

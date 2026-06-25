@@ -91,7 +91,7 @@ export const handlers = [
   
   // Crear proyecto
   http.post('/api/projects', async ({ request }) => {
-    const newProject = await request.json() as any
+    const newProject = await request.json() as Record<string, unknown>
     const project = {
       id: `project-${Date.now()}`,
       ...newProject,
@@ -105,7 +105,7 @@ export const handlers = [
   // Actualizar proyecto
   http.put('/api/projects/:id', async ({ params, request }) => {
     const { id } = params
-    const updates = await request.json() as any
+    const updates = await request.json() as Record<string, unknown>
     
     const project = {
       id,
@@ -138,7 +138,7 @@ export const handlers = [
   // Agregar miembro al proyecto
   http.post('/api/projects/:id/members', async ({ params, request }) => {
     const { id } = params
-    const { userId } = await request.json() as any
+    const { userId } = await request.json() as { userId: string }
     
     return HttpResponse.json({ success: true, projectId: id, userId })
   }),

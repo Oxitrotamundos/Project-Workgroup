@@ -91,7 +91,7 @@ describe('ProjectList Component', () => {
     mockUseProjects.mockReturnValue(defaultUseProjectsReturn)
     mockUseUserRole.mockReturnValue(defaultUseUserRoleReturn)
     mockUseAuth.mockReturnValue({
-      user: { uid: 'test-uid', email: 'test@example.com', displayName: 'Test User' } as any,
+      user: { id: 'test-uid', uid: 'test-uid', email: 'test@example.com', displayName: 'Test User', role: 'member' as const, createdAt: new Date() },
       loading: false,
       signIn: vi.fn(),
       signUp: vi.fn(),
@@ -291,9 +291,9 @@ describe('ProjectList Component', () => {
           uid: 'test-uid',
           email: 'test@example.com',
           displayName: 'Test User',
-          role: 'member',
+          role: 'member' as const,
           createdAt: new Date()
-        } as any
+        }
       }
       
       mockUseUserRole.mockReturnValue({

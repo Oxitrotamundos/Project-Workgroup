@@ -3,6 +3,10 @@ import { GanttDataProvider, toGanttId } from '../ganttDataProvider';
 import { TaskService } from '../taskService';
 import type { Task } from '../../types/domain';
 
+// Derive the GanttApi type from the provider method rather than importing wx-react-gantt directly
+// (the ambient declaration lives in src/types/ which is not part of tsconfig.test.json's include).
+type GanttApiType = Parameters<GanttDataProvider['setGanttApi']>[0];
+
 vi.mock('../taskService', () => ({
   TaskService: {
     updateTaskWithMeta: vi.fn(),
@@ -80,8 +84,13 @@ describe('GanttDataProvider actions', () => {
     const api = {
       getTask: vi.fn(() => ({ id: 1, parent: 0 })),
       exec: vi.fn(),
-    } as any;
-    provider.setGanttApi(api);
+      on: vi.fn(),
+      intercept: vi.fn(),
+      getLink: vi.fn(),
+      getState: vi.fn(),
+      setNext: vi.fn(),
+    };
+    provider.setGanttApi(api as GanttApiType);
     vi.mocked(TaskService.updateTaskPosition).mockResolvedValue({
       task: baseTask({ order: 3, version: 2 }),
       summariesPatched: [],
@@ -111,8 +120,13 @@ describe('GanttDataProvider actions', () => {
     const api = {
       getTask: vi.fn(() => ({ id: 1, start: new Date(initial.startDate), end: new Date(initial.endDate) })),
       exec: vi.fn(),
-    } as any;
-    provider.setGanttApi(api);
+      on: vi.fn(),
+      intercept: vi.fn(),
+      getLink: vi.fn(),
+      getState: vi.fn(),
+      setNext: vi.fn(),
+    };
+    provider.setGanttApi(api as GanttApiType);
 
     const sameMoment = baseTask({
       startDate: '2026-01-01T08:30:00Z',
@@ -157,8 +171,13 @@ describe('GanttDataProvider actions', () => {
     const api = {
       getTask: vi.fn(() => undefined),
       exec: vi.fn(),
-    } as any;
-    provider.setGanttApi(api);
+      on: vi.fn(),
+      intercept: vi.fn(),
+      getLink: vi.fn(),
+      getState: vi.fn(),
+      setNext: vi.fn(),
+    };
+    provider.setGanttApi(api as GanttApiType);
 
     // Llega un dataset con alta de '3' y baja de '2', SIN regenerar la prop de <Gantt>.
     provider.syncFromTasks([baseTask({ id: '1' }), baseTask({ id: '3', name: 'Three' })]);
@@ -184,8 +203,8 @@ describe('GanttDataProvider actions', () => {
       ],
       [],
     );
-    const api = { getTask: vi.fn(() => undefined), exec: vi.fn() } as any;
-    provider.setGanttApi(api);
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn(), on: vi.fn(), intercept: vi.fn(), getLink: vi.fn(), getState: vi.fn(), setNext: vi.fn() };
+    provider.setGanttApi(api as GanttApiType);
     vi.mocked(TaskService.bulkUpdate).mockResolvedValue({ tasks: [], summariesPatched: [] });
 
     // Propagaciones de hijos (con eventSource) emitidas por wx al mover la summary 125.
@@ -227,8 +246,8 @@ describe('GanttDataProvider actions', () => {
       ],
       [],
     );
-    const api = { getTask: vi.fn(() => undefined), exec: vi.fn() } as any;
-    provider.setGanttApi(api);
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn(), on: vi.fn(), intercept: vi.fn(), getLink: vi.fn(), getState: vi.fn(), setNext: vi.fn() };
+    provider.setGanttApi(api as GanttApiType);
     vi.mocked(TaskService.bulkUpdate).mockReset();
     vi.mocked(TaskService.bulkUpdate).mockRejectedValue(new Error('boom'));
 
@@ -244,8 +263,7 @@ describe('GanttDataProvider actions', () => {
     expect(TaskService.bulkUpdate).toHaveBeenCalledTimes(1);
     // El bulk falló sin persistir nada → la barra de 128 se revierte a su posición previa (01-01).
     const rollback = api.exec.mock.calls.find(
-      ([action, payload]: [string, { _rollback?: boolean }]) =>
-        action === 'update-task' && payload?._rollback === true,
+      (call) => call[0] === 'update-task' && (call[1] as { _rollback?: boolean })?._rollback === true,
     );
     expect(rollback).toBeDefined();
     expect(rollback![1].id).toBe('128');
@@ -261,8 +279,8 @@ describe('GanttDataProvider actions', () => {
       ],
       [],
     );
-    const api = { getTask: vi.fn(() => undefined), exec: vi.fn() } as any;
-    provider.setGanttApi(api);
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn(), on: vi.fn(), intercept: vi.fn(), getLink: vi.fn(), getState: vi.fn(), setNext: vi.fn() };
+    provider.setGanttApi(api as GanttApiType);
     vi.mocked(TaskService.bulkUpdate).mockResolvedValue({ tasks: [], summariesPatched: [] });
 
     // wx propaga solo el end (sin start): la hoja NO debe descartarse; se conserva el start de cache.
@@ -290,8 +308,8 @@ describe('GanttDataProvider actions', () => {
       ],
       [],
     );
-    const api = { getTask: vi.fn(() => undefined), exec: vi.fn() } as any;
-    provider.setGanttApi(api);
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn(), on: vi.fn(), intercept: vi.fn(), getLink: vi.fn(), getState: vi.fn(), setNext: vi.fn() };
+    provider.setGanttApi(api as GanttApiType);
     vi.mocked(TaskService.bulkUpdate).mockResolvedValue({ tasks: [], summariesPatched: [] });
 
     // Propagación de la sub-summary 125 SIN type en el payload → debe ignorarse (cache dice summary).
@@ -321,8 +339,8 @@ describe('GanttDataProvider actions', () => {
       ],
       [],
     );
-    const api = { getTask: vi.fn(() => undefined), exec: vi.fn() } as any;
-    provider.setGanttApi(api);
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn(), on: vi.fn(), intercept: vi.fn(), getLink: vi.fn(), getState: vi.fn(), setNext: vi.fn() };
+    provider.setGanttApi(api as GanttApiType);
     vi.mocked(TaskService.bulkUpdate).mockResolvedValue({ tasks: [], summariesPatched: [] });
     vi.mocked(TaskService.updateTaskWithMeta).mockResolvedValue({ task: baseTask({ id: '128' }), summariesPatched: [] });
 
