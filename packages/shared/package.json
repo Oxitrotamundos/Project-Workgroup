@@ -9,13 +9,16 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "class-validator": "^0.14.1",
-    "class-transformer": "^0.5.1"
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1"
   },
   "devDependencies": {
-    "typescript": "~5.6.0"
+    "reflect-metadata": "^0.2.2",
+    "typescript": "~5.6.0",
+    "vitest": "^3.2.6"
   }
 }
