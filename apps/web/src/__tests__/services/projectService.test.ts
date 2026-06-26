@@ -120,6 +120,21 @@ describe('ProjectService', () => {
       expect(result.hasMore).toBe(false)
     })
 
+    it('debe mapear una respuesta de array plano (forma real de la API)', async () => {
+      mockApiClient.get.mockResolvedValue([
+        mockProjectResponse,
+        { ...mockProjectResponse, id: 'project-2', name: 'Project 2' },
+        { ...mockProjectResponse, id: 'project-3', name: 'Project 3' },
+      ])
+
+      const result = await ProjectService.getUserProjects('user-1')
+
+      expect(result.items).toHaveLength(3)
+      expect(result.items[0].id).toBe('project-1')
+      expect(result.total).toBe(3)
+      expect(result.hasMore).toBe(false)
+    })
+
     it('debe manejar errores durante la consulta', async () => {
       mockApiClient.get.mockRejectedValue(new Error('Query failed'))
 
@@ -147,6 +162,19 @@ describe('ProjectService', () => {
       expect(result).toBeDefined()
       expect(result).toHaveProperty('items')
       expect(result.items).toHaveLength(2)
+    })
+
+    it('debe mapear una respuesta de array plano (forma real de la API)', async () => {
+      mockApiClient.get.mockResolvedValue([
+        mockProjectResponse,
+        { ...mockProjectResponse, id: 'project-2' },
+        { ...mockProjectResponse, id: 'project-3' },
+      ])
+
+      const result = await ProjectService.getAllProjects()
+
+      expect(result.items).toHaveLength(3)
+      expect(result.total).toBe(3)
     })
   })
 
