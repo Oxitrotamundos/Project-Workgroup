@@ -194,6 +194,87 @@ describe('TasksService', () => {
     );
   });
 
+  it('recalculates summary bounds spanning intermediate non-summary tasks (chain)', async () => {
+    const prisma = makePrisma();
+    // Cadena: summary 10 -> task 11 (intermedia, con subtarea) -> task 12 (hoja).
+    const summary = taskRow({ id: 10n, type: 'summary' });
+    const mid = taskRow({
+      id: 11n,
+      parentId: 10n,
+      startDate: new Date('2026-01-10T00:00:00.000Z'),
+      endDate: new Date('2026-01-20T00:00:00.000Z'),
+    });
+    const leaf = taskRow({
+      id: 12n,
+      parentId: 11n,
+      progress: 50,
+      duration: { toString: () => '7' },
+      startDate: new Date('2026-02-05T00:00:00.000Z'),
+      endDate: new Date('2026-02-15T00:00:00.000Z'),
+    });
+    prisma.task.findUnique.mockResolvedValue(leaf);
+    prisma.task.update.mockResolvedValue(leaf);
+    prisma.task.findMany.mockResolvedValue([summary, mid, leaf]);
+    const service = makeService(prisma);
+
+    await service.updateProgress(12n, { progress: 50 }, admin);
+
+    // El summary abarca a la intermedia 11 (min 01-10) Y a la hoja 12 (max 02-15), no solo la hoja.
+    expect(prisma.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10n },
+        data: expect.objectContaining({
+          startDate: new Date('2026-01-10T00:00:00.000Z'),
+          endDate: new Date('2026-02-15T00:00:00.000Z'),
+        }),
+      }),
+    );
+  });
+
+  it('derives summary bounds from grandchildren, ignoring sub-summary own dates', async () => {
+    const prisma = makePrisma();
+    // summary 10 -> sub-summary 11 (con fecha propia) -> hojas 12 y 13.
+    const grandparent = taskRow({ id: 10n, type: 'summary' });
+    const sub = taskRow({
+      id: 11n,
+      type: 'summary',
+      parentId: 10n,
+      startDate: new Date('2026-09-01T00:00:00.000Z'),
+      endDate: new Date('2026-09-02T00:00:00.000Z'),
+    });
+    const leafA = taskRow({
+      id: 12n,
+      parentId: 11n,
+      progress: 50,
+      duration: { toString: () => '3' },
+      startDate: new Date('2026-01-05T00:00:00.000Z'),
+      endDate: new Date('2026-01-08T00:00:00.000Z'),
+    });
+    const leafB = taskRow({
+      id: 13n,
+      parentId: 11n,
+      startDate: new Date('2026-03-10T00:00:00.000Z'),
+      endDate: new Date('2026-03-15T00:00:00.000Z'),
+    });
+    prisma.task.findUnique.mockResolvedValue(leafA);
+    prisma.task.update.mockResolvedValue(leafA);
+    prisma.task.findMany.mockResolvedValue([grandparent, sub, leafA, leafB]);
+    const service = makeService(prisma);
+
+    await service.updateProgress(12n, { progress: 50 }, admin);
+
+    // El abuelo 10 abarca a las nietas (min 01-05, max 03-15), ignorando la fecha propia del sub-summary.
+    expect(prisma.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10n },
+        data: expect.objectContaining({
+          startDate: new Date('2026-01-05T00:00:00.000Z'),
+          endDate: new Date('2026-03-15T00:00:00.000Z'),
+        }),
+      }),
+    );
+  });
+
   it('rejects update when expectedVersion does not match current version', async () => {
     const prisma = makePrisma();
     const stored = taskRow({ version: 5 });

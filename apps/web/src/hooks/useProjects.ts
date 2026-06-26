@@ -43,7 +43,7 @@ export function useProjects(filters?: ProjectFilters, pageSize: number = 10): Us
     error: null,
     hasMore: false
   });
-  const [lastDoc, setLastDoc] = useState<any>(undefined);
+  const [lastDoc, setLastDoc] = useState<unknown>(undefined);
 
   // Cargar proyectos
   const loadProjects = useCallback(async (reset: boolean = false) => {

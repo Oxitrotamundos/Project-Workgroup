@@ -2,11 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ProjectService } from '../../services/projectService'
 import type { CreateProjectData, UpdateProjectData } from '../../types/domain'
 
-vi.mock('../../lib/apiClient', () => ({
-  apiClient: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
-}))
+vi.mock('../../lib/apiClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/apiClient')>()
+  return {
+    ...actual,
+    apiClient: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  }
+})
 
-import { apiClient } from '../../lib/apiClient'
+import { apiClient, ApiError } from '../../lib/apiClient'
 const mockApiClient = vi.mocked(apiClient)
 
 const mockProjectData: CreateProjectData = {
@@ -159,8 +163,7 @@ describe('ProjectService', () => {
     })
 
     it('debe retornar null si el proyecto no existe (404)', async () => {
-      const err: any = new Error('Not found')
-      err.status = 404
+      const err = new ApiError(404, 'NOT_FOUND', 'Not found')
       mockApiClient.get.mockRejectedValue(err)
 
       const result = await ProjectService.getProject('non-existent')

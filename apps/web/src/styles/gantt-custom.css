@@ -117,6 +117,13 @@
   color: var(--surface) !important;
   font-weight: 500;
 }
+/* Redimensionar una summary no tiene efecto: su rango lo definen las hijas. Ocultamos el grip
+   de resize para no ofrecer un gesto sin resultado. Mover la summary (arrastrarla) sí desplaza
+   el grupo completo (ver handleSummaryGroupMove en ganttDataProvider). */
+.wx-gantt .wx-bar.wx-summary .wx-grip,
+.wx-willow-theme .wx-gantt-bar[data-task-type="summary"] .wx-grip {
+  display: none !important;
+}
 
 /* Colores específicos para diferentes tipos de tareas */
 .wx-willow-theme .wx-gantt-bar[data-task-type="task"] {
@@ -528,6 +535,21 @@
   background-color: var(--p-500) !important;
   border-left: 2px solid var(--p-600) !important;
   opacity: 0.8;
+}
+
+/* Tooltip en vivo durante el arrastre/redimensión: centrado sobre el ancla y por encima de la barra */
+.gantt-drag-tooltip {
+  position: absolute;
+  z-index: 60;
+  transform: translate(-50%, calc(-100% - 8px));
+  background: var(--p-600);
+  color: var(--ink-on-primary);
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
+  font: 600 11px var(--font-mono);
+  white-space: nowrap;
+  box-shadow: var(--sh-2);
+  pointer-events: none;
 }
 
 /* ─── Dark mode overrides ──────────────────────────────────────

@@ -7,6 +7,36 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-25
+
+### Added
+- `GanttDragTooltip`: tooltip flotante durante arrastre/resize que muestra las fechas destino formateadas según la granularidad del zoom activo
+- Snap al unit de zoom: `lengthUnit` derivado del tier activo (hora con zoom de horas, día en el resto), reemplazando el valor fijo anterior
+- `computeStructuralKey`: utility que incluye IDs de tasks, links y `parentId` para detectar cuándo regenerar las props del Gantt sin recargar la página
+- Movimiento de summary como group shift: mover una barra summary desplaza todos los descendientes hoja el mismo delta vía `bulkUpdate` atómico
+- Non-summary tasks contribuyen sus propias fechas a la visualización del Gantt
+- `computeSummaryBounds` en `packages/shared/src/utils/summary-bounds.ts`: función pura compartida entre web y api
+- Nuevos DTOs en `packages/shared`: `CreateProjectDto`, `UpdateProjectDto`, `AddProjectMemberDto`, `ProjectMemberResponse`, `CreateTaskDto`, `UpdateTaskDto`, `CreateTaskLinkDto`, `UpdateTaskLinkDto`, `CreateWorkloadDto`, `WorkloadQueryDto`, `SearchUsersQueryDto`, `UserResponse`, `CreateApiKeyDto`, `ApiKeyResponse`, `UpsertCalendarDto`, `WorkingDayPatternDto`, `HolidayDto`
+- Tests unitarios para `computeSummaryBounds`, `GanttDragTooltip` y `computeStructuralKey`
+
+### Changed
+- `GanttDataProvider`: índice de hijos construido una sola vez O(N) por llamada a `toGanttData`; `computeSummaryBounds` y `hasChildren` reutilizan el mismo índice
+- `GanttDataProvider.destroy()`: descarga open-states y leaf-shifts antes de limpiar el estado interno
+- `flushLeafShifts`: resuelve `expectedVersion` en el momento del flush; aplica trabajo confirmado en persistencia multi-chunk parcial; revierte la UI cuando el bulk falla con nada persistido
+- `bufferPropagatedLeaf`: cancela el PATCH individual pendiente para el mismo leaf cuando llega un flush, evitando escritura doble
+- `tasks.service.ts` (api): usa `computeSummaryBounds` compartido en lugar de la implementación local equivalente
+
+### Fixed
+- Movimientos de summary persisten ahora como group shift vía `bulkUpdate`; antes dependían de eventos internos frágiles de wx-react-gantt
+- Re-parentizaciones detectadas como cambio estructural al incluir `parentId` en la clave; antes el árbol no se reconstruía hasta recargar
+- `tsconfig.app.json`: eliminado `baseUrl: "."` redundante que causaba resolución de módulos ambigua con bundler moduleResolution
+- Tests e2e de API: `import request = require('supertest')` reemplazado por `import request from 'supertest'`
+
+### Security
+- Overrides de pnpm con scope para AJV (`@eslint/eslintrc>ajv`, `eslint>ajv`) y brace-expansion (`minimatch>brace-expansion`) que restituyen la compatibilidad de ESLint 9 con las versiones de API que espera
+- CVEs parcheados: vitest ≥3.2.6, vite ≥7.3.5, shell-quote ≥1.8.4, `@grpc/grpc-js` ≥1.14.4, ws ≥7.5.11, form-data ≥4.0.6, undici ≥7.28.0, hono ≥4.12.25, multer ≥2.2.0, tmp ≥0.2.6, protobufjs ≥8.4.1
+- Eliminados 78 usos de `@typescript-eslint/no-explicit-any` en servicios, componentes y tests; reemplazados por interfaces de dominio concretas o `unknown` con guards
+
 ## [1.0.0] - 2026-05-21
 
 ### Added

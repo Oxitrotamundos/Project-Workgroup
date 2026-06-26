@@ -1,6 +1,7 @@
 // Deprecated: ruta /signup deshabilitada (ver docs/superpowers/specs/2026-04-24-login-email-password-design.md). Mantener para reactivación futura.
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FirebaseError } from 'firebase/app';
 import { useAuth } from '../contexts/AuthContext';
 import type { SignUpFormData } from '../types';
 
@@ -47,11 +48,11 @@ const SignUp: React.FC = () => {
       setLoading(true);
       await signUp(formData.email, formData.password, formData.displayName);
       // No navegamos manualmente - AuthContext manejará la redirección
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('SignUp error:', error);
-      if (error.code === 'auth/email-already-in-use') {
+      if (error instanceof FirebaseError && error.code === 'auth/email-already-in-use') {
         setError('Este correo electrónico ya está registrado');
-      } else if (error.code === 'auth/weak-password') {
+      } else if (error instanceof FirebaseError && error.code === 'auth/weak-password') {
         setError('La contraseña es muy débil');
       } else {
         setError('Error al crear la cuenta. Inténtalo de nuevo.');

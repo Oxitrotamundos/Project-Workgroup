@@ -2,6 +2,7 @@ import { TaskService } from './taskService';
 import { TaskLinkService } from './taskLinkService';
 import { TASK_TYPE_COLORS } from '../types/domain';
 import type { CreateTaskData, Task, CreateTaskLinkData, TaskType } from '../types/domain';
+import type { UpdateTaskDto } from '@project-workgroup/shared';
 
 export interface TaskCreationOptions {
   projectId: string;
@@ -31,6 +32,17 @@ export interface TaskManagerEventData {
 }
 
 export type TaskManagerEventHandler = (data: TaskManagerEventData) => void;
+
+interface GanttTaskInput {
+  text?: string;
+  description?: string;
+  start?: Date;
+  end?: Date;
+  parent?: string;
+  assignee?: string;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  type?: 'task' | 'summary' | 'milestone';
+}
 
 export class TaskManager {
   private static instance: TaskManager | null = null;
@@ -143,7 +155,7 @@ export class TaskManager {
     });
   }
 
-  async createTaskFromGantt(ganttTaskData: any, projectId: string, parentId?: string): Promise<string> {
+  async createTaskFromGantt(ganttTaskData: GanttTaskInput, projectId: string, parentId?: string): Promise<string> {
     console.log('TaskManager: Creando tarea desde Gantt:', ganttTaskData);
 
     const options: TaskCreationOptions = {
@@ -165,13 +177,12 @@ export class TaskManager {
     console.log('TaskManager: Actualizando tarea:', taskId, updates);
 
     try {
-      const updateData: any = {};
-      
+      const updateData: UpdateTaskDto = {};
+
       if (updates.name !== undefined) updateData.name = updates.name.trim();
       if (updates.description !== undefined) updateData.description = updates.description;
-      if (updates.startDate !== undefined) updateData.startDate = updates.startDate;
-      if (updates.endDate !== undefined) updateData.endDate = updates.endDate;
-      if (updates.duration !== undefined) updateData.duration = updates.duration;
+      if (updates.startDate !== undefined) updateData.startDate = updates.startDate.toISOString();
+      if (updates.endDate !== undefined) updateData.endDate = updates.endDate.toISOString();
       if (updates.assigneeId !== undefined) updateData.assigneeId = updates.assigneeId;
       if (updates.parentId !== undefined) updateData.parentId = updates.parentId;
       if (updates.priority !== undefined) {
@@ -181,7 +192,7 @@ export class TaskManager {
         updateData.type = updates.type;
         updateData.color = this.getColorForTaskType(updates.type);
       }
-      if (updates.estimatedHours !== undefined) updateData.estimatedHours = updates.estimatedHours;
+      if (updates.estimatedHours !== undefined) updateData.estimatedHours = String(updates.estimatedHours);
 
       await TaskService.updateTask(taskId, updateData);
 

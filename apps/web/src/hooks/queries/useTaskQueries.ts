@@ -75,9 +75,6 @@ export function useUpdateTaskMutation(projectId: string | undefined) {
     onSuccess: (fresh) => {
       queryClient.setQueryData<Task[]>(queryKey, (prev) => replaceOrInsertTask(prev, fresh));
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
-    },
   });
 }
 
@@ -90,9 +87,6 @@ export function useUpdateTaskProgressMutation(projectId: string | undefined) {
       TaskService.updateTaskProgress(id, progress, expectedVersion),
     onSuccess: (fresh) => {
       queryClient.setQueryData<Task[]>(queryKey, (prev) => replaceOrInsertTask(prev, fresh));
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
     },
   });
 }
@@ -111,9 +105,6 @@ export function useDeleteTaskMutation(projectId: string | undefined) {
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(queryKey, ctx.previous);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
     },
   });
 }
@@ -135,9 +126,6 @@ export function useBulkUpdateTasksMutation(projectId: string | undefined) {
           patched,
         );
       });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
     },
   });
 }

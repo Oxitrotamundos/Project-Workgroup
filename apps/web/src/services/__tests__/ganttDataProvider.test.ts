@@ -3,6 +3,10 @@ import { GanttDataProvider, toGanttId } from '../ganttDataProvider';
 import { TaskService } from '../taskService';
 import type { Task } from '../../types/domain';
 
+// Derive the GanttApi type from the provider method rather than importing wx-react-gantt directly
+// (the ambient declaration lives in src/types/ which is not part of tsconfig.test.json's include).
+type GanttApiType = Parameters<GanttDataProvider['setGanttApi']>[0];
+
 vi.mock('../taskService', () => ({
   TaskService: {
     updateTaskWithMeta: vi.fn(),
@@ -11,6 +15,7 @@ vi.mock('../taskService', () => ({
     updateTask: vi.fn(),
     updateTaskOrder: vi.fn(),
     getDescendants: vi.fn(),
+    bulkUpdate: vi.fn(),
   },
 }));
 
@@ -79,8 +84,13 @@ describe('GanttDataProvider actions', () => {
     const api = {
       getTask: vi.fn(() => ({ id: 1, parent: 0 })),
       exec: vi.fn(),
-    } as any;
-    provider.setGanttApi(api);
+      on: vi.fn(),
+      intercept: vi.fn(),
+      getLink: vi.fn(),
+      getState: vi.fn(),
+      setNext: vi.fn(),
+    };
+    provider.setGanttApi(api as GanttApiType);
     vi.mocked(TaskService.updateTaskPosition).mockResolvedValue({
       task: baseTask({ order: 3, version: 2 }),
       summariesPatched: [],
@@ -110,8 +120,13 @@ describe('GanttDataProvider actions', () => {
     const api = {
       getTask: vi.fn(() => ({ id: 1, start: new Date(initial.startDate), end: new Date(initial.endDate) })),
       exec: vi.fn(),
-    } as any;
-    provider.setGanttApi(api);
+      on: vi.fn(),
+      intercept: vi.fn(),
+      getLink: vi.fn(),
+      getState: vi.fn(),
+      setNext: vi.fn(),
+    };
+    provider.setGanttApi(api as GanttApiType);
 
     const sameMoment = baseTask({
       startDate: '2026-01-01T08:30:00Z',
@@ -147,6 +162,256 @@ describe('GanttDataProvider actions', () => {
       { id: '1', open: false, expectedVersion: 1 },
       { id: '2', open: false, expectedVersion: 1 },
     ]);
+  });
+
+  it('syncFromTasks refleja altas (id nuevo) y bajas (id ausente) en el store de forma imperativa', () => {
+    const provider = new GanttDataProvider('p1');
+    // Estado inicial: tareas 1 y 2 (el api se conecta después, igual que en runtime).
+    provider.syncFromData([baseTask({ id: '1' }), baseTask({ id: '2', name: 'Two' })], []);
+    const api = {
+      getTask: vi.fn(() => undefined),
+      exec: vi.fn(),
+      on: vi.fn(),
+      intercept: vi.fn(),
+      getLink: vi.fn(),
+      getState: vi.fn(),
+      setNext: vi.fn(),
+    };
+    provider.setGanttApi(api as GanttApiType);
+
+    // Llega un dataset con alta de '3' y baja de '2', SIN regenerar la prop de <Gantt>.
+    provider.syncFromTasks([baseTask({ id: '1' }), baseTask({ id: '3', name: 'Three' })]);
+
+    // Alta → exec 'update-task' para el id nuevo (3); baja → exec 'delete-task' para el ausente (2).
+    expect(api.exec).toHaveBeenCalledWith(
+      'update-task',
+      expect.objectContaining({ id: 3, _silent: true }),
+    );
+    expect(api.exec).toHaveBeenCalledWith(
+      'delete-task',
+      expect.objectContaining({ id: 2, _silent: true }),
+    );
+  });
+
+  it('agrupa las hojas propagadas (eventSource) de un move de summary en un único bulkUpdate', async () => {
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData(
+      [
+        baseTask({ id: '125', type: 'summary', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-12T00:00:00.000Z' }),
+        baseTask({ id: '128', parentId: '125', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-02T00:00:00.000Z' }),
+        baseTask({ id: '129', parentId: '125', startDate: '2026-01-03T00:00:00.000Z', endDate: '2026-01-04T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn(), on: vi.fn(), intercept: vi.fn(), getLink: vi.fn(), getState: vi.fn(), setNext: vi.fn() };
+    provider.setGanttApi(api as GanttApiType);
+    vi.mocked(TaskService.bulkUpdate).mockResolvedValue({ tasks: [], summariesPatched: [] });
+
+    // Propagaciones de hijos (con eventSource) emitidas por wx al mover la summary 125.
+    void provider.send('update-task', {
+      id: '128',
+      task: { type: 'task', start: new Date('2026-01-08T00:00:00.000Z'), end: new Date('2026-01-09T00:00:00.000Z') },
+      eventSource: 'update-task',
+    });
+    void provider.send('update-task', {
+      id: '129',
+      task: { type: 'task', start: new Date('2026-01-10T00:00:00.000Z'), end: new Date('2026-01-11T00:00:00.000Z') },
+      eventSource: 'update-task',
+    });
+    // Propagación de un ancestro summary: debe IGNORARSE (se deriva de sus hijas).
+    void provider.send('update-task', {
+      id: '122',
+      task: { type: 'summary', start: new Date('2026-01-08T00:00:00.000Z'), end: new Date('2026-01-19T00:00:00.000Z') },
+      eventSource: 'update-task',
+    });
+
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(TaskService.bulkUpdate).toHaveBeenCalledTimes(1);
+    const [proj, items] = vi.mocked(TaskService.bulkUpdate).mock.calls[0];
+    expect(proj).toBe('p1');
+    expect(items.map((i) => i.id).sort()).toEqual(['128', '129']); // solo hojas, no el summary 122
+    const i128 = items.find((i) => i.id === '128')!;
+    expect(i128.data.startDate).toBe('2026-01-08T00:00:00.000Z');
+    expect(i128.data.endDate).toBe('2026-01-09T00:00:00.000Z');
+    expect(i128.expectedVersion).toBe(1);
+  });
+
+  it('revierte la posición de las hojas (rollback visual) si el bulkUpdate del grupo falla', async () => {
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData(
+      [
+        baseTask({ id: '125', type: 'summary', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-12T00:00:00.000Z' }),
+        baseTask({ id: '128', parentId: '125', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-02T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn(), on: vi.fn(), intercept: vi.fn(), getLink: vi.fn(), getState: vi.fn(), setNext: vi.fn() };
+    provider.setGanttApi(api as GanttApiType);
+    vi.mocked(TaskService.bulkUpdate).mockReset();
+    vi.mocked(TaskService.bulkUpdate).mockRejectedValue(new Error('boom'));
+
+    // wx propaga el move de la hoja 128 (con eventSource) al mover su summary.
+    void provider.send('update-task', {
+      id: '128',
+      task: { type: 'task', start: new Date('2026-01-08T00:00:00.000Z'), end: new Date('2026-01-09T00:00:00.000Z') },
+      eventSource: 'update-task',
+    });
+
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(TaskService.bulkUpdate).toHaveBeenCalledTimes(1);
+    // El bulk falló sin persistir nada → la barra de 128 se revierte a su posición previa (01-01).
+    const rollback = api.exec.mock.calls.find(
+      (call) => call[0] === 'update-task' && (call[1] as { _rollback?: boolean })?._rollback === true,
+    );
+    expect(rollback).toBeDefined();
+    expect(rollback![1].id).toBe('128');
+    expect(rollback![1].task.start).toEqual(new Date('2026-01-01T00:00:00.000Z'));
+  });
+
+  it('conserva el start de la cache cuando la propagación de una hoja solo trae el end', async () => {
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData(
+      [
+        baseTask({ id: '125', type: 'summary', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-12T00:00:00.000Z' }),
+        baseTask({ id: '128', parentId: '125', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-02T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn(), on: vi.fn(), intercept: vi.fn(), getLink: vi.fn(), getState: vi.fn(), setNext: vi.fn() };
+    provider.setGanttApi(api as GanttApiType);
+    vi.mocked(TaskService.bulkUpdate).mockResolvedValue({ tasks: [], summariesPatched: [] });
+
+    // wx propaga solo el end (sin start): la hoja NO debe descartarse; se conserva el start de cache.
+    void provider.send('update-task', {
+      id: '128',
+      task: { type: 'task', end: new Date('2026-01-05T00:00:00.000Z') },
+      eventSource: 'update-task',
+    });
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(TaskService.bulkUpdate).toHaveBeenCalledTimes(1);
+    const [, items] = vi.mocked(TaskService.bulkUpdate).mock.calls[0];
+    const i128 = items.find((i) => i.id === '128')!;
+    expect(i128.data.startDate).toBe('2026-01-01T00:00:00.000Z');
+    expect(i128.data.endDate).toBe('2026-01-05T00:00:00.000Z');
+  });
+
+  it('ignora una hoja propagada que la cache marca como summary aunque el evento omita type', async () => {
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData(
+      [
+        baseTask({ id: '122', type: 'summary', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-12T00:00:00.000Z' }),
+        baseTask({ id: '125', type: 'summary', parentId: '122', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-12T00:00:00.000Z' }),
+        baseTask({ id: '128', parentId: '125', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-02T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn(), on: vi.fn(), intercept: vi.fn(), getLink: vi.fn(), getState: vi.fn(), setNext: vi.fn() };
+    provider.setGanttApi(api as GanttApiType);
+    vi.mocked(TaskService.bulkUpdate).mockResolvedValue({ tasks: [], summariesPatched: [] });
+
+    // Propagación de la sub-summary 125 SIN type en el payload → debe ignorarse (cache dice summary).
+    void provider.send('update-task', {
+      id: '125',
+      task: { start: new Date('2026-01-03T00:00:00.000Z'), end: new Date('2026-01-10T00:00:00.000Z') },
+      eventSource: 'update-task',
+    });
+    void provider.send('update-task', {
+      id: '128',
+      task: { type: 'task', start: new Date('2026-01-08T00:00:00.000Z'), end: new Date('2026-01-09T00:00:00.000Z') },
+      eventSource: 'update-task',
+    });
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(TaskService.bulkUpdate).toHaveBeenCalledTimes(1);
+    const [, items] = vi.mocked(TaskService.bulkUpdate).mock.calls[0];
+    expect(items.map((i) => i.id)).toEqual(['128']);
+  });
+
+  it('cancela el PATCH individual de una hoja si entra en un move de grupo (sin doble escritura)', async () => {
+    const provider = new GanttDataProvider('p1');
+    provider.syncFromData(
+      [
+        baseTask({ id: '125', type: 'summary', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-12T00:00:00.000Z' }),
+        baseTask({ id: '128', parentId: '125', startDate: '2026-01-01T00:00:00.000Z', endDate: '2026-01-02T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const api = { getTask: vi.fn(() => undefined), exec: vi.fn(), on: vi.fn(), intercept: vi.fn(), getLink: vi.fn(), getState: vi.fn(), setNext: vi.fn() };
+    provider.setGanttApi(api as GanttApiType);
+    vi.mocked(TaskService.bulkUpdate).mockResolvedValue({ tasks: [], summariesPatched: [] });
+    vi.mocked(TaskService.updateTaskWithMeta).mockResolvedValue({ task: baseTask({ id: '128' }), summariesPatched: [] });
+
+    // 1) Drag directo de la hoja 128 (sin eventSource) → encola un PATCH individual.
+    void provider.send('update-task', {
+      id: '128',
+      task: { type: 'task', start: new Date('2026-01-05T00:00:00.000Z'), end: new Date('2026-01-06T00:00:00.000Z') },
+    });
+    // 2) Acto seguido, move del summary padre → propaga 128 con eventSource → buffer (cancela el PATCH).
+    void provider.send('update-task', {
+      id: '128',
+      task: { type: 'task', start: new Date('2026-01-08T00:00:00.000Z'), end: new Date('2026-01-09T00:00:00.000Z') },
+      eventSource: 'update-task',
+    });
+    await vi.advanceTimersByTimeAsync(400);
+
+    // El PATCH individual se canceló; la hoja se persiste solo una vez, por el bulk del grupo.
+    expect(TaskService.updateTaskWithMeta).not.toHaveBeenCalled();
+    expect(TaskService.bulkUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('deriva las fechas de un summary desde sus hojas (ignora la fecha desincronizada del backend)', () => {
+    const provider = new GanttDataProvider('p1');
+    const data = provider.syncFromData(
+      [
+        // El backend trae el summary desincronizado (marzo) — NO abarca a sus hijas (enero/febrero).
+        baseTask({ id: '100', name: 'S', type: 'summary', startDate: '2026-03-01T00:00:00.000Z', endDate: '2026-03-05T00:00:00.000Z' }),
+        baseTask({ id: '101', parentId: '100', startDate: '2026-01-10T00:00:00.000Z', endDate: '2026-01-15T00:00:00.000Z' }),
+        baseTask({ id: '102', parentId: '100', startDate: '2026-02-01T00:00:00.000Z', endDate: '2026-02-20T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const summary = data.tasks.find((t) => String(t.id) === '100')!;
+    // El summary abarca a sus hijas: min(101.start)=2026-01-10, max(102.end)=2026-02-20.
+    expect(summary.start.toISOString()).toBe('2026-01-10T00:00:00.000Z');
+    expect(summary.end.toISOString()).toBe('2026-02-20T00:00:00.000Z');
+  });
+
+  it('deriva las fechas de un summary a través de sub-summaries (nietas)', () => {
+    const provider = new GanttDataProvider('p1');
+    const data = provider.syncFromData(
+      [
+        baseTask({ id: '200', name: 'Abuelo', type: 'summary', startDate: '2026-05-01T00:00:00.000Z', endDate: '2026-05-02T00:00:00.000Z' }),
+        baseTask({ id: '201', name: 'Padre', type: 'summary', parentId: '200', startDate: '2026-05-01T00:00:00.000Z', endDate: '2026-05-02T00:00:00.000Z' }),
+        baseTask({ id: '202', parentId: '201', startDate: '2026-01-05T00:00:00.000Z', endDate: '2026-01-08T00:00:00.000Z' }),
+        baseTask({ id: '203', parentId: '201', startDate: '2026-03-10T00:00:00.000Z', endDate: '2026-03-15T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const grandparent = data.tasks.find((t) => String(t.id) === '200')!;
+    // Abarca a las nietas: min(202.start)=2026-01-05, max(203.end)=2026-03-15.
+    expect(grandparent.start.toISOString()).toBe('2026-01-05T00:00:00.000Z');
+    expect(grandparent.end.toISOString()).toBe('2026-03-15T00:00:00.000Z');
+  });
+
+  it('un summary abarca a una tarea intermedia con subtareas (cadena padre→subtarea)', () => {
+    const provider = new GanttDataProvider('p1');
+    const data = provider.syncFromData(
+      [
+        // Cadena lineal: summary 300 → task 301 (intermedia, con subtarea) → task 302.
+        // La única "hoja" es 302; 301 tiene fecha propia real y NO debe ignorarse.
+        baseTask({ id: '300', name: 'S', type: 'summary', startDate: '2026-03-01T00:00:00.000Z', endDate: '2026-03-02T00:00:00.000Z' }),
+        baseTask({ id: '301', name: 'Padre', type: 'task', parentId: '300', startDate: '2026-01-10T00:00:00.000Z', endDate: '2026-01-20T00:00:00.000Z' }),
+        baseTask({ id: '302', name: 'Sub', type: 'task', parentId: '301', startDate: '2026-02-05T00:00:00.000Z', endDate: '2026-02-15T00:00:00.000Z' }),
+      ],
+      [],
+    );
+    const summary = data.tasks.find((t) => String(t.id) === '300')!;
+    // Debe abarcar a 301 (intermedia) y a 302: min(301.start)=2026-01-10, max(302.end)=2026-02-15.
+    expect(summary.start.toISOString()).toBe('2026-01-10T00:00:00.000Z');
+    expect(summary.end.toISOString()).toBe('2026-02-15T00:00:00.000Z');
   });
 });
 

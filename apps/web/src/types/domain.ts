@@ -213,7 +213,7 @@ export interface ActivityLog {
   entityId: string;
   description: string;
   timestamp: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Tipos para comentarios (si se implementan)
@@ -356,7 +356,7 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
   hasMore: boolean;
-  lastDoc?: any;
+  lastDoc?: unknown;
 }
 
 // Tipos para validación

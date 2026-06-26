@@ -27,6 +27,8 @@ import { createHighlightTime } from '../services/workingCalendarMarkers';
 import { LocaleProvider } from './LocaleProvider';
 import { setupAutoLocalization } from '../utils/ganttLocalizer';
 import { applyBarTooltips } from '../utils/ganttBarTooltips';
+import { GanttDragTooltip, type DragTooltipContext } from '../utils/ganttDragTooltip';
+import { computeStructuralKey } from '../utils/ganttStructuralKey';
 import { GanttTimeline } from './GanttTimeline';
 import { useProjectSettings } from '../contexts/ProjectSettingsContext';
 
@@ -76,12 +78,21 @@ const GanttChart: React.FC<GanttChartProps> = ({
     tasks: [],
     links: [],
   });
+  // Derivado "live" para el minimapa (GanttTimeline): se actualiza en cada mutación,
+  // independiente de la prop CONGELADA de <Gantt>, para reflejar posiciones sin causar reset.
+  const [timelineTasks, setTimelineTasks] = useState<GanttTask[]>([]);
+  // Detección de reset intencional: regenerar la prop de <Gantt> solo al cambiar de provider
+  // (proyecto) o cuando cambia el conjunto de IDs (altas/bajas), no en cambios de campos.
+  const lastProviderRef = useRef<GanttDataProvider | null>(null);
+  const lastStructuralKeyRef = useRef<string | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [calendarLocal, setCalendarLocal] = useState<WorkingCalendarResponse | null>(null);
   const calendar = calendarFromProps ?? calendarLocal;
   const errorBannerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localizationCleanupRef = useRef<(() => void) | null>(null);
   const initListenersInstalledRef = useRef(false);
+  const dragTooltipRef = useRef<GanttDragTooltip | null>(null);
+  const dragCtxRef = useRef<DragTooltipContext>({ pxPerDay: 30, lengthUnit: 'day' });
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -153,7 +164,27 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
   useEffect(() => {
     if (!dataProvider) return;
-    setGanttData(dataProvider.syncFromData(tasks ?? [], links));
+    const incomingTasks = tasks ?? [];
+    const incomingLinks = links ?? [];
+
+    // syncFromData sincroniza el store de wx-react-gantt de forma imperativa
+    // (exec 'update-task'/'delete-task' con _silent, sin reset) y devuelve el snapshot.
+    const snapshot = dataProvider.syncFromData(incomingTasks, incomingLinks);
+
+    // El minimapa siempre refleja lo último (no afecta la prop de <Gantt>).
+    setTimelineTasks(snapshot.tasks);
+
+    // Solo regeneramos la prop de <Gantt> (que dispara A.init → reset del store) cuando
+    // realmente cambió la estructura: nuevo provider (proyecto) o alta/baja de tareas/links.
+    // Los cambios de campos (arrastrar, redimensionar, editar) se reflejan vía el sync
+    // imperativo de arriba, manteniendo la referencia estable → sin rubber banding.
+    const structuralKey = computeStructuralKey(incomingTasks, incomingLinks);
+    const providerChanged = lastProviderRef.current !== dataProvider;
+    if (providerChanged || lastStructuralKeyRef.current !== structuralKey) {
+      lastProviderRef.current = dataProvider;
+      lastStructuralKeyRef.current = structuralKey;
+      setGanttData(snapshot);
+    }
   }, [dataProvider, tasks, links]);
 
   useEffect(() => {
@@ -174,7 +205,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const highlightTime = React.useMemo(() => createHighlightTime(calendar), [calendar]);
   const { isDays } = useProjectSettings();
 
-  const { scales, cellWidth, zoomLevel, zoomLabel } = React.useMemo(() => {
+  const { scales, cellWidth, zoomLevel, zoomLabel, lengthUnit } = React.useMemo(() => {
     const allTiers = [
       { level: 0, label: 'Año',         max: 0.5,      factor: 365,    scales: [{ unit: 'year', step: 1, format: 'yyyy' }] },
       { level: 1, label: 'Año / Trim.', max: 2,        factor: 91,     scales: [{ unit: 'year', step: 1, format: 'yyyy' }, { unit: 'quarter', step: 1, format: "'T'Q" }] },
@@ -186,13 +217,23 @@ const GanttChart: React.FC<GanttChartProps> = ({
     ] as const;
     const tiers = isDays ? allTiers.filter((t) => t.level <= 4) : allTiers;
     const tier = tiers.find((t) => pxPerDay <= t.max) ?? tiers[tiers.length - 1];
+    // lengthUnit controla el snap nativo de wx al soltar: si la escala visible llega a horas
+    // cuadra a la hora; si no, al inicio del día (evita un snap horario torpe a zoom lejano).
+    const lowerUnit = tier.scales[tier.scales.length - 1].unit;
+    const lengthUnit: 'hour' | 'day' = lowerUnit === 'hour' ? 'hour' : 'day';
     return {
       scales: tier.scales as unknown as GanttScale[],
       cellWidth: Math.max(8, Math.round(pxPerDay * tier.factor)),
       zoomLevel: tier.level,
       zoomLabel: tier.label,
+      lengthUnit,
     };
   }, [pxPerDay, isDays]);
+
+  // El listener de drag se registra una sola vez; lee de esta ref el zoom vigente.
+  useEffect(() => {
+    dragCtxRef.current = { pxPerDay, lengthUnit };
+  }, [pxPerDay, lengthUnit]);
 
   const locale = React.useMemo(() => ({ ...coreLocaleEs, ...ganttLocaleEs }), []);
 
@@ -388,40 +429,42 @@ const GanttChart: React.FC<GanttChartProps> = ({
       if (initListenersInstalledRef.current) return;
       initListenersInstalledRef.current = true;
 
-      if (dataProvider) {
-        if (typeof api.setNext === 'function') api.setNext(dataProvider);
-        dataProvider.setGanttApi(api);
-      }
-
+      // La conexión del provider (api.setNext) se hace en un effect dedicado más abajo, NO aquí:
+      // el <Gantt> puede montarse antes de que exista el dataProvider, y ponerla tras este guard
+      // dejaría el provider sin conectar (ninguna mutación se persistiría). Los listeners leen
+      // dataProviderRef.current para usar siempre el provider vigente.
       api.on('scroll-chart', (ev: { left?: number; top?: number }) => {
         setScrollLeft(ev.left ?? 0);
       });
       api.on('select-task', (ev: { id?: GanttId }) => {
         if (ev.id === undefined || ev.id === null) return;
-        const realId = dataProvider?.getTaskIdFromGanttId?.(ev.id) ?? String(ev.id);
+        const realId = dataProviderRef.current?.getTaskIdFromGanttId?.(ev.id) ?? String(ev.id);
         if (realId) onSelectTaskRef.current?.(realId);
       });
-      if (dataProvider) {
-        api.on('open-task', ({ id, _fromRestore }) => {
-          if (_fromRestore) return;
-          dataProvider.handleExpandCollapseState({ id, isOpen: true });
-        });
-        api.on('close-task', ({ id, _fromRestore }) => {
-          if (_fromRestore) return;
-          dataProvider.handleExpandCollapseState({ id, isOpen: false });
-        });
-      }
+      api.on('open-task', ({ id, _fromRestore }) => {
+        if (_fromRestore) return;
+        dataProviderRef.current?.handleExpandCollapseState({ id, isOpen: true });
+      });
+      api.on('close-task', ({ id, _fromRestore }) => {
+        if (_fromRestore) return;
+        dataProviderRef.current?.handleExpandCollapseState({ id, isOpen: false });
+      });
+      // Solo feedback visual (no persiste): muestra el destino mientras se arrastra/redimensiona.
+      api.on('drag-task', (ev) => {
+        dragTooltipRef.current?.onDrag(ev, api, dragCtxRef.current);
+      });
     },
-    [apiRef, dataProvider, locale],
+    [apiRef, locale],
   );
 
+  // Conecta el provider a la API del Gantt en cuanto AMBOS existan, y re-conecta si cualquiera
+  // cambia (el <Gantt> puede montarse antes que el provider, o re-montarse). Sin esta conexión,
+  // GanttDataProvider.send no recibe los eventos del Gantt y ninguna mutación se persiste.
   useEffect(() => {
-    if (!apiRef.current || !dataProvider) return;
-    const t = setTimeout(() => {
-      if (apiRef.current) initGantt(apiRef.current);
-    }, 50);
-    return () => clearTimeout(t);
-  }, [apiRef, dataProvider, initGantt]);
+    if (!toolbarApi || !dataProvider) return;
+    if (typeof toolbarApi.setNext === 'function') toolbarApi.setNext(dataProvider);
+    dataProvider.setGanttApi(toolbarApi);
+  }, [toolbarApi, dataProvider]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -453,7 +496,18 @@ const GanttChart: React.FC<GanttChartProps> = ({
       if (timeoutId !== null) clearTimeout(timeoutId);
       observer.disconnect();
     };
-  }, [apiRef, ganttData.tasks]);
+  }, [apiRef, dataProvider]);
+
+  // Tooltip en vivo durante el arrastre: se monta cuando el contenedor del Gantt existe.
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const tooltip = new GanttDragTooltip(containerRef.current);
+    dragTooltipRef.current = tooltip;
+    return () => {
+      tooltip.destroy();
+      dragTooltipRef.current = null;
+    };
+  }, [toolbarApi, dataProvider]);
 
   if (loading) {
     return (
@@ -510,7 +564,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
     );
   }
 
-  if (!loading && ganttData.tasks.length === 0) {
+  if (!loading && (tasks?.length ?? 0) === 0) {
     return (
       <div className="flex items-center justify-center h-full" style={{ background: 'var(--surface)' }}>
         <div className="text-center max-w-md p-6">
@@ -583,14 +637,14 @@ const GanttChart: React.FC<GanttChartProps> = ({
               markers={markers}
               cellWidth={cellWidth}
               highlightTime={highlightTime}
-              {...({ lengthUnit: 'hour' } as { lengthUnit: 'hour' })}
+              lengthUnit={lengthUnit}
             />
           </Willow>
         </div>
         <GanttTimeline
           scrollLeft={scrollLeft}
           api={apiRef.current}
-          tasks={ganttData.tasks}
+          tasks={timelineTasks}
           zoomLevel={zoomLevel}
           zoomLabel={zoomLabel}
         />

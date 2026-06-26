@@ -229,8 +229,8 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, onSelectTask
       setError(null);
       await onCreate(input);
       setCreating(false);
-    } catch (e: any) {
-      setError(e?.message ?? 'No se pudo crear la tarea');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'No se pudo crear la tarea');
     }
   };
 
@@ -249,8 +249,8 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, onSelectTask
     setError(null);
     try {
       await onUpdate(task.id, patch, task.version);
-    } catch (e: any) {
-      setError(e?.message ?? 'No se pudo guardar el cambio');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el cambio');
     } finally {
       markSaving(task.id, false);
     }

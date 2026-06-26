@@ -1,4 +1,4 @@
-import { TaskService } from './taskService';
+import { TaskService, type BulkUpdateItem } from './taskService';
 import { TaskLinkService } from './taskLinkService';
 import type {
   Task,
@@ -8,6 +8,11 @@ import type {
   UpdateTaskLinkData,
 } from '../types/domain';
 import type { SummaryPatch, UpdateTaskDto } from '@project-workgroup/shared';
+import {
+  computeSummaryBounds,
+  type SummaryBoundsNode,
+  type SummaryBounds,
+} from '@project-workgroup/shared/utils/summary-bounds';
 import { wouldCreateCycle, type CycleEdge } from '../utils/cycleDetector';
 import { mergeSummaryPatchIntoTask } from '../lib/summaryPatches';
 import type {
@@ -98,6 +103,10 @@ export class GanttDataProvider {
   private openStateTimer: ReturnType<typeof setTimeout> | null = null;
   private throttleMs = 0;
   private pendingActions: Map<string, PendingQueuedAction> = new Map();
+  // Hojas que wx desplaza al arrastrar una summary (propagación interna). Se agrupan en un único
+  // bulkUpdate para evitar N requests concurrentes que chocan al recalcular summaries en el backend.
+  private pendingLeafShifts: Map<string, BulkUpdateItem> = new Map();
+  private leafFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(projectId: string) {
     this.projectId = projectId;
@@ -186,8 +195,10 @@ export class GanttDataProvider {
   }
 
   private toGanttData(tasks: Task[], links: TaskLink[]): GanttDataProviderData {
+    const childrenByParent = this.buildChildrenIndex(tasks);
+    const summaryBounds = computeSummaryBounds(tasks.map((task) => this.toBoundsNode(task)));
     const ganttTasks = tasks
-      .map((task) => this.toGanttTask(task, tasks))
+      .map((task) => this.toGanttTask(task, childrenByParent, summaryBounds))
       .filter((t): t is GanttTask => t !== null);
 
     const ganttLinks = links
@@ -331,7 +342,39 @@ export class GanttDataProvider {
     return this.toGanttData(tasks, links);
   }
 
-  private toGanttTask(task: Task, allTasks?: Task[]): GanttTask | null {
+  /** Índice parentId → hijos, construido una sola vez por snapshot (evita reconstruirlo por summary). */
+  private buildChildrenIndex(tasks: Task[]): Map<string, Task[]> {
+    const childrenByParent = new Map<string, Task[]>();
+    for (const t of tasks) {
+      if (t.parentId === undefined || t.parentId === null) continue;
+      const list = childrenByParent.get(t.parentId);
+      if (list) list.push(t);
+      else childrenByParent.set(t.parentId, [t]);
+    }
+    return childrenByParent;
+  }
+
+  /** Adapta una Task del dominio al nodo genérico que consume computeSummaryBounds (shared). */
+  private toBoundsNode(task: Task): SummaryBoundsNode {
+    const ms = (value?: string): number | null => {
+      if (!value) return null;
+      const time = new Date(value).getTime();
+      return Number.isFinite(time) ? time : null;
+    };
+    return {
+      id: task.id,
+      parentId: task.parentId ?? null,
+      type: task.type,
+      start: ms(task.startDate),
+      end: ms(task.endDate),
+    };
+  }
+
+  private toGanttTask(
+    task: Task,
+    childrenByParent?: Map<string, Task[]>,
+    summaryBounds?: Map<string, SummaryBounds>,
+  ): GanttTask | null {
     if (!task.id || !task.name) return null;
 
     let startDate: Date;
@@ -344,6 +387,17 @@ export class GanttDataProvider {
     } catch {
       startDate = new Date();
       endDate = new Date(Date.now() + 86_400_000);
+    }
+
+    // Un summary es un contenedor: su barra abarca a sus hijas. El rango se deriva de los descendientes
+    // (regla compartida con el backend) en vez de confiar en task.startDate/endDate, que el backend
+    // puede tener desincronizado.
+    if (task.type === 'summary' && summaryBounds) {
+      const bounds = summaryBounds.get(task.id);
+      if (bounds) {
+        startDate = new Date(bounds.start);
+        endDate = new Date(bounds.end);
+      }
     }
 
     if (task.type !== 'milestone' && endDate.getTime() <= startDate.getTime()) {
@@ -370,24 +424,28 @@ export class GanttDataProvider {
       priority: task.priority,
     } as GanttTask & { status: string; priority: string };
 
-    if (allTasks) {
-      const hasChildren = allTasks.some((t) => t.parentId === task.id);
+    if (childrenByParent) {
+      const hasChildren = childrenByParent.has(task.id);
       if (hasChildren) ganttTask.open = task.open !== false;
     }
 
     return ganttTask;
   }
 
+  /** Cancela una acción encolada (la resuelve como superseded) si existe. */
+  private cancelPendingAction(key: string): void {
+    const existing = this.pendingActions.get(key);
+    if (!existing) return;
+    clearTimeout(existing.timer);
+    existing.resolvers.forEach(({ resolve }) => resolve({ success: true, superseded: true }));
+    this.pendingActions.delete(key);
+  }
+
   private enqueueAction(
     key: string,
     run: () => Promise<unknown>,
   ): Promise<unknown> {
-    const existing = this.pendingActions.get(key);
-    if (existing) {
-      clearTimeout(existing.timer);
-      existing.resolvers.forEach(({ resolve }) => resolve({ success: true, superseded: true }));
-      this.pendingActions.delete(key);
-    }
+    this.cancelPendingAction(key);
 
     return new Promise((resolve, reject) => {
       const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -413,13 +471,24 @@ export class GanttDataProvider {
   }
 
   async send(action: string, data: unknown): Promise<unknown> {
-
     if (this.isUiOnlyEvent(data)) return { success: true };
     if (action === 'drag-task') return { success: true };
+
+    // Al arrastrar una summary, wx propaga el movimiento emitiendo un update-task por cada
+    // descendiente con `eventSource`. Persistirlos uno a uno dispara N requests concurrentes que
+    // chocan al recalcular los mismos summaries en el backend (y se revierten). En su lugar
+    // agrupamos las HOJAS en un único bulkUpdate; las summaries intermedias se ignoran (se derivan).
+    if (action === 'update-task' && (data as { eventSource?: unknown }).eventSource !== undefined) {
+      this.bufferPropagatedLeaf(data as GanttActionPayloadMap['update-task']);
+      return { success: true };
+    }
 
     if (action === 'update-task' || action === 'move-task') {
       const taskId = this.resolveTaskId((data as { id?: GanttId }).id);
       if (taskId) {
+        // Un drag/edición directo de la hoja reemplaza cualquier shift de grupo buffereado para ella:
+        // evita persistir la misma hoja dos veces (PATCH individual + bulk) y el 409 resultante.
+        if (action === 'update-task') this.pendingLeafShifts.delete(taskId);
         const key = `${action}:${taskId}`;
         return this.enqueueAction(key, () =>
           action === 'update-task'
@@ -451,6 +520,108 @@ export class GanttDataProvider {
     } catch (error) {
       console.error('GanttDataProvider: error procesando acción', action, error);
       throw error;
+    }
+  }
+
+  /** Acumula una hoja desplazada por la propagación de wx (move de summary) para un bulk posterior. */
+  private bufferPropagatedLeaf(data: GanttActionPayloadMap['update-task']): void {
+    const taskData: Partial<GanttTask> = data.task && typeof data.task === 'object' ? data.task : {};
+    const taskId = this.resolveTaskId(data.id);
+    if (!taskId) return;
+    const cached = this.taskCache.get(taskId);
+    // Las summaries intermedias se derivan de sus hijas en el backend; no se persisten. Se usa el
+    // type de la cache (fiable) y solo se cae al de la propagación si la tarea no está cacheada.
+    const type = cached?.type ?? taskData.type;
+    if (type === 'summary') return;
+    // Usa la fecha propagada por wx; si wx omite algún extremo (p. ej. un resize que solo mueve el
+    // fin), conserva el de la cache para no perder el cambio ni mandar un rango incompleto.
+    const startDate = toIsoDateTime(taskData.start) ?? toIsoDateTime(cached?.startDate);
+    if (startDate === undefined) return;
+    const update: UpdateTaskDto = { startDate };
+    const endDate = toIsoDateTime(taskData.end) ?? toIsoDateTime(cached?.endDate);
+    if (type !== 'milestone' && endDate !== undefined) update.endDate = endDate;
+    // Un drag directo previo de esta misma hoja quedaría encolado como PATCH individual; el bulk del
+    // grupo lo reemplaza para no escribir la misma hoja dos veces (conflicto de versión).
+    this.cancelPendingAction(`update-task:${taskId}`);
+    // expectedVersion se resuelve en el flush (no aquí) para no enviar una versión obsoleta.
+    this.pendingLeafShifts.set(taskId, { id: taskId, data: update });
+    this.scheduleLeafFlush();
+  }
+
+  private scheduleLeafFlush(): void {
+    if (this.leafFlushTimer !== null) clearTimeout(this.leafFlushTimer);
+    this.leafFlushTimer = setTimeout(() => {
+      this.leafFlushTimer = null;
+      void this.flushLeafShifts();
+    }, 60);
+  }
+
+  /** Persiste en un único bulkUpdate (chunked ≤200) las hojas desplazadas por el move de una summary. */
+  private async flushLeafShifts(): Promise<void> {
+    if (this.pendingLeafShifts.size === 0) return;
+    // expectedVersion se resuelve AHORA (no al bufferear): si la hoja cambió de versión entre el
+    // buffer y este flush, se usa la actual y se evita un 409 por versión obsoleta.
+    const items = Array.from(this.pendingLeafShifts.values()).map((item) => ({
+      ...item,
+      expectedVersion: this.taskCache.get(item.id)?.version,
+    }));
+    this.pendingLeafShifts.clear();
+    // Posición previa de cada hoja (en cache, aún sin el move) para revertir la UI si el bulk falla.
+    const prevSnapshots = items.map((item) => {
+      const cached = this.taskCache.get(item.id);
+      const ganttPrev = this._ganttApi?.getTask?.(item.id);
+      return {
+        id: item.id,
+        start: cached?.startDate ? new Date(cached.startDate) : ganttPrev?.start,
+        end: cached?.endDate ? new Date(cached.endDate) : ganttPrev?.end,
+      };
+    });
+    const updatedTasks: Task[] = [];
+    let summariesPatched: SummaryPatch[] = [];
+    try {
+      const CHUNK_SIZE = 200;
+      for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+        const result = await TaskService.bulkUpdate(this.projectId, items.slice(i, i + CHUNK_SIZE));
+        updatedTasks.push(...result.tasks);
+        summariesPatched = result.summariesPatched;
+      }
+      for (const task of updatedTasks) this.applyEntityUpdate(task.id, task);
+      this.applySummaryPatches(summariesPatched);
+    } catch (error) {
+      console.error('GanttDataProvider: error guardando el grupo de la summary', error);
+      this.emitMetric('rollback', { action: 'summary-group-move', count: items.length });
+      if (updatedTasks.length === 0) {
+        // Nada se persistió: revertir la UI a la posición previa (igual que handleUpdateTask).
+        this.rollbackLeafShifts(prevSnapshots);
+        this.onError?.({
+          message: 'No se pudo guardar el movimiento del grupo. Se revirtió.',
+          cause: error,
+        });
+      } else {
+        // Persistencia parcial entre chunks: aplicar lo confirmado y pedir recarga del estado real.
+        for (const task of updatedTasks) this.applyEntityUpdate(task.id, task);
+        this.onError?.({
+          message: 'El movimiento del grupo se guardó parcialmente. Recarga para ver el estado real.',
+          cause: error,
+        });
+      }
+    }
+  }
+
+  /** Revierte en el store de wx la posición de las hojas a su estado previo (rollback visual). */
+  private rollbackLeafShifts(snapshots: Array<{ id: string; start?: Date; end?: Date }>): void {
+    if (!this._ganttApi) return;
+    for (const prev of snapshots) {
+      if (!prev.start) continue;
+      try {
+        this._ganttApi.exec('update-task', {
+          id: prev.id,
+          task: { start: prev.start, end: prev.end },
+          _rollback: true,
+        });
+      } catch (rollbackError) {
+        console.error('GanttDataProvider: error en rollback visual del grupo', rollbackError);
+      }
     }
   }
 
@@ -876,7 +1047,6 @@ export class GanttDataProvider {
   destroy(): void {
     this.listeners.clear();
     this.tempIdMapping.clear();
-    this.taskCache.clear();
     this.linkCache.clear();
     this.pendingActions.forEach((entry) => {
       clearTimeout(entry.timer);
@@ -887,11 +1057,21 @@ export class GanttDataProvider {
       clearTimeout(this.dataChangeTimer);
       this.dataChangeTimer = null;
     }
+    // Flush de cambios pendientes ANTES de limpiar taskCache/_ganttApi: flushOpenStates lee taskCache
+    // para el expectedVersion (limpiarlo antes degradaría la escritura a un blind write sin control de
+    // versión); cada flush captura su snapshot de forma síncrona, antes del await del bulk.
     if (this.openStateTimer !== null) {
       clearTimeout(this.openStateTimer);
       this.openStateTimer = null;
       void this.flushOpenStates();
     }
+    if (this.leafFlushTimer !== null) {
+      clearTimeout(this.leafFlushTimer);
+      this.leafFlushTimer = null;
+      void this.flushLeafShifts();
+    }
+    this.taskCache.clear();
+    this.pendingLeafShifts.clear();
     this.onDataChange = null;
     this.onLinkChange = null;
     this._ganttApi = null;
