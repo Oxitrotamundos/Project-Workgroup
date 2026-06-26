@@ -108,6 +108,35 @@
         ]
       }
     },
+    "/projects/import": {
+      "post": {
+        "operationId": "ProjectsController_import",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportProjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/projects/{id}": {
       "get": {
         "operationId": "ProjectsController_getById",
@@ -259,106 +288,6 @@
         ],
         "tags": [
           "projects"
-        ]
-      }
-    },
-    "/projects/{projectId}/members": {
-      "post": {
-        "operationId": "ProjectMembersController_add",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddProjectMemberDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "project-members"
-        ]
-      },
-      "get": {
-        "operationId": "ProjectMembersController_list",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "project-members"
-        ]
-      }
-    },
-    "/projects/{projectId}/members/{userId}": {
-      "delete": {
-        "operationId": "ProjectMembersController_remove",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "userId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "project-members"
         ]
       }
     },
@@ -1090,6 +1019,106 @@
         ]
       }
     },
+    "/projects/{projectId}/members": {
+      "post": {
+        "operationId": "ProjectMembersController_add",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddProjectMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "project-members"
+        ]
+      },
+      "get": {
+        "operationId": "ProjectMembersController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "project-members"
+        ]
+      }
+    },
+    "/projects/{projectId}/members/{userId}": {
+      "delete": {
+        "operationId": "ProjectMembersController_remove",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "project-members"
+        ]
+      }
+    },
     "/projects/{projectId}/task-links": {
       "post": {
         "operationId": "TaskLinksController_create",
@@ -1488,15 +1517,15 @@
         "type": "object",
         "properties": {}
       },
+      "ImportProjectDto": {
+        "type": "object",
+        "properties": {}
+      },
       "UpdateProjectDto": {
         "type": "object",
         "properties": {}
       },
       "UpdateProjectSettingsDto": {
-        "type": "object",
-        "properties": {}
-      },
-      "AddProjectMemberDto": {
         "type": "object",
         "properties": {}
       },
@@ -1533,6 +1562,10 @@
         "properties": {}
       },
       "UpsertCalendarDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AddProjectMemberDto": {
         "type": "object",
         "properties": {}
       },
