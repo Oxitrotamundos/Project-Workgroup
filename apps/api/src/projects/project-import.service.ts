@@ -189,6 +189,8 @@ export class ProjectImportService {
 
         const deps = dto.dependencies ?? [];
         const edges: Edge[] = [];
+        // Refleja el @@unique([sourceTaskId, targetTaskId, type]) de task_links.
+        const seenDeps = new Set<string>();
         for (const dep of deps) {
           const sourceId = refToId.get(dep.fromRef);
           const targetId = refToId.get(dep.toRef);
@@ -207,6 +209,12 @@ export class ProjectImportService {
               `dependency ${dep.fromRef} -> ${dep.toRef} would create a cycle`,
             );
           }
+          const depKey = `${sourceId}|${targetId}|${dep.type}`;
+          if (seenDeps.has(depKey)) {
+            throw new BadRequestException(
+              `duplicate dependency ${dep.fromRef} -> ${dep.toRef} (${dep.type})`,
+            );
+          }
           await tx.taskLink.create({
             data: {
               projectId: project.id,
@@ -219,6 +227,7 @@ export class ProjectImportService {
             sourceTaskId: sourceId.toString(),
             targetTaskId: targetId.toString(),
           });
+          seenDeps.add(depKey);
         }
 
         await this.summaries.recalculate(project.id, tx);

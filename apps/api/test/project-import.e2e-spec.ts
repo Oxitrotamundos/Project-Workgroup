@@ -104,4 +104,30 @@ describe('POST /v1/projects/import (e2e)', () => {
     // El proyecto NO debe haberse creado: el conteo es idéntico al previo.
     expect(after.body.length).toBe(before.body.length);
   });
+
+  it('rejects (400) and rolls back when a dependency is duplicated', async () => {
+    const before = await request(handle.app.getHttpServer())
+      .get('/v1/projects')
+      .set('Authorization', 'Bearer fake-token');
+    expect(before.status).toBe(200);
+
+    const bad = validPlan();
+    bad.dependencies = [
+      { fromRef: 'sec-1', toRef: 'h4', type: 'e2s' },
+      { fromRef: 'sec-1', toRef: 'h4', type: 'e2s' },
+    ];
+
+    await request(handle.app.getHttpServer())
+      .post('/v1/projects/import')
+      .set('Authorization', 'Bearer fake-token')
+      .send(bad)
+      .expect(400);
+
+    const after = await request(handle.app.getHttpServer())
+      .get('/v1/projects')
+      .set('Authorization', 'Bearer fake-token');
+    expect(after.status).toBe(200);
+    // El proyecto NO debe haberse creado: el conteo es idéntico al previo.
+    expect(after.body.length).toBe(before.body.length);
+  });
 });
