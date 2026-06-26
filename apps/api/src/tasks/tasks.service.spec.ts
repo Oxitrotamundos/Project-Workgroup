@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { TasksService } from './tasks.service';
+import { SummaryRecalculationService } from './summary-recalculation.service';
 import { AuthUser } from '../auth/auth.guard';
 import { Prisma } from '../generated/prisma/client';
 
@@ -92,7 +93,12 @@ describe('TasksService', () => {
   });
 
   const makeService = (prisma: any) =>
-    new TasksService(prisma, makeResolver() as any, makeScheduling() as any);
+    new TasksService(
+      prisma,
+      makeResolver() as any,
+      makeScheduling() as any,
+      new SummaryRecalculationService(prisma),
+    );
 
   const makePrisma = () => {
     const prisma: any = {
@@ -355,6 +361,7 @@ describe('TasksService', () => {
       prisma,
       resolver as any,
       scheduling as any,
+      new SummaryRecalculationService(prisma),
     );
 
     await service.update(
@@ -414,6 +421,7 @@ describe('TasksService', () => {
       prisma,
       resolver as any,
       scheduling as any,
+      new SummaryRecalculationService(prisma),
     );
 
     await service.update(
@@ -474,6 +482,7 @@ describe('TasksService', () => {
       prisma,
       resolver as any,
       scheduling as any,
+      new SummaryRecalculationService(prisma),
     );
 
     await service.update(
@@ -540,6 +549,7 @@ describe('TasksService', () => {
       prisma,
       resolver as any,
       scheduling as any,
+      new SummaryRecalculationService(prisma),
     );
 
     const result = await service.update(
