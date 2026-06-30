@@ -203,3 +203,26 @@ describe('reschedule_task / apply_reschedule', () => {
     expect(res.content[0].text).toContain('Nada que propagar');
   });
 });
+
+describe('plan_project', () => {
+  it('maps input to the import DTO, defaults colors, and folds assigneeNote into description', async () => {
+    const importProject = vi.fn().mockResolvedValue({ project: { id: '30', name: 'Nuevo' }, taskRefToId: { a: '40', b: '41' }, taskCount: 2, dependencyCount: 1 });
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ importProject }));
+    const res = await handlers.get('plan_project')!({
+      project: { name: 'Nuevo', startDate: '2026-07-01', endDate: '2026-09-01' },
+      tasks: [
+        { ref: 'a', name: 'Frente', type: 'summary', startDate: '2026-07-01', endDate: '2026-07-10' },
+        { ref: 'b', name: 'Tarea', type: 'task', startDate: '2026-07-02', endDate: '2026-07-05', parentRef: 'a', assigneeNote: 'Dani (sin alta)' },
+      ],
+      dependencies: [{ fromRef: 'a', toRef: 'b', type: 'e2s' }],
+    });
+    const dto = importProject.mock.calls[0][0];
+    expect(dto.project).toMatchObject({ name: 'Nuevo', status: 'planning' });
+    expect(dto.project.color).toBeTruthy();
+    expect(dto.tasks[1].description).toContain('Dani');
+    expect(dto.tasks[0].color).toBeTruthy();
+    expect(res.content[0].text).toContain('30');
+    expect(res.content[0].text).toContain('2 tarea');
+  });
+});

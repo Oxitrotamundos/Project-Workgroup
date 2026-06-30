@@ -5,7 +5,12 @@ import {
   TASK_TYPES,
   TASK_PRIORITIES,
 } from '@project-workgroup/shared/dist/task.constants';
-import type { UpdateTaskDto } from '@project-workgroup/shared';
+import type {
+  UpdateTaskDto,
+  ImportProjectDto,
+  ProjectStatus,
+  ImportLinkType,
+} from '@project-workgroup/shared';
 import { ApiError, type ApiClient } from '../apiClient';
 import { textResult, errorResult } from './result';
 
@@ -269,6 +274,102 @@ export function registerWriteTools(server: McpServer, client: ApiClient): void {
         }));
         const res = await client.propagateApply(taskId, changes);
         return textResult(`Reprogramé ${res.tasks.length} tarea(s) en cascada.`);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'plan_project',
+    {
+      title: 'Plan project',
+      description:
+        'Crea un proyecto completo (proyecto + tareas jerárquicas + dependencias) en una sola operación atómica.',
+      inputSchema: {
+        project: z.object({
+          name: z.string().min(1),
+          description: z.string().optional(),
+          startDate: z.string().min(1),
+          endDate: z.string().min(1),
+          // El server valida el valor (z.string para no extraer otro enum de shared).
+          status: z.string().optional().describe('planning | active | completed | on-hold'),
+          color: z.string().optional(),
+        }),
+        tasks: z
+          .array(
+            z.object({
+              ref: z.string().min(1),
+              name: z.string().min(1),
+              type: z.enum(TASK_TYPES),
+              startDate: z.string().min(1),
+              endDate: z.string().optional(),
+              priority: z.enum(TASK_PRIORITIES).optional(),
+              status: z.enum(TASK_STATUSES).optional(),
+              color: z.string().optional(),
+              parentRef: z.string().optional(),
+              tags: z.array(z.string()).optional(),
+              estimatedHours: z.string().optional(),
+              description: z.string().optional(),
+              assigneeNote: z
+                .string()
+                .optional()
+                .describe('Nota de responsable; se anexa al description (no hay alta de persona)'),
+            }),
+          )
+          .min(1)
+          .max(500),
+        dependencies: z
+          .array(
+            z.object({
+              fromRef: z.string().min(1),
+              toRef: z.string().min(1),
+              type: z.string().describe('e2s | s2s | e2e | s2e'),
+            }),
+          )
+          .optional(),
+      },
+    },
+    async ({ project, tasks, dependencies }) => {
+      try {
+        const dto: ImportProjectDto = {
+          project: {
+            name: project.name,
+            description: project.description,
+            startDate: project.startDate,
+            endDate: project.endDate,
+            // z.string validado por el server; narrow al tipo del DTO (no `as any`).
+            status: (project.status ?? 'planning') as ProjectStatus,
+            color: project.color ?? DEFAULT_COLOR,
+          },
+          tasks: tasks.map((t) => {
+            const note = t.assigneeNote ? `Responsable: ${t.assigneeNote}` : '';
+            const description = [t.description, note].filter(Boolean).join('\n') || undefined;
+            return {
+              ref: t.ref,
+              name: t.name,
+              type: t.type,
+              startDate: t.startDate,
+              endDate: t.endDate,
+              priority: t.priority ?? 'medium',
+              status: t.status ?? 'not-started',
+              color: t.color ?? DEFAULT_COLOR,
+              parentRef: t.parentRef,
+              tags: t.tags,
+              estimatedHours: t.estimatedHours,
+              description,
+            };
+          }),
+          dependencies: dependencies?.map((d) => ({
+            fromRef: d.fromRef,
+            toRef: d.toRef,
+            type: d.type as ImportLinkType,
+          })),
+        };
+        const res = await client.importProject(dto);
+        return textResult(
+          `Proyecto creado: [${res.project.id}] ${res.project.name} con ${res.taskCount} tarea(s) y ${res.dependencyCount} dependencia(s).`,
+        );
       } catch (err) {
         return errorResult(err);
       }
