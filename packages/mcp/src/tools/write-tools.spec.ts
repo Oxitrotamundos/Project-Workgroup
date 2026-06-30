@@ -153,3 +153,53 @@ describe('daily_update', () => {
     expect(sent[0].data).not.toHaveProperty('description');
   });
 });
+
+describe('reschedule_task / apply_reschedule', () => {
+  it('moves the source then returns the downstream cascade preview', async () => {
+    const getTask = vi.fn().mockResolvedValue({ id: '20', name: 'Fuente', version: 3 });
+    const updateTask = vi.fn().mockResolvedValue({ id: '20', version: 4, summariesPatched: [] });
+    const propagatePreview = vi.fn().mockResolvedValue({ sourceTaskId: '20', changes: [{ taskId: '21', currentVersion: 1, currentStartDate: '2026-06-01', currentEndDate: '2026-06-03', proposedStartDate: '2026-06-05', proposedEndDate: '2026-06-07', via: 'e2s', fromTaskId: '20' }] });
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ getTask, updateTask, propagatePreview }));
+    const res = await handlers.get('reschedule_task')!({ taskId: '20', startDate: '2026-06-04', endDate: '2026-06-05' });
+    expect(updateTask.mock.calls[0][1]).toMatchObject({ startDate: '2026-06-04', endDate: '2026-06-05', expectedVersion: 3 });
+    // El preview se calcula desde las fechas ya guardadas: el movimiento debe ir antes.
+    expect(updateTask.mock.invocationCallOrder[0]).toBeLessThan(propagatePreview.mock.invocationCallOrder[0]);
+    expect(res.content[0].text).toContain('[21]');
+    expect(res.content[0].text).toContain('apply_reschedule');
+  });
+
+  it('reschedule_task still commits the move but reports no dependents when the preview is empty', async () => {
+    const getTask = vi.fn().mockResolvedValue({ id: '20', version: 3 });
+    const updateTask = vi.fn().mockResolvedValue({ id: '20', version: 4, summariesPatched: [] });
+    const propagatePreview = vi.fn().mockResolvedValue({ sourceTaskId: '20', changes: [] });
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ getTask, updateTask, propagatePreview }));
+    const res = await handlers.get('reschedule_task')!({ taskId: '20', startDate: '2026-06-04', endDate: '2026-06-05' });
+    expect(updateTask).toHaveBeenCalled();
+    expect(res.content[0].text).toContain('No hay dependientes');
+    expect(res.content[0].text).not.toContain('apply_reschedule');
+  });
+
+  it('apply_reschedule maps the preview changes into the apply call', async () => {
+    const propagatePreview = vi.fn().mockResolvedValue({ sourceTaskId: '20', changes: [{ taskId: '21', currentVersion: 1, currentStartDate: '2026-06-01', currentEndDate: '2026-06-03', proposedStartDate: '2026-06-05', proposedEndDate: '2026-06-07', via: 'e2s', fromTaskId: '20' }] });
+    const propagateApply = vi.fn().mockResolvedValue({ tasks: [{ id: '21' }], summariesPatched: [] });
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ propagatePreview, propagateApply }));
+    const res = await handlers.get('apply_reschedule')!({ taskId: '20' });
+    expect(propagateApply.mock.calls[0][1]).toEqual([
+      { taskId: '21', startDate: '2026-06-05', endDate: '2026-06-07', expectedVersion: 1 },
+    ]);
+    expect(res.content[0].text).toContain('1 tarea(s)');
+  });
+
+  it('apply_reschedule reports when there is nothing to cascade', async () => {
+    const propagatePreview = vi.fn().mockResolvedValue({ sourceTaskId: '20', changes: [] });
+    const propagateApply = vi.fn();
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ propagatePreview, propagateApply }));
+    const res = await handlers.get('apply_reschedule')!({ taskId: '20' });
+    expect(propagateApply).not.toHaveBeenCalled();
+    expect(res.content[0].text).toContain('Nada que propagar');
+  });
+});

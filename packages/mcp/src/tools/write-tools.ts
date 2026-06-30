@@ -205,4 +205,73 @@ export function registerWriteTools(server: McpServer, client: ApiClient): void {
       }
     },
   );
+
+  server.registerTool(
+    'reschedule_task',
+    {
+      title: 'Reschedule task',
+      description:
+        'Mueve las fechas de una tarea y muestra qué dependientes se reprogramarían. Para aplicar la cascada, usa apply_reschedule.',
+      inputSchema: {
+        taskId: z.string().min(1),
+        startDate: z.string().min(1).describe('Nueva fecha de inicio (ISO)'),
+        endDate: z.string().min(1).describe('Nueva fecha de fin (ISO)'),
+      },
+    },
+    async ({ taskId, startDate, endDate }) => {
+      try {
+        const current = await client.getTask(taskId);
+        await client.updateTask(taskId, {
+          startDate,
+          endDate,
+          expectedVersion: current.version,
+        });
+        const preview = await client.propagatePreview(taskId);
+        if (preview.changes.length === 0)
+          return textResult(
+            `Moví [${taskId}] a ${startDate.slice(0, 10)}→${endDate.slice(0, 10)}. No hay dependientes que reprogramar.`,
+          );
+        const lines = preview.changes
+          .map(
+            (c) =>
+              `  - [${c.taskId}] ${c.currentStartDate}→${c.currentEndDate} ⇒ ${c.proposedStartDate}→${c.proposedEndDate} (${c.via})`,
+          )
+          .join('\n');
+        return textResult(
+          `Moví [${taskId}] a ${startDate.slice(0, 10)}→${endDate.slice(0, 10)}.\n` +
+            `${preview.changes.length} dependiente(s) se reprogramarían:\n${lines}\n` +
+            `Llama a apply_reschedule({ taskId: "${taskId}" }) para aplicar la cascada.`,
+        );
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'apply_reschedule',
+    {
+      title: 'Apply reschedule',
+      description:
+        'Aplica la cascada de fechas a los dependientes de una tarea ya reprogramada (recalcula el preview y lo confirma).',
+      inputSchema: { taskId: z.string().min(1) },
+    },
+    async ({ taskId }) => {
+      try {
+        const preview = await client.propagatePreview(taskId);
+        if (preview.changes.length === 0)
+          return textResult('Nada que propagar.');
+        const changes = preview.changes.map((c) => ({
+          taskId: c.taskId,
+          startDate: c.proposedStartDate,
+          endDate: c.proposedEndDate,
+          expectedVersion: c.currentVersion,
+        }));
+        const res = await client.propagateApply(taskId, changes);
+        return textResult(`Reprogramé ${res.tasks.length} tarea(s) en cascada.`);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
 }
