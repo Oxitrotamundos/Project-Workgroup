@@ -12,4 +12,12 @@ describe('loadConfig', () => {
   it('throws when PWG_API_KEY is missing', () => {
     expect(() => loadConfig({ PWG_API_URL: 'http://x' } as any)).toThrow(/PWG_API_KEY/);
   });
+  it('trims values and rejects whitespace-only ones', () => {
+    expect(
+      loadConfig({ PWG_API_URL: ' http://x ', PWG_API_KEY: ' pwg_x ' } as any),
+    ).toEqual({ baseUrl: 'http://x', apiKey: 'pwg_x' });
+    expect(() =>
+      loadConfig({ PWG_API_URL: '   ', PWG_API_KEY: 'pwg_x' } as any),
+    ).toThrow(/PWG_API_URL/);
+  });
 });
