@@ -42,4 +42,15 @@ describe('formatProjectOverview', () => {
     expect(text).toContain('atrasadas');
     expect(text).toContain('hitos próximos');
   });
+  it('marks overflow when milestones exceed the cap', () => {
+    const many = Array.from({ length: 7 }, (_, i) => ({
+      id: String(i),
+      type: 'milestone',
+      status: 'not-started',
+      progress: 0,
+      endDate: `2026-07-${String(i + 10).padStart(2, '0')}T00:00:00.000Z`,
+      name: `m${i}`,
+    })) as any[];
+    expect(formatProjectOverview(project, many, now)).toContain('+2 más');
+  });
 });
