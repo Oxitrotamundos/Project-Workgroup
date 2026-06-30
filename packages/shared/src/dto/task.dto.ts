@@ -18,15 +18,13 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { TASK_STATUSES, TASK_PRIORITIES, TASK_TYPES } from '../task.constants';
+import type { TaskStatus, TaskPriority, TaskType } from '../task.constants';
 
-export const TASK_STATUSES = ['not-started', 'in-progress', 'completed', 'blocked'] as const;
-export type TaskStatus = (typeof TASK_STATUSES)[number];
-
-export const TASK_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
-export type TaskPriority = (typeof TASK_PRIORITIES)[number];
-
-export const TASK_TYPES = ['task', 'summary', 'milestone'] as const;
-export type TaskType = (typeof TASK_TYPES)[number];
+// Las constantes viven en task.constants.ts (sin decoradores); se re-exportan aquí
+// para no romper a los consumidores del barrel.
+export { TASK_STATUSES, TASK_PRIORITIES, TASK_TYPES } from '../task.constants';
+export type { TaskStatus, TaskPriority, TaskType } from '../task.constants';
 
 export class CreateTaskDto {
   @IsString() @MinLength(1) @MaxLength(500)
