@@ -7,16 +7,30 @@ import {
   Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Observable, of, tap } from 'rxjs';
+import {
+  Observable,
+  catchError,
+  concatMap,
+  from,
+  of,
+  throwError,
+} from 'rxjs';
 import { createHash } from 'node:crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 const HEADER = 'idempotency-key';
 const KEY_MAX_LEN = 256;
+// responseStatus 0 marca un claim pendiente; cualquier otro valor es una respuesta ya materializada.
+const PENDING = 0;
+const MAX_ATTEMPTS = 2;
 
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
+  // Un claim pendiente más viejo que esto se considera huérfano (su dueño murió) y se puede retomar.
+  private static readonly STALE_MS = 60_000;
+
   constructor(
     private readonly prisma: PrismaService,
     @Optional()
@@ -46,54 +60,116 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const userId = BigInt(req.user.id);
     const requestHash = this.hashRequest(req);
 
-    const existing = await this.prisma.idempotencyKey.findUnique({
-      where: { key_userId: { key, userId } },
-    });
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      // (A) Intentamos reclamar la clave de forma atómica: el unique([key,userId]) arbitra la carrera.
+      try {
+        await this.prisma.idempotencyKey.create({
+          data: {
+            key,
+            userId,
+            method: req.method,
+            path: req.url,
+            requestHash,
+            responseStatus: PENDING,
+            // responseBody se omite ⇒ queda null hasta que el handler termine.
+          },
+        });
+      } catch (err) {
+        if (!this.isUniqueViolation(err)) throw err;
 
-    if (existing) {
-      if (existing.requestHash !== requestHash) {
-        this.logger?.warn(
-          { key, userId: userId.toString(), method: req.method, path: req.url },
-          'idempotency conflict: different body for same key',
-        );
+        // (C) Otro request ya posee la clave: inspeccionamos su estado.
+        const existing = await this.prisma.idempotencyKey.findUnique({
+          where: { key_userId: { key, userId } },
+        });
+        if (!existing) continue; // liberada en una ventana mínima → reintentar el claim
+
+        if (existing.responseStatus !== PENDING) {
+          if (existing.requestHash !== requestHash) {
+            this.logger?.warn(
+              {
+                key,
+                userId: userId.toString(),
+                method: req.method,
+                path: req.url,
+              },
+              'idempotency conflict: different body for same key',
+            );
+            throw new ConflictException({
+              code: 'IDEMPOTENCY_KEY_REUSED',
+              message: 'Idempotency-Key was used with a different request body',
+            });
+          }
+          const res = context.switchToHttp().getResponse();
+          res.status(existing.responseStatus);
+          this.logger?.debug(
+            { key, status: existing.responseStatus },
+            'idempotency cache hit',
+          );
+          return of(existing.responseBody);
+        }
+
+        // Claim pendiente: si está huérfano lo retomamos, si está vivo devolvemos 409.
+        if (this.isStale(existing.createdAt)) {
+          await this.release(key, userId);
+          continue;
+        }
         throw new ConflictException({
-          code: 'IDEMPOTENCY_KEY_REUSED',
-          message: 'Idempotency-Key was used with a different request body',
+          code: 'IDEMPOTENCY_IN_PROGRESS',
+          message:
+            'A request with this Idempotency-Key is already in progress; retry shortly',
         });
       }
-      const res = context.switchToHttp().getResponse();
-      res.status(existing.responseStatus);
-      this.logger?.debug(
-        { key, status: existing.responseStatus },
-        'idempotency cache hit',
-      );
-      return of(existing.responseBody);
-    }
 
-    return next.handle().pipe(
-      tap(async (body) => {
-        const res = context.switchToHttp().getResponse();
-        const status = res.statusCode ?? 200;
-        try {
-          await this.prisma.idempotencyKey.create({
+      // (B) Ganamos el claim: ejecutamos el handler una sola vez y persistimos (await) o liberamos.
+      const res = context.switchToHttp().getResponse();
+      return next.handle().pipe(
+        concatMap(async (body) => {
+          const status = res.statusCode ?? 200;
+          await this.prisma.idempotencyKey.update({
+            where: { key_userId: { key, userId } },
             data: {
-              key,
-              userId,
-              method: req.method,
-              path: req.url,
-              requestHash,
               responseStatus: status,
               responseBody: this.toJsonSafe(body),
             },
           });
-        } catch (err) {
-          this.logger?.debug(
-            { key, err: (err as Error).message },
-            'idempotency persist skipped',
-          );
-        }
-      }),
+          return body; // emitimos solo tras commitear la fila
+        }),
+        catchError((err) =>
+          // Handler falló → liberamos la clave para que el cliente pueda reintentar.
+          from(this.release(key, userId)).pipe(
+            concatMap(() => throwError(() => err)),
+          ),
+        ),
+      );
+    }
+
+    // Bucle agotado (el claim siguió colisionando) → lo tratamos como concurrencia en curso.
+    throw new ConflictException({
+      code: 'IDEMPOTENCY_IN_PROGRESS',
+      message:
+        'A request with this Idempotency-Key is already in progress; retry shortly',
+    });
+  }
+
+  private isUniqueViolation(err: unknown): boolean {
+    return (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2002'
     );
+  }
+
+  private isStale(createdAt: Date): boolean {
+    return Date.now() - createdAt.getTime() > IdempotencyInterceptor.STALE_MS;
+  }
+
+  private async release(key: string, userId: bigint): Promise<void> {
+    try {
+      await this.prisma.idempotencyKey.delete({
+        where: { key_userId: { key, userId } },
+      });
+    } catch {
+      // Ya no existe — ignoramos.
+    }
   }
 
   private hashRequest(req: any): string {
