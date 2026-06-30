@@ -3,7 +3,11 @@ import { ProjectImportService } from './project-import.service';
 
 describe('ProjectImportService topological ordering', () => {
   const svc = new ProjectImportService(
-    {} as any, {} as any, {} as any, {} as any, {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
   );
 
   it('orders parents before children', () => {
@@ -21,10 +25,7 @@ describe('ProjectImportService topological ordering', () => {
 
   it('rejects a duplicate ref', () => {
     expect(() =>
-      svc.topoSortTasks([
-        { ref: 'dup' } as any,
-        { ref: 'dup' } as any,
-      ]),
+      svc.topoSortTasks([{ ref: 'dup' } as any, { ref: 'dup' } as any]),
     ).toThrow(BadRequestException);
   });
 
@@ -46,7 +47,11 @@ describe('ProjectImportService topological ordering', () => {
 
 describe('ProjectImportService.expandProjectBounds', () => {
   const svc = new ProjectImportService(
-    {} as any, {} as any, {} as any, {} as any, {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
   );
 
   it('keeps bounds when all tasks fit inside', () => {

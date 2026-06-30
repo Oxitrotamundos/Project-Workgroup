@@ -187,7 +187,9 @@ export class ProjectImportService {
               `dependency fromRef and toRef must differ ("${dep.fromRef}")`,
             );
           }
-          if (wouldCreateCycle(edges, sourceId.toString(), targetId.toString())) {
+          if (
+            wouldCreateCycle(edges, sourceId.toString(), targetId.toString())
+          ) {
             throw new BadRequestException(
               `dependency ${dep.fromRef} -> ${dep.toRef} would create a cycle`,
             );

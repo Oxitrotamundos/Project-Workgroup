@@ -7,14 +7,7 @@ import {
   Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import {
-  Observable,
-  catchError,
-  concatMap,
-  from,
-  of,
-  throwError,
-} from 'rxjs';
+import { Observable, catchError, concatMap, from, of, throwError } from 'rxjs';
 import { createHash } from 'node:crypto';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { Prisma } from '../generated/prisma/client';

@@ -12,9 +12,37 @@ const validPlan = () => ({
     color: '#3b82f6',
   },
   tasks: [
-    { ref: 'sec', name: 'Seguridad', type: 'summary', startDate: '2026-05-26', endDate: '2026-05-30', priority: 'high', status: 'completed', color: '#10b981' },
-    { ref: 'sec-1', parentRef: 'sec', name: 'App Check', type: 'task', startDate: '2026-05-26', endDate: '2026-05-28', priority: 'high', status: 'completed', color: '#10b981', tags: ['security'] },
-    { ref: 'h4', name: 'CMS inicial', type: 'milestone', startDate: '2026-06-26', priority: 'high', status: 'in-progress', color: '#f59e0b' },
+    {
+      ref: 'sec',
+      name: 'Seguridad',
+      type: 'summary',
+      startDate: '2026-05-26',
+      endDate: '2026-05-30',
+      priority: 'high',
+      status: 'completed',
+      color: '#10b981',
+    },
+    {
+      ref: 'sec-1',
+      parentRef: 'sec',
+      name: 'App Check',
+      type: 'task',
+      startDate: '2026-05-26',
+      endDate: '2026-05-28',
+      priority: 'high',
+      status: 'completed',
+      color: '#10b981',
+      tags: ['security'],
+    },
+    {
+      ref: 'h4',
+      name: 'CMS inicial',
+      type: 'milestone',
+      startDate: '2026-06-26',
+      priority: 'high',
+      status: 'in-progress',
+      color: '#f59e0b',
+    },
   ],
   dependencies: [{ fromRef: 'sec-1', toRef: 'h4', type: 'e2s' }],
 });
@@ -31,7 +59,12 @@ describe('POST /v1/projects/import (e2e)', () => {
         value: {
           canActivate: (ctx: any) => {
             const req = ctx.switchToHttp().getRequest();
-            req.user = { id: ownerId, role: 'admin', firebaseUid: null, via: 'api_key' };
+            req.user = {
+              id: ownerId,
+              role: 'admin',
+              firebaseUid: null,
+              via: 'api_key',
+            };
             return true;
           },
         },
