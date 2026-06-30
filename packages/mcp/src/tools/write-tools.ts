@@ -5,7 +5,8 @@ import {
   TASK_TYPES,
   TASK_PRIORITIES,
 } from '@project-workgroup/shared/dist/task.constants';
-import type { ApiClient } from '../apiClient';
+import type { UpdateTaskDto } from '@project-workgroup/shared';
+import { ApiError, type ApiClient } from '../apiClient';
 import { textResult, errorResult } from './result';
 
 const DEFAULT_COLOR = '#64748b';
@@ -126,6 +127,79 @@ export function registerWriteTools(server: McpServer, client: ApiClient): void {
         return textResult(
           `Asignada [${res.id}] ${res.name} a ${user.displayName} <${user.email}>.`,
         );
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'daily_update',
+    {
+      title: 'Daily update',
+      description:
+        'Actualiza progreso/estado de varias tareas de un proyecto en lote (resuelve refs por id o nombre).',
+      inputSchema: {
+        projectId: z.string().min(1),
+        updates: z
+          .array(
+            z.object({
+              taskRef: z.string().min(1).describe('id exacto o nombre de la tarea'),
+              progress: z.number().int().min(0).max(100).optional(),
+              status: z.enum(TASK_STATUSES).optional(),
+              note: z.string().optional().describe('Se anexa al description de la tarea'),
+            }),
+          )
+          .min(1)
+          .max(200),
+      },
+    },
+    async ({ projectId, updates }) => {
+      try {
+        const tasks = await client.listTasks(projectId);
+        const byId = new Map(tasks.map((t) => [t.id, t]));
+        const byName = new Map(tasks.map((t) => [t.name.toLowerCase(), t]));
+
+        // Resolución de refs antes de tocar la API: cualquier ref no resuelta aborta.
+        const resolved: { id: string; data: UpdateTaskDto; version: number }[] = [];
+        for (const u of updates) {
+          const task = byId.get(u.taskRef) ?? byName.get(u.taskRef.toLowerCase());
+          if (!task)
+            return errorResult(
+              new Error(`no pude resolver la tarea "${u.taskRef}" en el proyecto ${projectId}`),
+            );
+          const data: UpdateTaskDto = {};
+          if (u.progress !== undefined) data.progress = u.progress;
+          if (u.status !== undefined) data.status = u.status;
+          // Ignora notas en blanco para no ensuciar la descripción.
+          if (u.note?.trim()) {
+            const prev = task.description ? `${task.description}\n` : '';
+            data.description = `${prev}${u.note}`;
+          }
+          resolved.push({ id: task.id, data, version: task.version });
+        }
+
+        const buildItems = (versionById: Map<string, number>) =>
+          resolved.map((r) => ({
+            id: r.id,
+            data: r.data,
+            expectedVersion: versionById.get(r.id) ?? r.version,
+          }));
+
+        let versionById = new Map(resolved.map((r) => [r.id, r.version]));
+        try {
+          const res = await client.bulkUpdateTasks(projectId, buildItems(versionById));
+          return textResult(`Actualicé ${res.tasks.length} tarea(s).`);
+        } catch (err) {
+          // El bulk es atómico: un conflicto revierte todo. Refresca versiones y reintenta una vez.
+          if (err instanceof ApiError && err.code === 'TASK_VERSION_STALE') {
+            const fresh = await client.listTasks(projectId);
+            versionById = new Map(fresh.map((t) => [t.id, t.version]));
+            const res = await client.bulkUpdateTasks(projectId, buildItems(versionById));
+            return textResult(`Actualicé ${res.tasks.length} tarea(s) (tras refrescar versiones).`);
+          }
+          throw err;
+        }
       } catch (err) {
         return errorResult(err);
       }

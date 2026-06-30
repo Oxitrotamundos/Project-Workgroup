@@ -56,3 +56,100 @@ describe('registerWriteTools — fine tools', () => {
     expect(res.content[0].text).toContain('a1@x');
   });
 });
+
+describe('daily_update', () => {
+  const tasksFixture = [
+    { id: '10', name: 'Diseño', version: 2, status: 'not-started', progress: 0, description: '' },
+    { id: '11', name: 'API', version: 5, status: 'in-progress', progress: 20, description: '' },
+  ];
+  it('resolves refs by id or name and bulk-updates with per-item expectedVersion', async () => {
+    const listTasks = vi.fn().mockResolvedValue(tasksFixture);
+    const bulkUpdateTasks = vi.fn().mockResolvedValue({ tasks: [{ id: '10' }, { id: '11' }], summariesPatched: [] });
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ listTasks, bulkUpdateTasks }));
+    const res = await handlers.get('daily_update')!({
+      projectId: '9',
+      updates: [
+        { taskRef: '10', progress: 50 },
+        { taskRef: 'API', status: 'completed' },
+      ],
+    });
+    const sent = bulkUpdateTasks.mock.calls[0][1];
+    expect(sent).toEqual([
+      { id: '10', data: { progress: 50 }, expectedVersion: 2 },
+      { id: '11', data: { status: 'completed' }, expectedVersion: 5 },
+    ]);
+    expect(res.content[0].text).toContain('2 tarea(s)');
+  });
+
+  it('reports an unresolved ref without calling the API', async () => {
+    const listTasks = vi.fn().mockResolvedValue(tasksFixture);
+    const bulkUpdateTasks = vi.fn();
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ listTasks, bulkUpdateTasks }));
+    const res = await handlers.get('daily_update')!({ projectId: '9', updates: [{ taskRef: 'Inexistente', progress: 10 }] });
+    expect(bulkUpdateTasks).not.toHaveBeenCalled();
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain('Inexistente');
+  });
+
+  it('on TASK_VERSION_STALE refreshes versions and retries once, succeeding', async () => {
+    const bumpedFixture = [
+      { id: '10', name: 'Diseño', version: 7, status: 'not-started', progress: 0, description: '' },
+      { id: '11', name: 'API', version: 9, status: 'in-progress', progress: 20, description: '' },
+    ];
+    const listTasks = vi
+      .fn()
+      .mockResolvedValueOnce(tasksFixture)
+      .mockResolvedValueOnce(bumpedFixture);
+    const bulkUpdateTasks = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(409, 'TASK_VERSION_STALE', 'stale'))
+      .mockResolvedValueOnce({ tasks: [{ id: '10' }, { id: '11' }], summariesPatched: [] });
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ listTasks, bulkUpdateTasks }));
+    const res = await handlers.get('daily_update')!({
+      projectId: '9',
+      updates: [
+        { taskRef: '10', progress: 50 },
+        { taskRef: 'API', status: 'completed' },
+      ],
+    });
+    expect(bulkUpdateTasks).toHaveBeenCalledTimes(2);
+    const retried = bulkUpdateTasks.mock.calls[1][1];
+    expect(retried).toEqual([
+      { id: '10', data: { progress: 50 }, expectedVersion: 7 },
+      { id: '11', data: { status: 'completed' }, expectedVersion: 9 },
+    ]);
+    expect(res.content[0].text).toContain('tras refrescar versiones');
+  });
+
+  it('propagates a second TASK_VERSION_STALE without looping forever', async () => {
+    const listTasks = vi.fn().mockResolvedValue(tasksFixture);
+    const bulkUpdateTasks = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(409, 'TASK_VERSION_STALE', 'stale'))
+      .mockRejectedValueOnce(new ApiError(409, 'TASK_VERSION_STALE', 'stale again'));
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ listTasks, bulkUpdateTasks }));
+    const res = await handlers.get('daily_update')!({
+      projectId: '9',
+      updates: [{ taskRef: '10', progress: 50 }],
+    });
+    expect(bulkUpdateTasks).toHaveBeenCalledTimes(2);
+    expect(res.isError).toBe(true);
+  });
+
+  it('ignores a whitespace-only note (does not modify the description)', async () => {
+    const listTasks = vi.fn().mockResolvedValue(tasksFixture);
+    const bulkUpdateTasks = vi.fn().mockResolvedValue({ tasks: [{ id: '10' }], summariesPatched: [] });
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ listTasks, bulkUpdateTasks }));
+    await handlers.get('daily_update')!({
+      projectId: '9',
+      updates: [{ taskRef: '10', note: '   ' }],
+    });
+    const sent = bulkUpdateTasks.mock.calls[0][1];
+    expect(sent[0].data).not.toHaveProperty('description');
+  });
+});
