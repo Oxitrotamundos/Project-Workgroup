@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { ApiError, type ReadApiClient } from '../apiClient';
+import { ApiError, type ApiClient } from '../apiClient';
 import {
   formatProjectLine,
   formatTaskDetail,
@@ -32,7 +32,7 @@ function errorResult(err: unknown) {
 
 export function registerReadTools(
   server: McpServer,
-  client: ReadApiClient,
+  client: ApiClient,
 ): void {
   server.registerTool(
     'list_projects',

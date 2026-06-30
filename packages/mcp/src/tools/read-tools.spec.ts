@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { registerReadTools } from './read-tools';
-import { ApiError, type ReadApiClient } from '../apiClient';
+import { ApiError, type ApiClient } from '../apiClient';
 
 // Doble de McpServer: guarda los handlers por nombre para invocarlos en el test.
 function makeServerSpy() {
@@ -13,12 +13,18 @@ function makeServerSpy() {
   return { server: server as any, handlers };
 }
 
-const clientStub = (over: Partial<ReadApiClient> = {}): ReadApiClient => ({
+const clientStub = (over: Partial<ApiClient> = {}): ApiClient => ({
   listProjects: vi.fn().mockResolvedValue([]),
   getProject: vi.fn(),
   listTasks: vi.fn(),
   getTask: vi.fn(),
   searchUsers: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+  createTask: vi.fn(),
+  updateTask: vi.fn(),
+  bulkUpdateTasks: vi.fn(),
+  propagatePreview: vi.fn(),
+  propagateApply: vi.fn(),
+  importProject: vi.fn(),
   ...over,
 });
 

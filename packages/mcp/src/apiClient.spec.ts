@@ -65,4 +65,45 @@ describe('createApiClient', () => {
     expect(err.status).toBe(500);
     expect(err.code).toBe('unknown');
   });
+
+  it('extracts the message from the default Nest error shape', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'task not found', error: 'Not Found', statusCode: 404 }), {
+        status: 404, headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const err = await client().getTask('1').catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(404);
+    expect(err.message).toBe('task not found');
+  });
+
+  it('createTask sends an Idempotency-Key and the body', async () => {
+    fetchMock.mockResolvedValueOnce(okJson({ id: '5' }, 201));
+    await client().createTask('9', { name: 'X', startDate: '2026-06-01', priority: 'medium', status: 'not-started', type: 'task', color: '#fff' } as any);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/v1/projects/9/tasks');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['idempotency-key']).toMatch(/[0-9a-f-]{36}/);
+  });
+
+  it('updateTask retries once with currentVersion on TASK_VERSION_STALE', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: { code: 'TASK_VERSION_STALE', message: 'stale', currentVersion: 7 } }), { status: 409, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(okJson({ id: '1', version: 8, summariesPatched: [] }));
+    const res = await client().updateTask('1', { status: 'completed', expectedVersion: 5 } as any);
+    expect((res as any).version).toBe(8);
+    // El segundo PATCH usa expectedVersion = currentVersion (7).
+    const secondBody = JSON.parse((fetchMock.mock.calls[1][1] as any).body);
+    expect(secondBody.expectedVersion).toBe(7);
+  });
+
+  it('maps an aborted request to a TIMEOUT ApiError', async () => {
+    fetchMock.mockRejectedValueOnce(
+      Object.assign(new Error('aborted'), { name: 'AbortError' }),
+    );
+    const err = await client().listProjects().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe('TIMEOUT');
+  });
 });
