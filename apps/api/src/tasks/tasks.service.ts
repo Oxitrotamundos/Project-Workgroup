@@ -36,14 +36,12 @@ import {
   priorityToWire,
 } from './wire';
 import { firstOrder, between, after } from './fractional-index';
-import {
-  CalendarResolverService,
-  ResolvedCalendar,
-} from '../calendar/calendar-resolver.service';
+import { CalendarResolverService } from '../calendar/calendar-resolver.service';
 import {
   SchedulingService,
   ScheduledSlot,
 } from '../calendar/scheduling.service';
+import { TaskScheduleCalculator } from '../calendar/task-schedule-calculator.service';
 import { SummaryRecalculationService } from './summary-recalculation.service';
 
 type TaskRow = {
@@ -85,6 +83,7 @@ export class TasksService {
     private readonly calendarResolver: CalendarResolverService,
     private readonly scheduling: SchedulingService,
     private readonly summaries: SummaryRecalculationService,
+    private readonly scheduleCalculator: TaskScheduleCalculator,
     @Optional()
     @InjectPinoLogger(TasksService.name)
     private readonly logger?: PinoLogger,
@@ -189,17 +188,6 @@ export class TasksService {
     };
   }
 
-  private parseEstimatedHours(raw: string | undefined): number | undefined {
-    if (raw === undefined || raw === null || raw === '') return undefined;
-    const n = Number(raw);
-    if (!Number.isFinite(n) || n < 0) {
-      throw new BadRequestException(
-        'estimatedHours must be a non-negative number',
-      );
-    }
-    return n;
-  }
-
   private async computeSchedule(
     projectId: bigint,
     type: string,
@@ -213,80 +201,15 @@ export class TasksService {
     estimatedHours?: string;
     hoursPerDay: number;
     workload: ScheduledSlot[];
-    calendar: ResolvedCalendar;
   }> {
     const calendar = await this.calendarResolver.resolveForProject(projectId);
-    const hoursPerDay = calendar.hoursPerDay || 8;
-    const estimatedHours = this.parseEstimatedHours(estimatedHoursRaw);
-
-    if (type === 'milestone') {
-      return {
-        startDate: rawStart,
-        endDate: rawStart,
-        duration: '0',
-        estimatedHours:
-          estimatedHours !== undefined ? estimatedHours.toFixed(2) : undefined,
-        hoursPerDay,
-        workload: [],
-        calendar,
-      };
-    }
-
-    if (rawEnd !== undefined) {
-      if (rawEnd.getTime() <= rawStart.getTime()) {
-        throw new BadRequestException('endDate must be greater than startDate');
-      }
-      const result = this.scheduling.scheduleFromRange({
-        startDateTime: rawStart,
-        endDateTime: rawEnd,
-        calendar,
-      });
-      return {
-        startDate: result.startDate,
-        endDate: result.endDate,
-        duration:
-          hoursPerDay > 0
-            ? (result.estimatedHours / hoursPerDay).toFixed(2)
-            : '0',
-        estimatedHours: result.estimatedHours.toFixed(2),
-        hoursPerDay,
-        workload: result.workload,
-        calendar,
-      };
-    }
-
-    if (estimatedHours !== undefined && estimatedHours > 0) {
-      const result = this.scheduling.scheduleFromHours({
-        estimatedHours,
-        startDateTime: rawStart,
-        calendar,
-      });
-      return {
-        startDate: result.startDate,
-        endDate: result.endDate,
-        duration: (estimatedHours / hoursPerDay).toFixed(2),
-        estimatedHours: estimatedHours.toFixed(2),
-        hoursPerDay,
-        workload: result.workload,
-        calendar,
-      };
-    }
-
-    const defaultHours = hoursPerDay > 0 ? hoursPerDay : 8;
-    const result = this.scheduling.scheduleFromHours({
-      estimatedHours: defaultHours,
-      startDateTime: rawStart,
+    return this.scheduleCalculator.calculate(
       calendar,
-    });
-    return {
-      startDate: result.startDate,
-      endDate: result.endDate,
-      duration: '1.00',
-      estimatedHours: defaultHours.toFixed(2),
-      hoursPerDay,
-      workload: result.workload,
-      calendar,
-    };
+      type,
+      rawStart,
+      rawEnd,
+      estimatedHoursRaw,
+    );
   }
 
   private async regenerateWorkload(

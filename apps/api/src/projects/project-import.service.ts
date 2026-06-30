@@ -9,6 +9,7 @@ import {
 } from '@project-workgroup/shared';
 import { CalendarResolverService } from '../calendar/calendar-resolver.service';
 import { SchedulingService } from '../calendar/scheduling.service';
+import { TaskScheduleCalculator } from '../calendar/task-schedule-calculator.service';
 import { SummaryRecalculationService } from '../tasks/summary-recalculation.service';
 import { statusToPrisma, priorityToPrisma } from '../tasks/wire';
 import { firstOrder, after } from '../tasks/fractional-index';
@@ -27,6 +28,7 @@ export class ProjectImportService {
     private readonly calendarResolver: CalendarResolverService,
     private readonly scheduling: SchedulingService,
     private readonly summaries: SummaryRecalculationService,
+    private readonly scheduleCalculator: TaskScheduleCalculator,
   ) {}
 
   // Orden padre-antes-que-hijo + validación de refs únicas, padres existentes y sin ciclos.
@@ -71,65 +73,6 @@ export class ProjectImportService {
     return sorted;
   }
 
-  private computeSchedule(
-    task: ImportTaskDto,
-    hoursPerDay: number,
-    calendar: Parameters<SchedulingService['scheduleFromRange']>[0]['calendar'],
-  ): {
-    startDate: Date;
-    endDate: Date;
-    duration: string;
-    estimatedHours?: string;
-  } {
-    const start = new Date(task.startDate);
-    if (Number.isNaN(start.getTime())) {
-      throw new BadRequestException(`task "${task.ref}" has an invalid startDate`);
-    }
-
-    if (task.type === 'milestone') {
-      return { startDate: start, endDate: start, duration: '0' };
-    }
-
-    if (task.endDate !== undefined) {
-      const end = new Date(task.endDate);
-      if (Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
-        throw new BadRequestException(
-          `task "${task.ref}" endDate must be greater than startDate`,
-        );
-      }
-      const r = this.scheduling.scheduleFromRange({
-        startDateTime: start,
-        endDateTime: end,
-        calendar,
-      });
-      return {
-        startDate: r.startDate,
-        endDate: r.endDate,
-        duration:
-          hoursPerDay > 0 ? (r.estimatedHours / hoursPerDay).toFixed(2) : '0',
-        estimatedHours: r.estimatedHours.toFixed(2),
-      };
-    }
-
-    const hours =
-      task.estimatedHours !== undefined && Number(task.estimatedHours) > 0
-        ? Number(task.estimatedHours)
-        : hoursPerDay > 0
-          ? hoursPerDay
-          : 8;
-    const r = this.scheduling.scheduleFromHours({
-      estimatedHours: hours,
-      startDateTime: start,
-      calendar,
-    });
-    return {
-      startDate: r.startDate,
-      endDate: r.endDate,
-      duration: (hours / (hoursPerDay > 0 ? hoursPerDay : 8)).toFixed(2),
-      estimatedHours: hours.toFixed(2),
-    };
-  }
-
   async import(
     dto: ImportProjectDto,
     ownerId: bigint,
@@ -154,12 +97,17 @@ export class ProjectImportService {
         const calendar = await this.calendarResolver.resolveForProject(
           project.id,
         );
-        const hoursPerDay = calendar.hoursPerDay || 8;
 
         const refToId = new Map<string, bigint>();
         let order = firstOrder();
         for (const task of ordered) {
-          const schedule = this.computeSchedule(task, hoursPerDay, calendar);
+          const schedule = this.scheduleCalculator.calculate(
+            calendar,
+            task.type,
+            new Date(task.startDate),
+            task.endDate !== undefined ? new Date(task.endDate) : undefined,
+            task.estimatedHours,
+          );
           const parentId =
             task.parentRef !== undefined ? refToId.get(task.parentRef)! : null;
           const created = await tx.task.create({

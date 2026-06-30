@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { TasksService } from './tasks.service';
 import { SummaryRecalculationService } from './summary-recalculation.service';
+import { TaskScheduleCalculator } from '../calendar/task-schedule-calculator.service';
 import { AuthUser } from '../auth/auth.guard';
 import { Prisma } from '../generated/prisma/client';
 
@@ -92,13 +93,16 @@ describe('TasksService', () => {
     ),
   });
 
-  const makeService = (prisma: any) =>
-    new TasksService(
+  const makeService = (prisma: any) => {
+    const scheduling = makeScheduling();
+    return new TasksService(
       prisma,
       makeResolver() as any,
-      makeScheduling() as any,
+      scheduling as any,
       new SummaryRecalculationService(prisma),
+      new TaskScheduleCalculator(scheduling as any),
     );
+  };
 
   const makePrisma = () => {
     const prisma: any = {
@@ -362,6 +366,7 @@ describe('TasksService', () => {
       resolver as any,
       scheduling as any,
       new SummaryRecalculationService(prisma),
+      new TaskScheduleCalculator(scheduling as any),
     );
 
     await service.update(
@@ -422,6 +427,7 @@ describe('TasksService', () => {
       resolver as any,
       scheduling as any,
       new SummaryRecalculationService(prisma),
+      new TaskScheduleCalculator(scheduling as any),
     );
 
     await service.update(
@@ -483,6 +489,7 @@ describe('TasksService', () => {
       resolver as any,
       scheduling as any,
       new SummaryRecalculationService(prisma),
+      new TaskScheduleCalculator(scheduling as any),
     );
 
     await service.update(
@@ -550,6 +557,7 @@ describe('TasksService', () => {
       resolver as any,
       scheduling as any,
       new SummaryRecalculationService(prisma),
+      new TaskScheduleCalculator(scheduling as any),
     );
 
     const result = await service.update(

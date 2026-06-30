@@ -3,7 +3,7 @@ import { ProjectImportService } from './project-import.service';
 
 describe('ProjectImportService topological ordering', () => {
   const svc = new ProjectImportService(
-    {} as any, {} as any, {} as any, {} as any,
+    {} as any, {} as any, {} as any, {} as any, {} as any,
   );
 
   it('orders parents before children', () => {
