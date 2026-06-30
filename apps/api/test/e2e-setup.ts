@@ -13,6 +13,8 @@ import {
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AppModule } from '../src/app.module';
 import { BigIntSerializerInterceptor } from '../src/common/bigint-serializer.interceptor';
+import { AuditContextInterceptor } from '../src/common/audit-context.interceptor';
+import { IdempotencyInterceptor } from '../src/common/idempotency.interceptor';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { PrismaClient } from '../src/generated/prisma/client';
 
@@ -74,7 +76,11 @@ export async function bootE2E(opts?: {
       transform: true,
     }),
   );
-  app.useGlobalInterceptors(new BigIntSerializerInterceptor());
+  app.useGlobalInterceptors(
+    new BigIntSerializerInterceptor(),
+    new AuditContextInterceptor(),
+    app.get(IdempotencyInterceptor),
+  );
   await app.init();
 
   return {
