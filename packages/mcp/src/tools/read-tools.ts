@@ -4,8 +4,11 @@ import { ApiError, type ReadApiClient } from '../apiClient';
 import {
   formatProjectLine,
   formatTaskDetail,
+  formatTaskLine,
   formatUserLine,
 } from '../format';
+import { filterTasks } from '../tasks-filter';
+import { formatProjectOverview } from '../overview';
 
 // Resultado de texto plano para el chat.
 function textResult(text: string) {
@@ -78,6 +81,62 @@ export function registerReadTools(
           return textResult(`Sin coincidencias para "${query}".`);
         const lines = page.items.map(formatUserLine).join('\n');
         return textResult(`${page.items.length} persona(s):\n${lines}`);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'list_tasks',
+    {
+      title: 'List tasks',
+      description:
+        'Lista tareas de un proyecto con filtros opcionales (estado, tipo, asignado, rango de fechas).',
+      inputSchema: {
+        projectId: z.string().min(1),
+        status: z.string().optional().describe('Estado exacto a filtrar'),
+        type: z.string().optional().describe('task | summary | milestone'),
+        assigneeId: z.string().optional(),
+        from: z
+          .string()
+          .optional()
+          .describe('ISO date; excluye tareas que terminan antes'),
+        to: z
+          .string()
+          .optional()
+          .describe('ISO date; excluye tareas que empiezan después'),
+      },
+    },
+    async ({ projectId, status, type, assigneeId, from, to }) => {
+      try {
+        const tasks = await client.listTasks(projectId);
+        const filtered = filterTasks(tasks, { status, type, assigneeId, from, to });
+        if (filtered.length === 0)
+          return textResult('Sin tareas que cumplan el filtro.');
+        const lines = filtered.map(formatTaskLine).join('\n');
+        return textResult(`${filtered.length} tarea(s):\n${lines}`);
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    'get_project_overview',
+    {
+      title: 'Project overview',
+      description:
+        'Snapshot del proyecto: avance, conteo por estado, hitos próximos y tareas atrasadas.',
+      inputSchema: { projectId: z.string().min(1) },
+    },
+    async ({ projectId }) => {
+      try {
+        const [project, tasks] = await Promise.all([
+          client.getProject(projectId),
+          client.listTasks(projectId),
+        ]);
+        return textResult(formatProjectOverview(project, tasks));
       } catch (err) {
         return errorResult(err);
       }
