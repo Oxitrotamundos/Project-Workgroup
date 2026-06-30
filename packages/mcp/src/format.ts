@@ -4,8 +4,16 @@ import type {
   UserResponse,
 } from '@project-workgroup/shared';
 
+// recorta a n caracteres añadiendo ellipsis si excede
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+}
+
 export function formatProjectLine(p: ProjectResponse): string {
-  return `- [${p.id}] ${p.name} · ${p.status} · ${p.startDate}→${p.endDate}`;
+  const desc = p.description && p.description.trim()
+    ? ` — ${truncate(p.description.trim(), 80)}`
+    : '';
+  return `- [${p.id}] ${p.name} · ${p.status} · ${p.startDate}→${p.endDate}${desc}`;
 }
 
 export function formatUserLine(u: UserResponse): string {
@@ -23,7 +31,7 @@ export function formatTaskDetail(t: TaskResponse): string {
   return [
     `Tarea [${t.id}] ${t.name}`,
     `  tipo: ${t.type} · estado: ${t.status} · prioridad: ${t.priority}`,
-    `  fechas: ${t.startDate}→${t.endDate} · progreso: ${t.progress}%`,
+    `  fechas: ${t.startDate.slice(0, 10)}→${t.endDate.slice(0, 10)} · progreso: ${t.progress}%`,
     `  ${assignee}${tags}`,
   ].join('\n');
 }
