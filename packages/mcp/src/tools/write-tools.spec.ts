@@ -225,4 +225,42 @@ describe('plan_project', () => {
     expect(res.content[0].text).toContain('30');
     expect(res.content[0].text).toContain('2 tarea');
   });
+
+  it('keeps the description untouched when there is no assigneeNote', async () => {
+    const importProject = vi.fn().mockResolvedValue({ project: { id: '30', name: 'N' }, taskRefToId: {}, taskCount: 1, dependencyCount: 0 });
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ importProject }));
+    await handlers.get('plan_project')!({
+      project: { name: 'N', startDate: '2026-07-01', endDate: '2026-09-01' },
+      tasks: [{ ref: 'a', name: 'T', type: 'task', startDate: '2026-07-01', description: 'base text' }],
+      dependencies: [],
+    });
+    const dto = importProject.mock.calls[0][0];
+    expect(dto.tasks[0].description).toBe('base text');
+  });
+
+  it('leaves dependencies undefined when none are provided', async () => {
+    const importProject = vi.fn().mockResolvedValue({ project: { id: '30', name: 'N' }, taskRefToId: {}, taskCount: 1, dependencyCount: 0 });
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ importProject }));
+    await handlers.get('plan_project')!({
+      project: { name: 'N', startDate: '2026-07-01', endDate: '2026-09-01' },
+      tasks: [{ ref: 'a', name: 'T', type: 'task', startDate: '2026-07-01' }],
+    });
+    const dto = importProject.mock.calls[0][0];
+    expect(dto.dependencies).toBeUndefined();
+  });
+
+  it('returns an error result when importProject fails', async () => {
+    const importProject = vi.fn().mockRejectedValue(new ApiError(400, 'PROJECT_INVALID', 'bad'));
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ importProject }));
+    const res = await handlers.get('plan_project')!({
+      project: { name: 'N', startDate: '2026-07-01', endDate: '2026-09-01' },
+      tasks: [{ ref: 'a', name: 'T', type: 'task', startDate: '2026-07-01' }],
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain('PROJECT_INVALID');
+    expect(res.content[0].text).toContain('bad');
+  });
 });
