@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { ApiError, type ApiClient } from '../apiClient';
+import type { ApiClient } from '../apiClient';
 import {
   formatProjectLine,
   formatTaskDetail,
@@ -9,26 +9,13 @@ import {
 } from '../format';
 import { filterTasks } from '../tasks-filter';
 import { formatProjectOverview } from '../overview';
+import { textResult, errorResult } from './result';
 // Deep-import del módulo de constantes puro: evita cargar los DTOs decorados
 // del barrel (que exigen reflect-metadata) preservando el anti-drift.
 import {
   TASK_STATUSES,
   TASK_TYPES,
 } from '@project-workgroup/shared/dist/task.constants';
-
-// Resultado de texto plano para el chat.
-function textResult(text: string) {
-  return { content: [{ type: 'text' as const, text }] };
-}
-
-// Traduce cualquier fallo a un resultado de error legible (isError marca fallo de la tool).
-function errorResult(err: unknown) {
-  const text =
-    err instanceof ApiError
-      ? `Error ${err.status} (${err.code}): ${err.message}`
-      : `Error inesperado: ${(err as Error)?.message ?? String(err)}`;
-  return { content: [{ type: 'text' as const, text }], isError: true };
-}
 
 export function registerReadTools(
   server: McpServer,
