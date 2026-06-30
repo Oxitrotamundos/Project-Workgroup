@@ -118,6 +118,51 @@ describe('createApiClient', () => {
     expect(secondBody.expectedVersion).toBe(7);
   });
 
+  it('postIdempotent retries on IDEMPOTENCY_IN_PROGRESS reusing the same key', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock
+        .mockResolvedValueOnce(
+          okJson({ message: { code: 'IDEMPOTENCY_IN_PROGRESS', message: 'in progress' } }, 409),
+        )
+        .mockResolvedValueOnce(okJson({ id: '5' }, 201));
+      const p = client().createTask('9', { name: 'X', startDate: '2026-06-01' } as any);
+      await vi.runAllTimersAsync();
+      const res = await p;
+      expect(res).toEqual({ id: '5' });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const k0 = (fetchMock.mock.calls[0][1] as any).headers['idempotency-key'];
+      const k1 = (fetchMock.mock.calls[1][1] as any).headers['idempotency-key'];
+      expect(k0).toBeTruthy();
+      expect(k1).toBe(k0); // misma clave única en el reintento
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('updateTask does not retry TASK_VERSION_STALE when expectedVersion is undefined', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ message: { code: 'TASK_VERSION_STALE', message: 'stale', currentVersion: 7 } }),
+        { status: 409, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const err = await client()
+      .updateTask('1', { status: 'completed' } as any)
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe('TASK_VERSION_STALE');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagatePreview posts without an idempotency-key', async () => {
+    fetchMock.mockResolvedValueOnce(okJson({ sourceTaskId: '20', changes: [] }));
+    await client().propagatePreview('20');
+    const init = fetchMock.mock.calls[0][1] as any;
+    expect(init.method).toBe('POST');
+    expect(init.headers).not.toHaveProperty('idempotency-key');
+  });
+
   it('maps an aborted request to a TIMEOUT ApiError', async () => {
     fetchMock.mockRejectedValueOnce(
       Object.assign(new Error('aborted'), { name: 'AbortError' }),
