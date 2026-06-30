@@ -9,6 +9,12 @@ import {
 } from '../format';
 import { filterTasks } from '../tasks-filter';
 import { formatProjectOverview } from '../overview';
+// Deep-import del módulo de constantes puro: evita cargar los DTOs decorados
+// del barrel (que exigen reflect-metadata) preservando el anti-drift.
+import {
+  TASK_STATUSES,
+  TASK_TYPES,
+} from '@project-workgroup/shared/dist/task.constants';
 
 // Resultado de texto plano para el chat.
 function textResult(text: string) {
@@ -95,8 +101,8 @@ export function registerReadTools(
         'Lista tareas de un proyecto con filtros opcionales (estado, tipo, asignado, rango de fechas).',
       inputSchema: {
         projectId: z.string().min(1),
-        status: z.string().optional().describe('Estado exacto a filtrar'),
-        type: z.string().optional().describe('task | summary | milestone'),
+        status: z.enum(TASK_STATUSES).optional().describe('Estado exacto a filtrar'),
+        type: z.enum(TASK_TYPES).optional().describe('task | summary | milestone'),
         assigneeId: z.string().optional(),
         from: z
           .string()
