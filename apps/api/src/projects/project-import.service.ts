@@ -73,6 +73,21 @@ export class ProjectImportService {
     return sorted;
   }
 
+  // Amplía el rango del proyecto para cubrir las tareas; nunca lo encoge.
+  expandProjectBounds(
+    projectStart: Date,
+    projectEnd: Date,
+    ranges: { startDate: Date; endDate: Date }[],
+  ): { startDate: Date; endDate: Date } {
+    let startDate = projectStart;
+    let endDate = projectEnd;
+    for (const r of ranges) {
+      if (r.startDate.getTime() < startDate.getTime()) startDate = r.startDate;
+      if (r.endDate.getTime() > endDate.getTime()) endDate = r.endDate;
+    }
+    return { startDate, endDate };
+  }
+
   async import(
     dto: ImportProjectDto,
     ownerId: bigint,
@@ -99,6 +114,7 @@ export class ProjectImportService {
         );
 
         const refToId = new Map<string, bigint>();
+        const taskRanges: { startDate: Date; endDate: Date }[] = [];
         let order = firstOrder();
         for (const task of ordered) {
           const schedule = this.scheduleCalculator.calculate(
@@ -132,7 +148,26 @@ export class ProjectImportService {
             select: { id: true },
           });
           refToId.set(task.ref, created.id);
+          taskRanges.push({
+            startDate: schedule.startDate,
+            endDate: schedule.endDate,
+          });
           order = after(order);
+        }
+
+        const bounds = this.expandProjectBounds(
+          project.startDate,
+          project.endDate,
+          taskRanges,
+        );
+        if (
+          bounds.startDate.getTime() !== project.startDate.getTime() ||
+          bounds.endDate.getTime() !== project.endDate.getTime()
+        ) {
+          await tx.project.update({
+            where: { id: project.id },
+            data: { startDate: bounds.startDate, endDate: bounds.endDate },
+          });
         }
 
         const deps = dto.dependencies ?? [];

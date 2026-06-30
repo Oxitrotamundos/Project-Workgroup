@@ -43,3 +43,32 @@ describe('ProjectImportService topological ordering', () => {
     ).toThrow(BadRequestException);
   });
 });
+
+describe('ProjectImportService.expandProjectBounds', () => {
+  const svc = new ProjectImportService(
+    {} as any, {} as any, {} as any, {} as any, {} as any,
+  );
+
+  it('keeps bounds when all tasks fit inside', () => {
+    const r = svc.expandProjectBounds(
+      new Date('2026-05-01'),
+      new Date('2026-08-01'),
+      [{ startDate: new Date('2026-06-01'), endDate: new Date('2026-06-10') }],
+    );
+    expect(r.startDate).toEqual(new Date('2026-05-01'));
+    expect(r.endDate).toEqual(new Date('2026-08-01'));
+  });
+
+  it('widens both ends to cover out-of-range tasks', () => {
+    const r = svc.expandProjectBounds(
+      new Date('2026-05-01'),
+      new Date('2026-08-01'),
+      [
+        { startDate: new Date('2026-04-15'), endDate: new Date('2026-06-10') },
+        { startDate: new Date('2026-07-01'), endDate: new Date('2026-08-20') },
+      ],
+    );
+    expect(r.startDate).toEqual(new Date('2026-04-15'));
+    expect(r.endDate).toEqual(new Date('2026-08-20'));
+  });
+});

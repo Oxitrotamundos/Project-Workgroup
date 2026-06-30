@@ -130,4 +130,27 @@ describe('POST /v1/projects/import (e2e)', () => {
     // El proyecto NO debe haberse creado: el conteo es idéntico al previo.
     expect(after.body.length).toBe(before.body.length);
   });
+
+  it('expands the project range to cover out-of-range tasks', async () => {
+    const plan = validPlan();
+    plan.project.endDate = '2026-08-01';
+    plan.tasks.push({
+      ref: 'late',
+      name: 'Cierre tardío',
+      type: 'task',
+      startDate: '2026-08-10',
+      endDate: '2026-08-20',
+      priority: 'medium',
+      status: 'not-started',
+      color: '#64748b',
+    });
+
+    const res = await request(handle.app.getHttpServer())
+      .post('/v1/projects/import')
+      .set('Authorization', 'Bearer fake-token')
+      .send(plan)
+      .expect(201);
+
+    expect(res.body.project.endDate).toBe('2026-08-20');
+  });
 });
