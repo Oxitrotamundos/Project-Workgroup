@@ -212,6 +212,10 @@ async function toApiError(res: Response): Promise<ApiError> {
       code = e.code ?? code;
       message = e.message ?? message;
       details = e.details ?? envelope;
+    } else if (Array.isArray(msg)) {
+      // class-validator de Nest devuelve { message: string[] }: une los errores en el mensaje
+      message = msg.join('; ');
+      details = msg;
     } else if (msg && typeof msg === 'object') {
       // La excepción llevó { code, message, ... } dentro de `message` (p. ej. TASK_VERSION_STALE)
       const m = msg as { code?: string; message?: string };

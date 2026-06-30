@@ -78,6 +78,26 @@ describe('createApiClient', () => {
     expect(err.message).toBe('task not found');
   });
 
+  it('joins a Nest validation array into the ApiError message', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okJson(
+        {
+          message: ['name should not be empty', 'color must be a string'],
+          error: 'Bad Request',
+          statusCode: 400,
+        },
+        400,
+      ),
+    );
+    const err = await client()
+      .getTask('1')
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(400);
+    expect(err.message).toContain('name should not be empty');
+    expect(err.message).toContain('color must be a string');
+  });
+
   it('createTask sends an Idempotency-Key and the body', async () => {
     fetchMock.mockResolvedValueOnce(okJson({ id: '5' }, 201));
     await client().createTask('9', { name: 'X', startDate: '2026-06-01', priority: 'medium', status: 'not-started', type: 'task', color: '#fff' } as any);
