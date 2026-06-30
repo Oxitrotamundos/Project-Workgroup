@@ -46,4 +46,7 @@ describe('filterTasks', () => {
     // La tarea 1 (jun 1-10) queda fuera por terminar antes de `from`; la 3 (jul) por empezar tras `to`.
     expect(r.map((x) => x.id)).toEqual(['2']);
   });
+  it('ignores a malformed date bound instead of disabling the filter silently', () => {
+    expect(filterTasks(tasks, { from: 'not-a-date' })).toHaveLength(3);
+  });
 });

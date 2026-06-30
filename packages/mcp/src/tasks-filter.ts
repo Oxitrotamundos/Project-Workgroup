@@ -13,8 +13,14 @@ export function filterTasks(
   tasks: TaskResponse[],
   f: TaskFilter,
 ): TaskResponse[] {
-  const fromMs = f.from ? new Date(f.from).getTime() : undefined;
-  const toMs = f.to ? new Date(f.to).getTime() : undefined;
+  // Una fecha inválida se trata como bound ausente (no como "no excluir nada").
+  const parseMs = (s?: string): number | undefined => {
+    if (!s) return undefined;
+    const ms = new Date(s).getTime();
+    return Number.isNaN(ms) ? undefined : ms;
+  };
+  const fromMs = parseMs(f.from);
+  const toMs = parseMs(f.to);
   return tasks.filter((t) => {
     if (f.status && t.status !== f.status) return false;
     if (f.type && t.type !== f.type) return false;
