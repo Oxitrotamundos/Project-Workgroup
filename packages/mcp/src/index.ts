@@ -2,3 +2,4 @@
 export const PACKAGE_NAME = '@project-workgroup/mcp';
 export { createApiClient, ApiError } from './apiClient';
 export type { ApiClientConfig, ReadApiClient } from './apiClient';
+export { buildServer, SERVER_NAME, SERVER_VERSION } from './server';
