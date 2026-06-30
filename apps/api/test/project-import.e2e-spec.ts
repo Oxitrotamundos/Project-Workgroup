@@ -153,4 +153,53 @@ describe('POST /v1/projects/import (e2e)', () => {
 
     expect(res.body.project.endDate).toBe('2026-08-20');
   });
+
+  it('is idempotent: same Idempotency-Key does not create a second project', async () => {
+    const before = await request(handle.app.getHttpServer())
+      .get('/v1/projects')
+      .set('Authorization', 'Bearer fake-token');
+
+    const key = 'import-key-fixed-001';
+    const first = await request(handle.app.getHttpServer())
+      .post('/v1/projects/import')
+      .set('Authorization', 'Bearer fake-token')
+      .set('Idempotency-Key', key)
+      .send(validPlan())
+      .expect(201);
+
+    const replay = await request(handle.app.getHttpServer())
+      .post('/v1/projects/import')
+      .set('Authorization', 'Bearer fake-token')
+      .set('Idempotency-Key', key)
+      .send(validPlan())
+      .expect(201);
+
+    // Mismo proyecto devuelto, no uno nuevo.
+    expect(replay.body.project.id).toBe(first.body.project.id);
+
+    const after = await request(handle.app.getHttpServer())
+      .get('/v1/projects')
+      .set('Authorization', 'Bearer fake-token');
+    // Exactamente un proyecto creado pese a los dos POST.
+    expect(after.body.length).toBe(before.body.length + 1);
+  });
+
+  it('rejects (409) reusing an Idempotency-Key with a different body', async () => {
+    const key = 'import-key-fixed-002';
+    await request(handle.app.getHttpServer())
+      .post('/v1/projects/import')
+      .set('Authorization', 'Bearer fake-token')
+      .set('Idempotency-Key', key)
+      .send(validPlan())
+      .expect(201);
+
+    const other = validPlan();
+    other.project.name = 'Different Plan';
+    await request(handle.app.getHttpServer())
+      .post('/v1/projects/import')
+      .set('Authorization', 'Bearer fake-token')
+      .set('Idempotency-Key', key)
+      .send(other)
+      .expect(409);
+  });
 });
