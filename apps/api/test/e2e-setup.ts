@@ -41,6 +41,10 @@ class TestPrismaService extends PrismaClient {
 
 export async function bootE2E(opts?: {
   overrideGuard?: { guard: any; value: any };
+  // Hook opcional que corre tras los interceptores y JUSTO antes de app.init(), para montar
+  // middleware crudo en Express (p. ej. el Authorization Server) antes de que el router de Nest
+  // capture las rutas. Opcional: los demás specs e2e no lo pasan y quedan intactos.
+  preInit?: (app: INestApplication) => void | Promise<void>;
 }): Promise<E2EHandle> {
   const container = await new PostgreSqlContainer('postgres:16-alpine').start();
   const url = container.getConnectionUri();
@@ -81,6 +85,9 @@ export async function bootE2E(opts?: {
     new AuditContextInterceptor(),
     app.get(IdempotencyInterceptor),
   );
+  if (opts?.preInit) {
+    await opts.preInit(app);
+  }
   await app.init();
 
   return {
