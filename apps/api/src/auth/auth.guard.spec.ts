@@ -1,4 +1,8 @@
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { AuthGuard } from './auth.guard';
 import { FirebaseService } from '../firebase/firebase.service';
@@ -197,5 +201,33 @@ describe('AuthGuard — OAuth JWT path', () => {
       UnauthorizedException,
     );
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects DELETE for an oauth token (postura A)', async () => {
+    const guard = new AuthGuard(
+      firebaseStub as any,
+      prismaStub() as any,
+      configStub() as any,
+    );
+    const ctx = makeCtx(`Bearer ${await mint()}`, 'DELETE');
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it('sets WWW-Authenticate on a 401', async () => {
+    const guard = new AuthGuard(
+      firebaseStub as any,
+      prismaStub() as any,
+      configStub() as any,
+    );
+    const ctx = makeCtx(undefined);
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(ctx.__res.setHeader).toHaveBeenCalledWith(
+      'WWW-Authenticate',
+      expect.stringContaining('resource_metadata='),
+    );
   });
 });

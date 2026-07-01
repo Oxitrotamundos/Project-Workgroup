@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -63,6 +64,13 @@ export class AuthGuard implements CanActivate {
 
     const oauthUser = await this.tryOAuthJwt(token);
     if (oauthUser) {
+      // Postura A: un token MCP (via oauth) NO puede borrar por el API directo.
+      // La API key local (via api_key) conserva el rol completo del dueño (asimetría aceptada).
+      if (req.method === 'DELETE') {
+        throw new ForbiddenException(
+          'mcp tokens may not perform destructive operations',
+        );
+      }
       req.user = oauthUser;
       return true;
     }
