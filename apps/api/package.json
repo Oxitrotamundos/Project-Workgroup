@@ -33,6 +33,7 @@
     "class-validator": "^0.14.4",
     "dotenv": "^16.4.5",
     "firebase-admin": "^13.10.0",
+    "jose": "^5.10.0",
     "nestjs-pino": "^4.6.1",
     "pg": "^8.20.0",
     "pino": "^10.3.1",
