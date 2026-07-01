@@ -25,7 +25,9 @@ export async function createOidcProvider(opts: OidcProviderOpts) {
       {
         client_id: 'mcp-test-client',
         token_endpoint_auth_method: 'none',
-        grant_types: ['authorization_code', 'refresh_token'],
+        // Solo authorization_code en 4b-i: el grant refresh_token requiere habilitar offline_access
+        // o issueRefreshToken en el provider, y la rotación/poda de refresh está diferida a 4b-ii.
+        grant_types: ['authorization_code'],
         response_types: ['code'],
         redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
       },
