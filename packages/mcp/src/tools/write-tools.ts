@@ -163,12 +163,33 @@ export function registerWriteTools(server: McpServer, client: ApiClient): void {
       try {
         const tasks = await client.listTasks(projectId);
         const byId = new Map(tasks.map((t) => [t.id, t]));
-        const byName = new Map(tasks.map((t) => [t.name.toLowerCase(), t]));
+        // Índice por nombre a lista: un mismo nombre puede repetirse entre tareas.
+        const byName = new Map<string, typeof tasks>();
+        for (const t of tasks) {
+          const key = t.name.toLowerCase();
+          const bucket = byName.get(key);
+          if (bucket) bucket.push(t);
+          else byName.set(key, [t]);
+        }
 
         // Resolución de refs antes de tocar la API: cualquier ref no resuelta aborta.
         const resolved: { id: string; data: UpdateTaskDto; version: number }[] = [];
         for (const u of updates) {
-          const task = byId.get(u.taskRef) ?? byName.get(u.taskRef.toLowerCase());
+          // El id exacto tiene prioridad y no pasa por el chequeo de ambigüedad de nombre.
+          let task = byId.get(u.taskRef);
+          if (!task) {
+            const matches = byName.get(u.taskRef.toLowerCase()) ?? [];
+            if (matches.length > 1) {
+              const candidates = matches.map((t) => `[${t.id}] ${t.name}`).join(', ');
+              return errorResult(
+                new Error(
+                  `la tarea "${u.taskRef}" es ambigua en el proyecto ${projectId}; ` +
+                    `vuelve a llamar con el id exacto. Candidatos: ${candidates}`,
+                ),
+              );
+            }
+            task = matches[0];
+          }
           if (!task)
             return errorResult(
               new Error(`no pude resolver la tarea "${u.taskRef}" en el proyecto ${projectId}`),

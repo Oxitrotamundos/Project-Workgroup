@@ -93,6 +93,24 @@ describe('daily_update', () => {
     expect(res.content[0].text).toContain('Inexistente');
   });
 
+  it('rejects an ambiguous name ref listing both candidates without calling the API', async () => {
+    const ambiguousFixture = [
+      { id: '10', name: 'Revisión', version: 2, status: 'not-started', progress: 0, description: '' },
+      { id: '12', name: 'revisión', version: 3, status: 'in-progress', progress: 10, description: '' },
+      { id: '11', name: 'API', version: 5, status: 'in-progress', progress: 20, description: '' },
+    ];
+    const listTasks = vi.fn().mockResolvedValue(ambiguousFixture);
+    const bulkUpdateTasks = vi.fn();
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ listTasks, bulkUpdateTasks }));
+    const res = await handlers.get('daily_update')!({ projectId: '9', updates: [{ taskRef: 'Revisión', progress: 50 }] });
+    expect(bulkUpdateTasks).not.toHaveBeenCalled();
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain('Revisión');
+    expect(res.content[0].text).toContain('10');
+    expect(res.content[0].text).toContain('12');
+  });
+
   it('on TASK_VERSION_STALE refreshes versions and retries once, succeeding', async () => {
     const bumpedFixture = [
       { id: '10', name: 'Diseño', version: 7, status: 'not-started', progress: 0, description: '' },
