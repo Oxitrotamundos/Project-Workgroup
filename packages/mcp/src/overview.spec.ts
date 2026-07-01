@@ -22,7 +22,7 @@ describe('buildOverview', () => {
   it('counts only non-summary leaves and averages their progress', () => {
     const o = buildOverview(project, tasks, now);
     expect(o.total).toBe(3); // excluye el summary
-    expect(o.avgProgress).toBe(Math.round((100 + 40 + 0) / 3));
+    expect(o.avgProgress).toBe(Math.round((100 + 40) / 2)); // excluye el milestone (progress 0)
   });
   it('detects overdue non-completed leaves before now', () => {
     const o = buildOverview(project, tasks, now);
@@ -32,6 +32,13 @@ describe('buildOverview', () => {
   it('lists upcoming milestones on/after now', () => {
     const o = buildOverview(project, tasks, now);
     expect(o.upcomingMilestones.map((x) => x.id)).toEqual(['4']);
+  });
+  it('avgProgress is 0 when there are no type==="task" leaves, even with milestones', () => {
+    const onlyMilestones = [
+      { id: '4', type: 'milestone', status: 'not-started', progress: 0, endDate: '2026-07-15T00:00:00.000Z', name: 'm' },
+    ] as any[];
+    const o = buildOverview(project, onlyMilestones, now);
+    expect(o.avgProgress).toBe(0);
   });
 });
 

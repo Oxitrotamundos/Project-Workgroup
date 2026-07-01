@@ -19,10 +19,12 @@ export function buildOverview(
   const byStatus: Record<string, number> = {};
   for (const t of leaves) byStatus[t.status] = (byStatus[t.status] ?? 0) + 1;
 
+  // El avance solo se mide sobre tareas reales: excluye milestones (progress suele ser 0) y summaries.
+  const workItems = tasks.filter((t) => t.type === 'task');
   const avgProgress =
-    leaves.length === 0
+    workItems.length === 0
       ? 0
-      : Math.round(leaves.reduce((s, t) => s + t.progress, 0) / leaves.length);
+      : Math.round(workItems.reduce((s, t) => s + t.progress, 0) / workItems.length);
 
   const nowMs = now.getTime();
   const overdue = leaves
