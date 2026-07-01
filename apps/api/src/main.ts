@@ -41,6 +41,23 @@ async function bootstrap() {
 
   mountSwagger(app);
 
+  // Montaje del Authorization Server (solo si está configurado). Express crudo: node-oidc-provider
+  // trae sus propias rutas (/.well-known/openid-configuration, /auth, /token, /jwks, /oauth/interaction...).
+  const issuer = config.get<string>('MCP_OAUTH_ISSUER');
+  const audience = config.get<string>('MCP_OAUTH_AUDIENCE');
+  const signing = config.get<string>('MCP_OAUTH_SIGNING_JWKS');
+  if (issuer && audience && signing) {
+    const { createOidcProvider } = await import('./oauth/oidc-provider.factory');
+    const { PrismaService } = await import('./prisma/prisma.service');
+    const provider = await createOidcProvider({
+      issuer,
+      audience,
+      prisma: app.get(PrismaService),
+      signingJwks: JSON.parse(signing),
+    });
+    app.getHttpAdapter().getInstance().use('/oauth', provider.callback());
+  }
+
   const port = Number(config.get<string>('PORT') ?? 3000);
   await app.listen(port);
 }
