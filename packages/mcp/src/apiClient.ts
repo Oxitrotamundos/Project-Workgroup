@@ -85,6 +85,7 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
         signal: controller.signal,
       });
       if (!res.ok) throw await toApiError(res);
+      // Defensivo: hoy ningún endpoint invocado responde 204, pero evita romper si el client crece.
       if (res.status === 204) return undefined as T;
       return (await res.json()) as T;
     } catch (err) {

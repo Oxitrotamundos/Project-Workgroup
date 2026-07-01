@@ -31,11 +31,15 @@ describe('createApiClient', () => {
   });
 
   it('builds the users search query', async () => {
-    fetchMock.mockResolvedValueOnce(okJson({ items: [], nextCursor: null }));
-    await client().searchUsers({ search: 'ana', limit: 5 });
+    const items = [
+      { id: '3', displayName: 'Ana', email: 'ana@x.com', role: 'pm', avatarUrl: null },
+    ];
+    fetchMock.mockResolvedValueOnce(okJson({ items, nextCursor: null }));
+    const result = await client().searchUsers({ search: 'ana', limit: 5 });
     expect(fetchMock.mock.calls[0][0]).toBe(
       'http://api.test/v1/users?search=ana&limit=5',
     );
+    expect(result.items).toEqual(items);
   });
 
   it('translates the error envelope into an ApiError', async () => {

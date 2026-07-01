@@ -39,14 +39,18 @@ describe('OAuth Resource Server (e2e)', () => {
   }, 180_000);
 
   afterAll(async () => {
-    await handle.close();
-    delete process.env.MCP_OAUTH_JWKS;
-    delete process.env.MCP_OAUTH_ISSUER;
-    delete process.env.MCP_OAUTH_AUDIENCE;
+    // finally garantiza el cleanup de env vars incluso si close() lanza (evita fugas entre archivos de test).
+    try {
+      await handle.close();
+    } finally {
+      delete process.env.MCP_OAUTH_JWKS;
+      delete process.env.MCP_OAUTH_ISSUER;
+      delete process.env.MCP_OAUTH_AUDIENCE;
+    }
   });
 
-  const mint = (over: Record<string, unknown> = {}) =>
-    new SignJWT({ scope: 'mcp:read mcp:write', ...over })
+  const mint = () =>
+    new SignJWT({ scope: 'mcp:read mcp:write' })
       .setProtectedHeader({ alg: 'RS256', kid: 'test' })
       .setSubject(userId)
       .setIssuer(ISS)
