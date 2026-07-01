@@ -47,7 +47,8 @@ async function bootstrap() {
   const audience = config.get<string>('MCP_OAUTH_AUDIENCE');
   const signing = config.get<string>('MCP_OAUTH_SIGNING_JWKS');
   if (issuer && audience && signing) {
-    const { createOidcProvider } = await import('./oauth/oidc-provider.factory');
+    const { createOidcProvider } =
+      await import('./oauth/oidc-provider.factory');
     const { PrismaService } = await import('./prisma/prisma.service');
     const provider = await createOidcProvider({
       issuer,

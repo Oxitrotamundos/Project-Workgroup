@@ -54,7 +54,8 @@ export async function createOidcProvider(opts: OidcProviderOpts) {
       return { accountId: id, claims: async () => ({ sub: id }) };
     },
     interactions: {
-      url: (_ctx: any, interaction: any) => `/oauth/interaction/${interaction.uid}`,
+      url: (_ctx: any, interaction: any) =>
+        `/oauth/interaction/${interaction.uid}`,
     },
     scopes: ['openid', 'mcp:read', 'mcp:write'],
   });
