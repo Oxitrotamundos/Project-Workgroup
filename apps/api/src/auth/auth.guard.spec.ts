@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { generateKeyPair, exportJWK, SignJWT } from 'jose';
+import { generateKeyPair, exportJWK, SignJWT, UnsecuredJWT } from 'jose';
 import { AuthGuard } from './auth.guard';
 import { FirebaseService } from '../firebase/firebase.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -228,6 +228,46 @@ describe('AuthGuard — OAuth JWT path', () => {
     expect(ctx.__res.setHeader).toHaveBeenCalledWith(
       'WWW-Authenticate',
       expect.stringContaining('resource_metadata='),
+    );
+  });
+
+  it('rejects a token with alg "none"', async () => {
+    const guard = new AuthGuard(
+      firebaseStub as any,
+      prismaStub() as any,
+      configStub() as any,
+    );
+    // UnsecuredJWT produce un token alg:'none'; el guard fija algorithms:['RS256'] y debe rechazarlo.
+    const token = new UnsecuredJWT({ scope: 'mcp:read' })
+      .setSubject('1')
+      .setIssuer(ISS)
+      .setAudience(AUD)
+      .setExpirationTime('1h')
+      .encode();
+    const ctx = makeCtx(`Bearer ${token}`);
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
+
+  it('rejects a token signed with HS256 (algorithm confusion)', async () => {
+    const guard = new AuthGuard(
+      firebaseStub as any,
+      prismaStub() as any,
+      configStub() as any,
+    );
+    // Secreto simétrico arbitrario: el guard solo acepta RS256 y debe rechazar HS256.
+    const secret = new TextEncoder().encode('attacker-guessed-secret');
+    const token = await new SignJWT({ scope: 'mcp:read' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject('1')
+      .setIssuer(ISS)
+      .setAudience(AUD)
+      .setExpirationTime('1h')
+      .sign(secret);
+    const ctx = makeCtx(`Bearer ${token}`);
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(
+      UnauthorizedException,
     );
   });
 });
