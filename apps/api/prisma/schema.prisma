@@ -288,3 +288,23 @@ model IdempotencyKey {
   @@index([createdAt])
   @@map("idempotency_keys")
 }
+
+// Tabla de infra de node-oidc-provider: almacén key-value keyado por (type, id).
+// id es String a propósito (excepción a la convención BigInt del repo).
+model OAuthPayload {
+  type       String
+  id         String
+  payload    Json
+  grantId    String?   @map("grant_id")
+  userCode   String?   @map("user_code")
+  uid        String?
+  expiresAt  DateTime? @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@id([type, id])
+  @@index([grantId])
+  @@index([uid])
+  @@index([userCode])
+  @@map("oauth_payloads")
+}
