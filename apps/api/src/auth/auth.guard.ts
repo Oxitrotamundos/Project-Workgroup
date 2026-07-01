@@ -115,6 +115,8 @@ export class AuthGuard implements CanActivate {
         issuer: this.oauthIssuer,
         audience: this.oauthAudience,
         algorithms: ['RS256'],
+        // jose solo valida exp si está presente: forzamos su presencia para que no exista token sin caducidad.
+        requiredClaims: ['exp'],
       });
       if (!payload.sub) return null;
       const user = await this.prisma.user.findUnique({

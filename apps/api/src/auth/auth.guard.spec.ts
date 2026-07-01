@@ -149,6 +149,25 @@ describe('AuthGuard — OAuth JWT path', () => {
     );
   });
 
+  it('rejects a token without an exp claim (would otherwise be valid forever)', async () => {
+    const guard = new AuthGuard(
+      firebaseStub as any,
+      prismaStub() as any,
+      configStub() as any,
+    );
+    // JWT correctamente firmado pero sin exp: omitimos setExpirationTime.
+    const noExpToken = await new SignJWT({ scope: 'mcp:read mcp:write' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'test' })
+      .setSubject('1')
+      .setIssuer(ISS)
+      .setAudience(AUD)
+      .sign(privateKey);
+    const ctx = makeCtx(`Bearer ${noExpToken}`);
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
+
   it('rejects when the subject user does not exist', async () => {
     const prisma = {
       user: { findUnique: jest.fn().mockResolvedValue(null) },
