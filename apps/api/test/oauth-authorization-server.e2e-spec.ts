@@ -47,6 +47,9 @@ describe('OAuth Authorization Server (e2e)', () => {
           audience: process.env.MCP_OAUTH_AUDIENCE as string,
           prisma: app.get(PrismaService),
           signingJwks: JSON.parse(process.env.MCP_OAUTH_SIGNING_JWKS as string),
+          cookieKeys: ['test-cookie-key'],
+          accessTokenTTL: 900,
+          includeTestClient: true,
         });
         const expressApp = app.getHttpAdapter().getInstance();
 

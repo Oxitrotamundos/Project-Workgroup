@@ -6,6 +6,9 @@ export interface OidcProviderOpts {
   audience: string;
   prisma: PrismaService;
   signingJwks: { keys: unknown[] };
+  cookieKeys: string[]; // desde env; ya no hardcodeado
+  accessTokenTTL: number; // segundos (900-1800)
+  includeTestClient: boolean; // cliente estático solo en tests
 }
 
 // node-oidc-provider es ESM-only y no trae tipos: se carga con un import() dinámico real.
@@ -20,20 +23,26 @@ export async function createOidcProvider(opts: OidcProviderOpts) {
   const provider = new Provider(opts.issuer, {
     adapter: (name: string) => new PrismaOidcAdapter(name, opts.prisma),
     jwks: opts.signingJwks,
-    // Cliente ESTÁTICO de prueba (se reemplaza por CIMD en 4b-ii).
-    clients: [
-      {
-        client_id: 'mcp-test-client',
-        token_endpoint_auth_method: 'none',
-        // Solo authorization_code en 4b-i: el grant refresh_token requiere habilitar offline_access
-        // o issueRefreshToken en el provider, y la rotación/poda de refresh está diferida a 4b-ii.
-        grant_types: ['authorization_code'],
-        response_types: ['code'],
-        redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
-      },
-    ],
-    // Claves de firma de cookies (sesión/interacción); andamiaje del spike, se rota en 4b-ii.
-    cookies: { keys: ['dev-spike-key'] },
+    // Cliente ESTÁTICO de prueba (se reemplaza por CIMD en 4b-ii); solo en tests.
+    clients: opts.includeTestClient
+      ? [
+          {
+            client_id: 'mcp-test-client',
+            token_endpoint_auth_method: 'none',
+            // Solo authorization_code en 4b-i: el grant refresh_token requiere habilitar offline_access
+            // o issueRefreshToken en el provider, y la rotación/poda de refresh está diferida a 4b-ii.
+            grant_types: ['authorization_code'],
+            response_types: ['code'],
+            redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
+          },
+        ]
+      : [],
+    // Claves de firma de cookies (sesión/interacción); desde env, rotables.
+    cookies: { keys: opts.cookieKeys },
+    ttl: {
+      AccessToken: opts.accessTokenTTL,
+      // los demás TTL quedan en los defaults de la librería por ahora.
+    },
     pkce: { required: () => true },
     features: {
       devInteractions: { enabled: false },

@@ -50,11 +50,25 @@ async function bootstrap() {
     const { createOidcProvider } =
       await import('./oauth/oidc-provider.factory');
     const { PrismaService } = await import('./prisma/prisma.service');
+    const cookieKeys = (config.get<string>('MCP_OAUTH_COOKIE_KEYS') ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (cookieKeys.length === 0) {
+      throw new Error(
+        'MCP_OAUTH_COOKIE_KEYS is required when the OAuth AS is enabled',
+      );
+    }
     const provider = await createOidcProvider({
       issuer,
       audience,
       prisma: app.get(PrismaService),
       signingJwks: JSON.parse(signing),
+      cookieKeys,
+      accessTokenTTL: Number(
+        config.get<string>('MCP_OAUTH_ACCESS_TOKEN_TTL') ?? 900,
+      ),
+      includeTestClient: false, // producción: solo CIMD
     });
     app.getHttpAdapter().getInstance().use('/oauth', provider.callback());
   }
