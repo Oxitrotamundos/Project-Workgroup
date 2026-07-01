@@ -69,6 +69,13 @@ async function bootstrap() {
         config.get<string>('MCP_OAUTH_ACCESS_TOKEN_TTL') ?? 900,
       ),
       includeTestClient: false, // producción: solo CIMD
+      allowedClientHosts: (
+        config.get<string>('MCP_OAUTH_ALLOWED_CLIENT_HOSTS') ??
+        'claude.ai,claude.com'
+      )
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
     });
     app.getHttpAdapter().getInstance().use('/oauth', provider.callback());
   }

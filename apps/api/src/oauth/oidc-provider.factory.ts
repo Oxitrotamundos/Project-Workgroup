@@ -1,5 +1,6 @@
 import type { PrismaService } from '../prisma/prisma.service';
 import { PrismaOidcAdapter } from './prisma-oidc-adapter';
+import { isAllowedClientId } from './client-allowlist';
 
 export interface OidcProviderOpts {
   issuer: string;
@@ -9,6 +10,7 @@ export interface OidcProviderOpts {
   cookieKeys: string[]; // desde env; ya no hardcodeado
   accessTokenTTL: number; // segundos (900-1800)
   includeTestClient: boolean; // cliente estático solo en tests
+  allowedClientHosts: string[]; // hostnames exactos permitidos para CIMD (allow-list = gate SSRF)
 }
 
 // node-oidc-provider es ESM-only y no trae tipos: se carga con un import() dinámico real.
@@ -46,6 +48,18 @@ export async function createOidcProvider(opts: OidcProviderOpts) {
     pkce: { required: () => true },
     features: {
       devInteractions: { enabled: false },
+      // CIMD: el client_id es una URL https cuyo metadata doc el AS descarga server-side.
+      // allowFetch corre ANTES del fetch (gate SSRF); allowClient revalida el id ya resuelto.
+      // ack fija la versión experimental: si un bump de oidc-provider cambia CIMD, el constructor
+      // lanza y fuerza re-revisión de seguridad en vez de adoptar un cambio breaking en silencio.
+      clientIdMetadataDocument: {
+        enabled: true,
+        ack: 'draft-01',
+        allowFetch: async (_ctx: any, clientId: string) =>
+          isAllowedClientId(clientId, opts.allowedClientHosts),
+        allowClient: async (_ctx: any, client: any) =>
+          isAllowedClientId(client.clientId, opts.allowedClientHosts),
+      },
       resourceIndicators: {
         enabled: true,
         defaultResource: () => opts.audience,

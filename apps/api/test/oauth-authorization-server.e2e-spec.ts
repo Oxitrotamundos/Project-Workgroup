@@ -50,6 +50,7 @@ describe('OAuth Authorization Server (e2e)', () => {
           cookieKeys: ['test-cookie-key'],
           accessTokenTTL: 900,
           includeTestClient: true,
+          allowedClientHosts: ['claude.ai', 'claude.com'],
         });
         const expressApp = app.getHttpAdapter().getInstance();
 
