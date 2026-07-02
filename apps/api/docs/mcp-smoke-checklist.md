@@ -29,8 +29,8 @@ de punta a punta: deploy → cadena de discovery → OAuth (login Firebase) → 
 
 El handshake OAuth toca `/authorize` y `/token` en cold-start (~12 s medido; el timeout de
 30 s del lado de Claude ya se disparó una vez). En cold-start el connector **no conecta**.
-Resolver antes del smoke: keep-warm ping (cron externo a `/v1/health` cada ~5 min) **o** tier
-pago sin hibernación.
+Resolver antes del smoke: keep-warm ping (cron externo a `/health` — endpoint neutral, sin `/v1`
+— cada ~5 min) **o** tier pago sin hibernación.
 
 ### Compliance (diseño §7, bloqueante)
 
