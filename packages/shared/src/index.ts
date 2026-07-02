@@ -6,6 +6,7 @@ export * from './dto/task-link.dto';
 export * from './dto/workload.dto';
 export * from './dto/api-key.dto';
 export * from './dto/calendar.dto';
+export * from './dto/project-import.dto';
 export { wouldCreateCycle } from './utils/cycle-detector';
 export type { Edge } from './utils/cycle-detector';
 export { computeSummaryBounds } from './utils/summary-bounds';

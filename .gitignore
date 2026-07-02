@@ -41,3 +41,7 @@ apps/api/.env
 apps/api/.env.local
 /docs/superpowers
 docs/pr/2026-05-21-v1.0.0-epic-db-refactor.md
+/docs/pr
+
+# Codegraph tooling artifacts
+apps/web/.codegraph/

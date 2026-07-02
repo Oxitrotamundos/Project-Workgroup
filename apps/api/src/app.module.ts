@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import { validateEnv } from './config/env.validation';
@@ -16,6 +18,8 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
 import { IdempotencyModule } from './common/idempotency.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { CalendarModule } from './calendar/calendar.module';
+import { McpModule } from './mcp/mcp.module';
+import { OAuthCleanupService } from './oauth/oauth-cleanup.service';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -26,6 +30,10 @@ const isProd = process.env.NODE_ENV === 'production';
       validate: validateEnv,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
+    // Rate-limit acotado: el ThrottlerGuard solo se aplica en McpController (superficie
+    // pública /mcp). No se registra como APP_GUARD para no throttlear /v1 ni el web.
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL ?? (isProd ? 'info' : 'debug'),
@@ -65,6 +73,8 @@ const isProd = process.env.NODE_ENV === 'production';
     IdempotencyModule,
     ObservabilityModule,
     CalendarModule,
+    McpModule,
   ],
+  providers: [OAuthCleanupService],
 })
 export class AppModule {}

@@ -12,6 +12,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
 
+  // Detrás del proxy de Render (x-forwarded-*): sin esto req.ip = la IP del proxy y los rate-limiters
+  // de /mcp y /oauth degradan a un único bucket global. Alinea con oidc-provider (proxy = true).
+  // Nota: si el chain tiene varios saltos (Cloudflare+Render), ajustar el número o keyear por
+  // cf-connecting-ip para un límite per-cliente exacto.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
   const config = app.get(ConfigService);
 
   app.enableVersioning({
@@ -40,6 +46,75 @@ async function bootstrap() {
   );
 
   mountSwagger(app);
+
+  // Montaje del Authorization Server (solo si está configurado). Express crudo: node-oidc-provider
+  // trae sus propias rutas (/.well-known/openid-configuration, /auth, /token, /jwks, /oauth/interaction...).
+  const issuer = config.get<string>('MCP_OAUTH_ISSUER');
+  const audience = config.get<string>('MCP_OAUTH_AUDIENCE');
+  const signing = config.get<string>('MCP_OAUTH_SIGNING_JWKS');
+  if (issuer && audience && signing) {
+    // El AS registra express.json() sobre el Express crudo (mountOidcInteractions), y NestJS entonces
+    // OMITE registrar su body-parser global (isMiddlewareApplied detecta 'jsonParser') → /v1 se quedaría
+    // sin req.body y TODAS las escrituras romperían (200 no-op o 400 de validación). Registramos el JSON
+    // parser global explícito ANTES de los mounts del AS para que /v1 siga parseando el body.
+    const { json: expressJson } = await import('express');
+    app.getHttpAdapter().getInstance().use(expressJson());
+    const { createOidcProvider } =
+      await import('./oauth/oidc-provider.factory');
+    const { PrismaService } = await import('./prisma/prisma.service');
+    const cookieKeys = (config.get<string>('MCP_OAUTH_COOKIE_KEYS') ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (cookieKeys.length === 0) {
+      throw new Error(
+        'MCP_OAUTH_COOKIE_KEYS is required when the OAuth AS is enabled',
+      );
+    }
+    const provider = await createOidcProvider({
+      issuer,
+      audience,
+      prisma: app.get(PrismaService),
+      signingJwks: JSON.parse(signing),
+      cookieKeys,
+      accessTokenTTL: Number(
+        config.get<string>('MCP_OAUTH_ACCESS_TOKEN_TTL') ?? 900,
+      ),
+      includeTestClient: false, // producción: solo CIMD
+      allowedClientHosts: (
+        config.get<string>('MCP_OAUTH_ALLOWED_CLIENT_HOSTS') ??
+        'claude.ai,claude.com'
+      )
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    });
+    // Rate-limit acotado a la superficie pública /oauth (interacción + token + auth). Se registra
+    // ANTES de los handlers para interceptarlos; /v1 y el web quedan intactos.
+    const { default: rateLimit } = await import('express-rate-limit');
+    app
+      .getHttpAdapter()
+      .getInstance()
+      .use('/oauth', rateLimit({ windowMs: 60_000, limit: 120 }));
+    // Alias RFC 8414: la forma path-inserted que pide claude.ai redirige (308) al discovery real
+    // del provider bajo /oauth. Se registra antes de los mounts /oauth (no solapa sus rutas).
+    const { mountOidcDiscoveryAliases } =
+      await import('./oauth/oidc-discovery-aliases');
+    mountOidcDiscoveryAliases(app.getHttpAdapter().getInstance());
+    // Interacción real (login gateado por Firebase): se monta ANTES de provider.callback() para
+    // ganarle la ruta /oauth/interaction/:uid.
+    const { mountOidcInteractions } = await import('./oauth/oidc-interactions');
+    const { AuthService } = await import('./auth/auth.service');
+    const { FirebaseService } = await import('./firebase/firebase.service');
+    mountOidcInteractions(app.getHttpAdapter().getInstance(), provider, {
+      firebase: app.get(FirebaseService),
+      auth: app.get(AuthService),
+      firebaseWebConfig: JSON.parse(
+        config.get<string>('MCP_OAUTH_FIREBASE_WEB_CONFIG') ?? '{}',
+      ),
+    });
+    app.getHttpAdapter().getInstance().use('/oauth', provider.callback());
+  }
 
   const port = Number(config.get<string>('PORT') ?? 3000);
   await app.listen(port);

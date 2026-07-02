@@ -1,0 +1,141 @@
+import { json } from 'express';
+import type { FirebaseService } from '../firebase/firebase.service';
+import type { AuthService } from '../auth/auth.service';
+
+interface Deps {
+  firebase: FirebaseService;
+  auth: AuthService;
+  firebaseWebConfig: Record<string, string>;
+}
+
+// Página de login autocontenida: Firebase Web SDK (Google o email/password) → POST del ID token.
+function loginPage(uid: string, cfg: Record<string, string>): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>KTP — iniciar sesión</title></head>
+<body>
+  <button id="go">Entrar con Google</button>
+  <hr>
+  <form id="pw">
+    <input id="email" type="email" placeholder="correo" required autocomplete="username">
+    <input id="password" type="password" placeholder="contraseña" required autocomplete="current-password">
+    <button type="submit">Entrar con correo</button>
+  </form>
+  <p id="err"></p>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+const app = initializeApp(${JSON.stringify(cfg)});
+const auth = getAuth(app);
+const err = document.getElementById('err');
+// Ambos métodos terminan igual: ID token → POST → redirect de reanudación del authorize.
+async function finish(cred) {
+  const idToken = await cred.user.getIdToken();
+  const r = await fetch(location.pathname + '/login', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin', body: JSON.stringify({ idToken }),
+  });
+  if (r.redirected) { location.href = r.url; return; }
+  if (!r.ok) { err.textContent = await r.text(); return; }
+  const body = await r.json().catch(() => ({}));
+  if (body.redirect) location.href = body.redirect;
+}
+document.getElementById('go').onclick = async () => {
+  try { await finish(await signInWithPopup(auth, new GoogleAuthProvider())); }
+  catch (e) { err.textContent = String(e); }
+};
+document.getElementById('pw').onsubmit = async (ev) => {
+  ev.preventDefault();
+  try {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    await finish(await signInWithEmailAndPassword(auth, email, password));
+  } catch (e) { err.textContent = String(e); }
+};
+</script></body></html>`;
+}
+
+export function mountOidcInteractions(
+  expressApp: any,
+  provider: any,
+  deps: Deps,
+): void {
+  // Parser JSON acotado a la interacción: Nest registra su body-parser global en init() (tras
+  // app.listen()), que corre DESPUÉS de estos .use() de bootstrap; sin esto req.body sería undefined.
+  expressApp.use('/oauth/interaction', json());
+
+  // GET: sirve login o auto-consent según el prompt (el uid queda atado por la cookie de interacción).
+  expressApp.get('/oauth/interaction/:uid', async (req: any, res: any) => {
+    try {
+      const details = await provider.interactionDetails(req, res);
+      if (details.prompt.name === 'login') {
+        res.set('content-type', 'text/html');
+        res.end(loginPage(details.uid, deps.firebaseWebConfig));
+        return;
+      }
+      // consent: auto-consent para el cliente vetado por la allow-list (sin UI por-scope).
+      if (details.prompt.name === 'consent') {
+        const grant = details.grantId
+          ? await provider.Grant.find(details.grantId)
+          : new provider.Grant({
+              accountId: details.session.accountId,
+              clientId: details.params.client_id,
+            });
+        const d = details.prompt.details;
+        if (d.missingOIDCScope) {
+          grant.addOIDCScope((d.missingOIDCScope as string[]).join(' '));
+        }
+        if (d.missingOIDCClaims) {
+          grant.addOIDCClaims(d.missingOIDCClaims as string[]);
+        }
+        if (d.missingResourceScopes) {
+          for (const [indicator, scopes] of Object.entries(
+            d.missingResourceScopes as Record<string, string[]>,
+          )) {
+            grant.addResourceScope(indicator, (scopes as string[]).join(' '));
+          }
+        }
+        const grantId = await grant.save();
+        const redirectTo = await provider.interactionResult(
+          req,
+          res,
+          { consent: { grantId } },
+          { mergeWithLastSubmission: true },
+        );
+        res.redirect(redirectTo);
+        return;
+      }
+      // Prompt inesperado (inalcanzable con la config actual): cierra el request en vez de colgarlo.
+      res.status(500).end(`unexpected prompt: ${details.prompt.name}`);
+    } catch (err: any) {
+      res.status(500).end(`interaction error: ${err?.message ?? err}`);
+    }
+  });
+
+  // POST del ID token: valida Firebase, resuelve user.id y finaliza el login.
+  // CSRF: interactionDetails exige la cookie de interacción firmada (SameSite=Lax por defecto), así que
+  // un POST cross-site no la lleva y esto lanza → 401; además el ID token es un bearer no forjable.
+  expressApp.post(
+    '/oauth/interaction/:uid/login',
+    async (req: any, res: any) => {
+      try {
+        await provider.interactionDetails(req, res); // valida el uid atado por cookie
+        const idToken = req.body?.idToken;
+        if (!idToken) {
+          res.status(400).end('missing idToken');
+          return;
+        }
+        // Checkpoint de seguridad explícito: verifica el ID token al finalizar el login.
+        await deps.firebase.verifyIdToken(idToken);
+        const user = await deps.auth.syncFromToken(idToken); // upsert by firebaseUid → user.id
+        const redirectTo = await provider.interactionResult(
+          req,
+          res,
+          { login: { accountId: user.id.toString() } },
+          { mergeWithLastSubmission: false },
+        );
+        res.json({ redirect: redirectTo });
+      } catch (err: any) {
+        res.status(401).end(`login failed: ${err?.message ?? err}`);
+      }
+    },
+  );
+}

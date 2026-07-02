@@ -4,5 +4,7 @@
   "testEnvironment": "node",
   "testRegex": ".e2e-spec\\.ts$",
   "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+  "transformIgnorePatterns": ["node_modules/(?!(\\.pnpm/uuid|uuid/))"],
+  "moduleNameMapper": { "^uuid$": "<rootDir>/uuid-cjs-shim.js" },
   "testTimeout": 180000
 }

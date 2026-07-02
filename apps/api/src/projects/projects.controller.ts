@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   CreateProjectDto,
+  ImportProjectDto,
   UpdateProjectDto,
   UpdateProjectSettingsDto,
 } from '@project-workgroup/shared';
@@ -20,17 +21,26 @@ import { ProjectMembershipGuard } from '../auth/project-membership.guard';
 import { RequireProject } from '../auth/require-project.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ProjectsService } from './projects.service';
+import { ProjectImportService } from './project-import.service';
 
 @ApiTags('projects')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 @Controller({ path: 'projects', version: '1' })
 export class ProjectsController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(
+    private readonly projects: ProjectsService,
+    private readonly projectImport: ProjectImportService,
+  ) {}
 
   @Post()
   async create(@Body() dto: CreateProjectDto, @CurrentUser() user: AuthUser) {
     return this.projects.create(dto, user.id);
+  }
+
+  @Post('import')
+  async import(@Body() dto: ImportProjectDto, @CurrentUser() user: AuthUser) {
+    return this.projectImport.import(dto, user.id);
   }
 
   @Get()

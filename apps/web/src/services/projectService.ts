@@ -38,18 +38,25 @@ const toDomain = (r: RawProject): Project => ({
   updatedAt: r.updatedAt ?? '',
 });
 
-const toPaginatedProjects = (res: RawProjectsPage, pageSize: number): PaginatedResponse<Project> => {
-  const items = (res.items ?? []).map(toDomain);
-  const total = typeof res.total === 'number' ? res.total : items.length;
-  const hasMore = typeof res.hasMore === 'boolean' ? res.hasMore : Boolean(res.nextCursor) || items.length > pageSize;
+// La API `/v1/projects` devuelve un array plano; mantenemos compatibilidad con un
+// posible envelope paginado por si algún endpoint pagina en el futuro.
+const toPaginatedProjects = (
+  res: RawProjectsPage | RawProject[],
+  pageSize: number,
+): PaginatedResponse<Project> => {
+  const page: RawProjectsPage = Array.isArray(res) ? {} : res;
+  const rawItems = Array.isArray(res) ? res : (res.items ?? []);
+  const items = rawItems.map(toDomain);
+  const total = typeof page.total === 'number' ? page.total : items.length;
+  const hasMore = typeof page.hasMore === 'boolean' ? page.hasMore : Boolean(page.nextCursor) || items.length > pageSize;
 
   return {
     items: items.slice(0, pageSize),
     total,
-    page: typeof res.page === 'number' ? res.page : 1,
+    page: typeof page.page === 'number' ? page.page : 1,
     pageSize,
     hasMore,
-    lastDoc: res.lastDoc ?? res.nextCursor ?? undefined,
+    lastDoc: page.lastDoc ?? page.nextCursor ?? undefined,
   };
 };
 
@@ -84,7 +91,7 @@ export class ProjectService {
     pageSize: number = 10
   ): Promise<PaginatedResponse<Project>> {
     try {
-      const res = await apiClient.get<RawProjectsPage>('/v1/projects');
+      const res = await apiClient.get<RawProjectsPage | RawProject[]>('/v1/projects');
       return toPaginatedProjects(res, pageSize);
     } catch (error) {
       console.error('Error getting user projects:', error);
@@ -134,7 +141,7 @@ export class ProjectService {
     _lastDoc?: unknown
   ): Promise<PaginatedResponse<Project>> {
     try {
-      const res = await apiClient.get<RawProjectsPage>('/v1/projects');
+      const res = await apiClient.get<RawProjectsPage | RawProject[]>('/v1/projects');
       return toPaginatedProjects(res, pageSize);
     } catch (error) {
       console.error('Error getting all projects:', error);

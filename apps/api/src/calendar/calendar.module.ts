@@ -5,6 +5,7 @@ import { CalendarService } from './calendar.service';
 import { CalendarResolverService } from './calendar-resolver.service';
 import { SchedulingService } from './scheduling.service';
 import { TaskReschedulerService } from './task-rescheduler.service';
+import { TaskScheduleCalculator } from './task-schedule-calculator.service';
 
 @Module({
   imports: [AuthModule],
@@ -14,12 +15,14 @@ import { TaskReschedulerService } from './task-rescheduler.service';
     CalendarResolverService,
     SchedulingService,
     TaskReschedulerService,
+    TaskScheduleCalculator,
   ],
   exports: [
     CalendarResolverService,
     SchedulingService,
     CalendarService,
     TaskReschedulerService,
+    TaskScheduleCalculator,
   ],
 })
 export class CalendarModule {}

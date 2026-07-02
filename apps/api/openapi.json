@@ -24,6 +24,20 @@
         ]
       }
     },
+    "/.well-known/oauth-protected-resource": {
+      "get": {
+        "operationId": "OAuthMetadataController_protectedResource",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuthMetadata"
+        ]
+      }
+    },
     "/users/me": {
       "get": {
         "operationId": "UsersController_me",
@@ -95,6 +109,35 @@
         "parameters": [],
         "responses": {
           "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/import": {
+      "post": {
+        "operationId": "ProjectsController_import",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportProjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": ""
           }
         },
@@ -259,106 +302,6 @@
         ],
         "tags": [
           "projects"
-        ]
-      }
-    },
-    "/projects/{projectId}/members": {
-      "post": {
-        "operationId": "ProjectMembersController_add",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddProjectMemberDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "project-members"
-        ]
-      },
-      "get": {
-        "operationId": "ProjectMembersController_list",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "project-members"
-        ]
-      }
-    },
-    "/projects/{projectId}/members/{userId}": {
-      "delete": {
-        "operationId": "ProjectMembersController_remove",
-        "parameters": [
-          {
-            "name": "projectId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "userId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "project-members"
         ]
       }
     },
@@ -1090,6 +1033,106 @@
         ]
       }
     },
+    "/projects/{projectId}/members": {
+      "post": {
+        "operationId": "ProjectMembersController_add",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddProjectMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "project-members"
+        ]
+      },
+      "get": {
+        "operationId": "ProjectMembersController_list",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "project-members"
+        ]
+      }
+    },
+    "/projects/{projectId}/members/{userId}": {
+      "delete": {
+        "operationId": "ProjectMembersController_remove",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "project-members"
+        ]
+      }
+    },
     "/projects/{projectId}/task-links": {
       "post": {
         "operationId": "TaskLinksController_create",
@@ -1465,6 +1508,20 @@
           "api-keys"
         ]
       }
+    },
+    "/mcp": {
+      "post": {
+        "operationId": "McpController_handle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Mcp"
+        ]
+      }
     }
   },
   "info": {
@@ -1488,15 +1545,15 @@
         "type": "object",
         "properties": {}
       },
+      "ImportProjectDto": {
+        "type": "object",
+        "properties": {}
+      },
       "UpdateProjectDto": {
         "type": "object",
         "properties": {}
       },
       "UpdateProjectSettingsDto": {
-        "type": "object",
-        "properties": {}
-      },
-      "AddProjectMemberDto": {
         "type": "object",
         "properties": {}
       },
@@ -1533,6 +1590,10 @@
         "properties": {}
       },
       "UpsertCalendarDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AddProjectMemberDto": {
         "type": "object",
         "properties": {}
       },
