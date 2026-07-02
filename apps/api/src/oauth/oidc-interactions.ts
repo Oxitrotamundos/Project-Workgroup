@@ -52,8 +52,38 @@ export function mountOidcInteractions(
         res.end(loginPage(details.uid, deps.firebaseWebConfig));
         return;
       }
-      // consent: se maneja en una task posterior.
-      res.status(501).end('consent not implemented');
+      // consent: auto-consent para el cliente vetado por la allow-list (sin UI por-scope).
+      if (details.prompt.name === 'consent') {
+        const grant = details.grantId
+          ? await provider.Grant.find(details.grantId)
+          : new provider.Grant({
+              accountId: details.session.accountId,
+              clientId: details.params.client_id,
+            });
+        const d = details.prompt.details;
+        if (d.missingOIDCScope) {
+          grant.addOIDCScope((d.missingOIDCScope as string[]).join(' '));
+        }
+        if (d.missingOIDCClaims) {
+          grant.addOIDCClaims(d.missingOIDCClaims as string[]);
+        }
+        if (d.missingResourceScopes) {
+          for (const [indicator, scopes] of Object.entries(
+            d.missingResourceScopes as Record<string, string[]>,
+          )) {
+            grant.addResourceScope(indicator, (scopes as string[]).join(' '));
+          }
+        }
+        const grantId = await grant.save();
+        const redirectTo = await provider.interactionResult(
+          req,
+          res,
+          { consent: { grantId } },
+          { mergeWithLastSubmission: true },
+        );
+        res.redirect(redirectTo);
+        return;
+      }
     } catch (err: any) {
       res.status(500).end(`interaction error: ${err?.message ?? err}`);
     }
