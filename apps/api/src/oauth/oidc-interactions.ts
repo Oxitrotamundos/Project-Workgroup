@@ -8,28 +8,47 @@ interface Deps {
   firebaseWebConfig: Record<string, string>;
 }
 
-// Página de login autocontenida: Firebase Web SDK → signInWithPopup → POST del ID token.
+// Página de login autocontenida: Firebase Web SDK (Google o email/password) → POST del ID token.
 function loginPage(uid: string, cfg: Record<string, string>): string {
   return `<!doctype html><html><head><meta charset="utf-8"><title>KTP — iniciar sesión</title></head>
-<body><button id="go">Entrar con Google</button><p id="err"></p>
+<body>
+  <button id="go">Entrar con Google</button>
+  <hr>
+  <form id="pw">
+    <input id="email" type="email" placeholder="correo" required autocomplete="username">
+    <input id="password" type="password" placeholder="contraseña" required autocomplete="current-password">
+    <button type="submit">Entrar con correo</button>
+  </form>
+  <p id="err"></p>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 const app = initializeApp(${JSON.stringify(cfg)});
 const auth = getAuth(app);
+const err = document.getElementById('err');
+// Ambos métodos terminan igual: ID token → POST → redirect de reanudación del authorize.
+async function finish(cred) {
+  const idToken = await cred.user.getIdToken();
+  const r = await fetch(location.pathname + '/login', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin', body: JSON.stringify({ idToken }),
+  });
+  if (r.redirected) { location.href = r.url; return; }
+  if (!r.ok) { err.textContent = await r.text(); return; }
+  const body = await r.json().catch(() => ({}));
+  if (body.redirect) location.href = body.redirect;
+}
 document.getElementById('go').onclick = async () => {
+  try { await finish(await signInWithPopup(auth, new GoogleAuthProvider())); }
+  catch (e) { err.textContent = String(e); }
+};
+document.getElementById('pw').onsubmit = async (ev) => {
+  ev.preventDefault();
   try {
-    const cred = await signInWithPopup(auth, new GoogleAuthProvider());
-    const idToken = await cred.user.getIdToken();
-    const r = await fetch(location.pathname + '/login', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      credentials: 'same-origin', body: JSON.stringify({ idToken }),
-    });
-    if (r.redirected) { location.href = r.url; return; }
-    if (!r.ok) { document.getElementById('err').textContent = await r.text(); return; }
-    const body = await r.json().catch(() => ({}));
-    if (body.redirect) location.href = body.redirect;
-  } catch (e) { document.getElementById('err').textContent = String(e); }
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    await finish(await signInWithEmailAndPassword(auth, email, password));
+  } catch (e) { err.textContent = String(e); }
 };
 </script></body></html>`;
 }
