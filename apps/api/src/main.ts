@@ -47,6 +47,12 @@ async function bootstrap() {
   const audience = config.get<string>('MCP_OAUTH_AUDIENCE');
   const signing = config.get<string>('MCP_OAUTH_SIGNING_JWKS');
   if (issuer && audience && signing) {
+    // El AS registra express.json() sobre el Express crudo (mountOidcInteractions), y NestJS entonces
+    // OMITE registrar su body-parser global (isMiddlewareApplied detecta 'jsonParser') → /v1 se quedaría
+    // sin req.body y TODAS las escrituras romperían (200 no-op o 400 de validación). Registramos el JSON
+    // parser global explícito ANTES de los mounts del AS para que /v1 siga parseando el body.
+    const { json: expressJson } = await import('express');
+    app.getHttpAdapter().getInstance().use(expressJson());
     const { createOidcProvider } =
       await import('./oauth/oidc-provider.factory');
     const { PrismaService } = await import('./prisma/prisma.service');
