@@ -77,6 +77,18 @@ async function bootstrap() {
         .map((s) => s.trim())
         .filter(Boolean),
     });
+    // Interacción real (login gateado por Firebase): se monta ANTES de provider.callback() para
+    // ganarle la ruta /oauth/interaction/:uid.
+    const { mountOidcInteractions } = await import('./oauth/oidc-interactions');
+    const { AuthService } = await import('./auth/auth.service');
+    const { FirebaseService } = await import('./firebase/firebase.service');
+    mountOidcInteractions(app.getHttpAdapter().getInstance(), provider, {
+      firebase: app.get(FirebaseService),
+      auth: app.get(AuthService),
+      firebaseWebConfig: JSON.parse(
+        config.get<string>('MCP_OAUTH_FIREBASE_WEB_CONFIG') ?? '{}',
+      ),
+    });
     app.getHttpAdapter().getInstance().use('/oauth', provider.callback());
   }
 
