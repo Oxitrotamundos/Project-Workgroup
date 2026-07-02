@@ -144,7 +144,7 @@ export function registerWriteTools(server: McpServer, client: ApiClient): void {
     },
     async (a) => {
       try {
-        // Lee la versión vigente para mandar expectedVersion (el cliente reintenta si choca).
+        // Lee la versión vigente para mandar expectedVersion (si choca, el cliente propaga el conflicto, no reintenta).
         const current = await client.getTask(a.taskId);
         const { taskId, ...patch } = a;
         const res = await client.updateTask(taskId, {
