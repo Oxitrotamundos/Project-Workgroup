@@ -84,6 +84,8 @@ export function mountOidcInteractions(
         res.redirect(redirectTo);
         return;
       }
+      // Prompt inesperado (inalcanzable con la config actual): cierra el request en vez de colgarlo.
+      res.status(500).end(`unexpected prompt: ${details.prompt.name}`);
     } catch (err: any) {
       res.status(500).end(`interaction error: ${err?.message ?? err}`);
     }
