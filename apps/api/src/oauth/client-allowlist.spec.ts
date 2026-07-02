@@ -10,7 +10,9 @@ describe('isAllowedClientId', () => {
     expect(isAllowedClientId('https://claude.com/x', HOSTS)).toBe(true);
   });
   it('rejects subdomain/suffix spoofing (exact hostname only)', () => {
-    expect(isAllowedClientId('https://claude.ai.evil.com/x', HOSTS)).toBe(false);
+    expect(isAllowedClientId('https://claude.ai.evil.com/x', HOSTS)).toBe(
+      false,
+    );
     expect(isAllowedClientId('https://evil.com/claude.ai', HOSTS)).toBe(false);
     expect(isAllowedClientId('https://notclaude.ai/x', HOSTS)).toBe(false);
   });
