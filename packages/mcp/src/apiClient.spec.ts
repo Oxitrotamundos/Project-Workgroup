@@ -111,15 +111,31 @@ describe('createApiClient', () => {
     expect((init.headers as Record<string, string>)['idempotency-key']).toMatch(/[0-9a-f-]{36}/);
   });
 
-  it('updateTask retries once with currentVersion on TASK_VERSION_STALE', async () => {
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ message: { code: 'TASK_VERSION_STALE', message: 'stale', currentVersion: 7 } }), { status: 409, headers: { 'content-type': 'application/json' } }))
-      .mockResolvedValueOnce(okJson({ id: '1', version: 8, summariesPatched: [] }));
+  it('updateTask patches normally on the happy path (200)', async () => {
+    fetchMock.mockResolvedValueOnce(okJson({ id: '1', version: 6, summariesPatched: [] }));
     const res = await client().updateTask('1', { status: 'completed', expectedVersion: 5 } as any);
-    expect((res as any).version).toBe(8);
-    // El segundo PATCH usa expectedVersion = currentVersion (7).
-    const secondBody = JSON.parse((fetchMock.mock.calls[1][1] as any).body);
-    expect(secondBody.expectedVersion).toBe(7);
+    expect((res as any).version).toBe(6);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.method).toBe('PATCH');
+  });
+
+  it('updateTask propagates an actionable conflict on TASK_VERSION_STALE without a 2nd PATCH', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ message: { code: 'TASK_VERSION_STALE', message: 'stale', currentVersion: 7 } }),
+        { status: 409, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const err = await client()
+      .updateTask('1', { status: 'completed', expectedVersion: 5 } as any)
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe('TASK_VERSION_STALE');
+    // El mensaje es accionable: menciona la versión esperada y la vigente.
+    expect(err.message).toContain('5');
+    expect(err.message).toContain('7');
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no reintenta a ciegas
   });
 
   it('postIdempotent retries on IDEMPOTENCY_IN_PROGRESS reusing the same key', async () => {

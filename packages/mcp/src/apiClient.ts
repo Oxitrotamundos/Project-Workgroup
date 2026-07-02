@@ -148,19 +148,19 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       try {
         return await request<TaskMutationResponse>('PATCH', path, { body: dto });
       } catch (err) {
-        // Conflicto optimista: reintenta una vez con la versión vigente que reporta el error.
-        if (
-          err instanceof ApiError &&
-          err.code === 'TASK_VERSION_STALE' &&
-          dto.expectedVersion !== undefined
-        ) {
+        // Conflicto optimista: NO reintenta a ciegas (eso sería un last-write-wins silencioso
+        // que pisaría la edición concurrente). Propaga un error accionable para que el
+        // llamador relea la tarea y decida con la versión vigente.
+        if (err instanceof ApiError && err.code === 'TASK_VERSION_STALE') {
           const fresh = (err.details as { currentVersion?: number } | undefined)
             ?.currentVersion;
-          if (typeof fresh === 'number') {
-            return await request<TaskMutationResponse>('PATCH', path, {
-              body: { ...dto, expectedVersion: fresh },
-            });
-          }
+          throw new ApiError(
+            err.status,
+            err.code,
+            `task ${id} changed concurrently: expected version ${dto.expectedVersion ?? 'unknown'}, ` +
+              `current version is ${fresh ?? 'unknown'}. Re-read the task and retry with the fresh version.`,
+            err.details,
+          );
         }
         throw err;
       }
