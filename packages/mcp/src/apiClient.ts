@@ -65,7 +65,11 @@ const enc = encodeURIComponent;
 export const REQUEST_TIMEOUT_MS = 45_000;
 
 export function createApiClient(config: ApiClientConfig): ApiClient {
-  const base = config.baseUrl.replace(/\/+$/, '');
+  // Recorta las barras finales por índice (no con regex) para evitar el
+  // backtracking polinomial de `/\/+$/` sobre inputs con muchas '/'.
+  let baseEnd = config.baseUrl.length;
+  while (baseEnd > 0 && config.baseUrl[baseEnd - 1] === '/') baseEnd -= 1;
+  const base = config.baseUrl.slice(0, baseEnd);
 
   async function request<T>(
     method: string,
