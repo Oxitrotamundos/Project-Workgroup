@@ -24,6 +24,20 @@
         ]
       }
     },
+    "/.well-known/oauth-protected-resource": {
+      "get": {
+        "operationId": "OAuthMetadataController_protectedResource",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OAuthMetadata"
+        ]
+      }
+    },
     "/users/me": {
       "get": {
         "operationId": "UsersController_me",
@@ -1492,6 +1506,20 @@
         ],
         "tags": [
           "api-keys"
+        ]
+      }
+    },
+    "/mcp": {
+      "post": {
+        "operationId": "McpController_handle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Mcp"
         ]
       }
     }
