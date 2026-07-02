@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import { validateEnv } from './config/env.validation';
@@ -16,6 +17,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
 import { IdempotencyModule } from './common/idempotency.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { CalendarModule } from './calendar/calendar.module';
+import { OAuthCleanupService } from './oauth/oauth-cleanup.service';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -26,6 +28,7 @@ const isProd = process.env.NODE_ENV === 'production';
       validate: validateEnv,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL ?? (isProd ? 'info' : 'debug'),
@@ -66,5 +69,6 @@ const isProd = process.env.NODE_ENV === 'production';
     ObservabilityModule,
     CalendarModule,
   ],
+  providers: [OAuthCleanupService],
 })
 export class AppModule {}
