@@ -12,7 +12,7 @@ import { bootE2E, E2EHandle } from './e2e-setup';
 import { createOidcProvider } from '../src/oauth/oidc-provider.factory';
 import { mountOidcDiscoveryAliases } from '../src/oauth/oidc-discovery-aliases';
 import { PrismaService } from '../src/prisma/prisma.service';
-import { createApiClient } from '@project-workgroup/mcp';
+import { createApiClient, SERVER_NAME } from '@project-workgroup/mcp';
 import type { AddressInfo } from 'node:net';
 
 // Reproduce la condición de PROD: el Authorization Server montado en el Express crudo
@@ -218,5 +218,32 @@ describe('MCP write loopback with the AS mounted (e2e repro)', () => {
     ]);
     const after2 = await client.getTask(taskId);
     expect(after2.progress).toBe(55);
+  });
+
+  // Con el AS montado (json global activo), el transporte POST /mcp sigue respondiendo el initialize.
+  it('POST /mcp initialize works with the AS mounted', async () => {
+    const token = await mint();
+    const res = await request(handle.app.getHttpServer())
+      .post('/mcp')
+      .set('Authorization', `Bearer ${token}`)
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'e2e', version: '0.0.0' },
+        },
+      })
+      .expect(200);
+    const dataLine = res.text
+      .split('\n')
+      .find((line) => line.startsWith('data:'));
+    expect(dataLine).toBeDefined();
+    const parsed = JSON.parse(dataLine!.slice('data:'.length).trim());
+    expect(parsed.result?.serverInfo?.name).toBe(SERVER_NAME);
   });
 });
