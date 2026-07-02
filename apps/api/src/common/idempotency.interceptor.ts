@@ -18,6 +18,8 @@ const KEY_MAX_LEN = 256;
 // responseStatus 0 marca un claim pendiente; cualquier otro valor es una respuesta ya materializada.
 const PENDING = 0;
 const MAX_ATTEMPTS = 2;
+// Reintentos acotados para el update que materializa la respuesta (blips transitorios de BD).
+const PERSIST_MAX_ATTEMPTS = 3;
 
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
@@ -115,24 +117,33 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
       // (B) Ganamos el claim: ejecutamos el handler una sola vez y persistimos (await) o liberamos.
       const res = context.switchToHttp().getResponse();
+      // Se pone en true justo cuando el handler emite: distingue "falló el handler" (libera)
+      // de "falló persistir después de que el handler ya commiteó" (no libera, ver abajo).
+      let handlerEmitted = false;
       return next.handle().pipe(
         concatMap(async (body) => {
+          handlerEmitted = true;
           const status = res.statusCode ?? 200;
-          await this.prisma.idempotencyKey.update({
-            where: { key_userId: { key, userId } },
-            data: {
-              responseStatus: status,
-              responseBody: this.toJsonSafe(body),
-            },
-          });
+          await this.persistResponse(
+            key,
+            userId,
+            status,
+            this.toJsonSafe(body),
+          );
           return body; // emitimos solo tras commitear la fila
         }),
-        catchError((err) =>
-          // Handler falló → liberamos la clave para que el cliente pueda reintentar.
-          from(this.release(key, userId)).pipe(
+        catchError((err) => {
+          if (handlerEmitted) {
+            // El handler ya emitió (y, en mutaciones, ya commiteó). Liberar aquí dejaría
+            // la puerta abierta a que un retry re-ejecute la mutación ya hecha → duplicado.
+            // Dejamos el claim PENDING: un retry inmediato choca con IDEMPOTENCY_IN_PROGRESS.
+            return throwError(() => err);
+          }
+          // Handler falló antes de emitir → liberamos la clave para que el cliente pueda reintentar.
+          return from(this.release(key, userId)).pipe(
             concatMap(() => throwError(() => err)),
-          ),
-        ),
+          );
+        }),
       );
     }
 
@@ -153,6 +164,31 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
   private isStale(createdAt: Date): boolean {
     return Date.now() - createdAt.getTime() > IdempotencyInterceptor.STALE_MS;
+  }
+
+  // Reintenta un número acotado de veces antes de propagar (blip transitorio de BD).
+  private async persistResponse(
+    key: string,
+    userId: bigint,
+    status: number,
+    body: Prisma.InputJsonValue,
+  ): Promise<void> {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < PERSIST_MAX_ATTEMPTS; attempt++) {
+      try {
+        await this.prisma.idempotencyKey.update({
+          where: { key_userId: { key, userId } },
+          data: {
+            responseStatus: status,
+            responseBody: body,
+          },
+        });
+        return;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr;
   }
 
   private async release(key: string, userId: bigint): Promise<void> {

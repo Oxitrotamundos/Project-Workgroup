@@ -230,6 +230,96 @@ describe('IdempotencyInterceptor', () => {
     expect(prisma.idempotencyKey.update).not.toHaveBeenCalled();
   });
 
+  it('does NOT release the claim when persisting the response fails after the handler already emitted', async () => {
+    const prisma = makePrisma();
+    prisma.idempotencyKey.create.mockResolvedValue({});
+    const persistErr = new Error('db blip while persisting response');
+    prisma.idempotencyKey.update.mockRejectedValue(persistErr);
+
+    const interceptor = new IdempotencyInterceptor(prisma as any);
+    (interceptor as any).hashRequest = () => 'sha-new';
+
+    const ctx = makeContext({
+      headers: { 'idempotency-key': 'k1' },
+      method: 'POST',
+      url: '/v1/projects/import',
+      user: { id: 1n },
+      body: { name: 'C' },
+    });
+
+    const result$ = await interceptor.intercept(ctx, {
+      handle: () => of({ id: '42' }),
+    } as any);
+
+    await expect(firstValueFrom(result$)).rejects.toBe(persistErr);
+    // El handler ya commiteó su mutación: liberar la key aquí duplicaría el efecto en un retry.
+    expect(prisma.idempotencyKey.delete).not.toHaveBeenCalled();
+    // Se agotó el retry acotado de persistencia.
+    expect(prisma.idempotencyKey.update).toHaveBeenCalledTimes(3);
+  });
+
+  it('persists the response on a later retry when the first persist attempts fail transiently', async () => {
+    const prisma = makePrisma();
+    prisma.idempotencyKey.create.mockResolvedValue({});
+    const blip = new Error('db blip while persisting response');
+    prisma.idempotencyKey.update
+      .mockRejectedValueOnce(blip)
+      .mockRejectedValueOnce(blip)
+      .mockResolvedValueOnce({});
+
+    const interceptor = new IdempotencyInterceptor(prisma as any);
+    (interceptor as any).hashRequest = () => 'sha-new';
+
+    const ctx = makeContext({
+      headers: { 'idempotency-key': 'k1' },
+      method: 'POST',
+      url: '/v1/projects/import',
+      user: { id: 1n },
+      body: { name: 'C' },
+    });
+
+    const result$ = await interceptor.intercept(ctx, {
+      handle: () => of({ id: '42' }),
+    } as any);
+
+    await expect(firstValueFrom(result$)).resolves.toEqual({ id: '42' });
+    expect(prisma.idempotencyKey.update).toHaveBeenCalledTimes(3);
+    expect(prisma.idempotencyKey.delete).not.toHaveBeenCalled();
+  });
+
+  it('rejects a retry with IDEMPOTENCY_IN_PROGRESS while a persist-failed claim is still pending and fresh', async () => {
+    const prisma = makePrisma();
+    // Simula el estado que deja el fix: la key sigue PENDING en DB porque la persistencia falló.
+    prisma.idempotencyKey.create.mockRejectedValue(uniqueViolation());
+    prisma.idempotencyKey.findUnique.mockResolvedValue({
+      requestHash: 'sha-new',
+      responseStatus: 0,
+      responseBody: null,
+      createdAt: new Date(),
+    });
+
+    const interceptor = new IdempotencyInterceptor(prisma as any);
+    (interceptor as any).hashRequest = () => 'sha-new';
+
+    const handle = jest.fn(() => of('should-not-run'));
+    const ctx = makeContext({
+      headers: { 'idempotency-key': 'k1' },
+      method: 'POST',
+      url: '/v1/projects/import',
+      user: { id: 1n },
+      body: { name: 'C' },
+    });
+
+    const err = await interceptor
+      .intercept(ctx, { handle } as any)
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toMatchObject({
+      code: 'IDEMPOTENCY_IN_PROGRESS',
+    });
+    expect(handle).not.toHaveBeenCalled();
+  });
+
   it('takes over a stale pending claim by releasing it then re-claiming on the next attempt', async () => {
     const prisma = makePrisma();
     prisma.idempotencyKey.create
