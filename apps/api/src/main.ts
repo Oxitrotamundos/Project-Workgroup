@@ -12,6 +12,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
 
+  // Detrás del proxy de Render (x-forwarded-*): sin esto req.ip = la IP del proxy y los rate-limiters
+  // de /mcp y /oauth degradan a un único bucket global. Alinea con oidc-provider (proxy = true).
+  // Nota: si el chain tiene varios saltos (Cloudflare+Render), ajustar el número o keyear por
+  // cf-connecting-ip para un límite per-cliente exacto.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
   const config = app.get(ConfigService);
 
   app.enableVersioning({
