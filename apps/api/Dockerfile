@@ -5,7 +5,7 @@
 # Context Directory" = . (root).
 
 # ---------- Stage 1: Build ----------
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends openssl ca-certificates \
@@ -38,7 +38,7 @@ RUN pnpm --filter @project-workgroup/shared run build \
     && pnpm --filter @project-workgroup/api run build
 
 # ---------- Stage 2: Runtime ----------
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends openssl ca-certificates tini \
