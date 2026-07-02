@@ -84,6 +84,11 @@ async function bootstrap() {
       .getHttpAdapter()
       .getInstance()
       .use('/oauth', rateLimit({ windowMs: 60_000, limit: 120 }));
+    // Alias RFC 8414: la forma path-inserted que pide claude.ai redirige (308) al discovery real
+    // del provider bajo /oauth. Se registra antes de los mounts /oauth (no solapa sus rutas).
+    const { mountOidcDiscoveryAliases } =
+      await import('./oauth/oidc-discovery-aliases');
+    mountOidcDiscoveryAliases(app.getHttpAdapter().getInstance());
     // Interacción real (login gateado por Firebase): se monta ANTES de provider.callback() para
     // ganarle la ruta /oauth/interaction/:uid.
     const { mountOidcInteractions } = await import('./oauth/oidc-interactions');

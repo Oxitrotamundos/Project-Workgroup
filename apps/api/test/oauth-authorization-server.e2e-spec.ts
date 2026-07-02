@@ -9,6 +9,7 @@ import {
 import { createHash, randomBytes } from 'node:crypto';
 import { bootE2E, E2EHandle } from './e2e-setup';
 import { createOidcProvider } from '../src/oauth/oidc-provider.factory';
+import { mountOidcDiscoveryAliases } from '../src/oauth/oidc-discovery-aliases';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 // Issuer del AS montado en el harness: su pathname (/oauth) coincide con el mount de Express, y su
@@ -53,6 +54,10 @@ describe('OAuth Authorization Server (e2e)', () => {
           allowedClientHosts: ['claude.ai', 'claude.com'],
         });
         const expressApp = app.getHttpAdapter().getInstance();
+
+        // Alias RFC 8414 (Task 5): igual que en main.ts, redirige la forma path-inserted al discovery
+        // real del provider. Sus rutas no solapan /oauth/*, así que el orden no importa.
+        mountOidcDiscoveryAliases(expressApp);
 
         // Stub de interacción: resuelve login y consent programáticamente (sin HTML). Se registra
         // ANTES del mount del provider para ganarle la ruta /oauth/interaction/:uid.
@@ -153,6 +158,34 @@ describe('OAuth Authorization Server (e2e)', () => {
       .expect(200);
     expect(res.body.code_challenge_methods_supported).toContain('S256');
     expect(res.body.token_endpoint).toContain('/oauth/token');
+  });
+
+  it('aliases the RFC 8414 path-inserted well-known to the provider discovery', async () => {
+    const server = handle.app.getHttpServer();
+
+    // AS metadata: forma path-inserted (host + well-known + path del issuer) → 308 hacia la ruta real.
+    const asRedirect = await request(server)
+      .get('/.well-known/oauth-authorization-server/oauth')
+      .redirects(0);
+    expect(asRedirect.status).toBe(308);
+    expect(asRedirect.headers['location']).toBe(
+      '/oauth/.well-known/oauth-authorization-server',
+    );
+
+    // Seguir el alias aterriza en el discovery real del provider (no un stub).
+    const asTarget = await request(server)
+      .get('/oauth/.well-known/oauth-authorization-server')
+      .expect(200);
+    expect(asTarget.body.code_challenge_methods_supported).toContain('S256');
+
+    // Variante OIDC: misma inserción → 308 hacia su ruta real.
+    const oidcRedirect = await request(server)
+      .get('/.well-known/openid-configuration/oauth')
+      .redirects(0);
+    expect(oidcRedirect.status).toBe(308);
+    expect(oidcRedirect.headers['location']).toBe(
+      '/oauth/.well-known/openid-configuration',
+    );
   });
 
   it('issues a JWT access token that the API accepts as an mcp oauth credential', async () => {

@@ -68,38 +68,37 @@ curl https://<host>/oauth/.well-known/openid-configuration          # ✔ sirve
 Confirmar en el JSON: `issuer: "https://<host>/oauth"`, `code_challenge_methods_supported: ["S256"]`,
 `authorization_endpoint`, `token_endpoint`, `jwks_uri`.
 
-La forma **RFC 8414 path-inserted** que algunos clientes piden primero (oidc-provider NO la sirve):
+La forma **RFC 8414 path-inserted** que algunos clientes piden primero (oidc-provider NO la sirve
+directamente; el alias del §2 la cubre por defecto):
 ```bash
-curl -i https://<host>/.well-known/oauth-authorization-server/oauth   # probablemente 404
+curl -i https://<host>/.well-known/oauth-authorization-server/oauth   # → 308 hacia /oauth/.well-known/...
 ```
 
 ---
 
-## 2. Punto de alineación predicho + fix listo
+## 2. Punto de alineación predicho + fix ya incorporado
 
-Si claude.ai reporta que **no encuentra la metadata del AS**, está pidiendo la URL RFC 8414
-*path-inserted* `https://<host>/.well-known/oauth-authorization-server/oauth` (y/o la variante
-OIDC `.../.well-known/openid-configuration/oauth`), que oidc-provider no sirve bajo la raíz.
+claude.ai pide primero la URL RFC 8414 *path-inserted*
+`https://<host>/.well-known/oauth-authorization-server/oauth` (y/o la variante OIDC
+`.../.well-known/openid-configuration/oauth`), que oidc-provider no sirve bajo la raíz.
 
-**Fix (aplicar SOLO si el smoke lo revela):** alias en `main.ts`, registrado en el Express crudo
-ANTES del mount del provider, hacia la ruta que oidc-provider sí sirve bajo `/oauth`:
+**Fix (ya aplicado por defecto):** `mountOidcDiscoveryAliases` en `main.ts` registra en el Express
+crudo, antes de los mounts `/oauth`, un `redirect(308)` de cada forma path-inserted hacia el
+discovery real bajo `/oauth/.well-known/*`. Por tanto el curl del §1 para la forma path-inserted ya
+**no devuelve 404**, sino **308 → 200**:
 
-```ts
-const httpInstance = app.getHttpAdapter().getInstance();
-// RFC 8414: el cliente inserta el well-known entre host y el path del issuer (.../oauth).
-// oidc-provider lo sirve bajo su mount (/oauth/.well-known/...): redirigimos hacia ahí.
-httpInstance.get('/.well-known/oauth-authorization-server/oauth', (_req, res) =>
-  res.redirect(308, '/oauth/.well-known/oauth-authorization-server'),
-);
-httpInstance.get('/.well-known/openid-configuration/oauth', (_req, res) =>
-  res.redirect(308, '/oauth/.well-known/openid-configuration'),
-);
+```bash
+curl -i https://<host>/.well-known/oauth-authorization-server/oauth
+# → HTTP/1.1 308  location: /oauth/.well-known/oauth-authorization-server
+#   (siguiendo el redirect → 200 con code_challenge_methods_supported: ["S256"])
+curl -iL https://<host>/.well-known/openid-configuration/oauth
+# → 308 → /oauth/.well-known/openid-configuration → 200
 ```
 
-- `308` preserva el método y es cacheable; un `302` también sirve para GET.
-- Si el cliente no sigue redirects de discovery, servir el JSON directamente (fetch interno a la
-  ruta del provider y responder el cuerpo) en vez de redirigir.
-- Commit sugerido: `fix(api): alias the rfc 8414 well-known to the oidc-provider discovery`.
+- `308` preserva el método GET y es cacheable.
+- Si algún cliente no siguiera redirects de discovery, servir el JSON directamente (fetch interno a
+  la ruta del provider y responder el cuerpo) en vez de redirigir.
+- Commit: `fix(api): alias the rfc 8414 well-known to the oidc-provider discovery`.
 
 **Segundo punto posible (menos probable):** si claude.ai exige que el `resource` de la PRM sea la
 URL exacta del MCP (`https://<host>/mcp`) en vez del origin, servir la PRM path-based en
