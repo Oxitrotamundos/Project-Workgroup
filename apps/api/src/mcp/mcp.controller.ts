@@ -7,13 +7,15 @@ import {
   VERSION_NEUTRAL,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { handleMcpRequest } from '@project-workgroup/mcp';
 import { AuthGuard } from '../auth/auth.guard';
 
 // POST /mcp: entrada del transporte Streamable HTTP. AuthGuard valida el JWT (3ª vía) → 401+WWW-Auth
 // sin token, que es justo lo que claude.ai necesita para el discovery.
+// ThrottlerGuard acota el rate-limit a esta superficie pública (no es global → /v1 y el web intactos).
 @Controller({ version: VERSION_NEUTRAL })
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, ThrottlerGuard)
 export class McpController {
   constructor(private readonly config: ConfigService) {}
 

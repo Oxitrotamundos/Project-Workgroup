@@ -77,6 +77,13 @@ async function bootstrap() {
         .map((s) => s.trim())
         .filter(Boolean),
     });
+    // Rate-limit acotado a la superficie pública /oauth (interacción + token + auth). Se registra
+    // ANTES de los handlers para interceptarlos; /v1 y el web quedan intactos.
+    const { default: rateLimit } = await import('express-rate-limit');
+    app
+      .getHttpAdapter()
+      .getInstance()
+      .use('/oauth', rateLimit({ windowMs: 60_000, limit: 120 }));
     // Interacción real (login gateado por Firebase): se monta ANTES de provider.callback() para
     // ganarle la ruta /oauth/interaction/:uid.
     const { mountOidcInteractions } = await import('./oauth/oidc-interactions');

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import { validateEnv } from './config/env.validation';
@@ -30,6 +31,9 @@ const isProd = process.env.NODE_ENV === 'production';
       envFilePath: '.env',
     }),
     ScheduleModule.forRoot(),
+    // Rate-limit acotado: el ThrottlerGuard solo se aplica en McpController (superficie
+    // pública /mcp). No se registra como APP_GUARD para no throttlear /v1 ni el web.
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL ?? (isProd ? 'info' : 'debug'),
