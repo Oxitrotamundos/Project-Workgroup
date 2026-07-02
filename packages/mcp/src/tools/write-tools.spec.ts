@@ -142,6 +142,35 @@ describe('daily_update', () => {
     expect(res.content[0].text).toContain('tras refrescar versiones');
   });
 
+  it('on TASK_VERSION_STALE re-resolves the whole batch, rebuilding a note against the FRESH description', async () => {
+    // Entre la resolución inicial y el retry, otra persona edita la descripción de la tarea 10.
+    const bumpedFixtureWithFreshDescription = [
+      { id: '10', name: 'Diseño', version: 7, status: 'not-started', progress: 0, description: 'edición concurrente' },
+      { id: '11', name: 'API', version: 9, status: 'in-progress', progress: 20, description: '' },
+    ];
+    const listTasks = vi
+      .fn()
+      .mockResolvedValueOnce(tasksFixture)
+      .mockResolvedValueOnce(bumpedFixtureWithFreshDescription);
+    const bulkUpdateTasks = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(409, 'TASK_VERSION_STALE', 'stale'))
+      .mockResolvedValueOnce({ tasks: [{ id: '10' }], summariesPatched: [] });
+    const { server, handlers } = makeServerSpy();
+    registerWriteTools(server, clientStub({ listTasks, bulkUpdateTasks }));
+    const res = await handlers.get('daily_update')!({
+      projectId: '9',
+      updates: [{ taskRef: '10', note: 'listo' }],
+    });
+    expect(bulkUpdateTasks).toHaveBeenCalledTimes(2);
+    const retried = bulkUpdateTasks.mock.calls[1][1];
+    // La nota se anexa a la descripción FRESCA (no a la vieja del snapshot inicial): no se pierde la edición concurrente.
+    expect(retried).toEqual([
+      { id: '10', data: { description: 'edición concurrente\nlisto' }, expectedVersion: 7 },
+    ]);
+    expect(res.content[0].text).toContain('tras refrescar versiones');
+  });
+
   it('propagates a second TASK_VERSION_STALE without looping forever', async () => {
     const listTasks = vi.fn().mockResolvedValue(tasksFixture);
     const bulkUpdateTasks = vi

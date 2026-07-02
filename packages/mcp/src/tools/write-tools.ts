@@ -10,11 +10,72 @@ import type {
   ImportProjectDto,
   ProjectStatus,
   ImportLinkType,
+  TaskResponse,
 } from '@project-workgroup/shared';
 import { ApiError, type ApiClient } from '../apiClient';
 import { textResult, errorResult } from './result';
 
 const DEFAULT_COLOR = '#64748b';
+
+interface DailyUpdateInput {
+  taskRef: string;
+  progress?: number;
+  status?: TaskResponse['status'];
+  note?: string;
+}
+
+type ResolvedDailyUpdate = { id: string; data: UpdateTaskDto; version: number };
+
+// Resuelve refs (id o nombre) contra un snapshot de tareas y arma {id,data,version} por item.
+// Se invoca dos veces en daily_update: con el snapshot inicial y, si hay conflicto, con uno fresco.
+function resolveDailyUpdates(
+  tasks: TaskResponse[],
+  updates: DailyUpdateInput[],
+  projectId: string,
+): { items: ResolvedDailyUpdate[] } | { error: Error } {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  // Índice por nombre a lista: un mismo nombre puede repetirse entre tareas.
+  const byName = new Map<string, typeof tasks>();
+  for (const t of tasks) {
+    const key = t.name.toLowerCase();
+    const bucket = byName.get(key);
+    if (bucket) bucket.push(t);
+    else byName.set(key, [t]);
+  }
+
+  const items: ResolvedDailyUpdate[] = [];
+  for (const u of updates) {
+    // El id exacto tiene prioridad y no pasa por el chequeo de ambigüedad de nombre.
+    let task = byId.get(u.taskRef);
+    if (!task) {
+      const matches = byName.get(u.taskRef.toLowerCase()) ?? [];
+      if (matches.length > 1) {
+        const candidates = matches.map((t) => `[${t.id}] ${t.name}`).join(', ');
+        return {
+          error: new Error(
+            `la tarea "${u.taskRef}" es ambigua en el proyecto ${projectId}; ` +
+              `vuelve a llamar con el id exacto. Candidatos: ${candidates}`,
+          ),
+        };
+      }
+      task = matches[0];
+    }
+    if (!task)
+      return {
+        error: new Error(`no pude resolver la tarea "${u.taskRef}" en el proyecto ${projectId}`),
+      };
+    const data: UpdateTaskDto = {};
+    if (u.progress !== undefined) data.progress = u.progress;
+    if (u.status !== undefined) data.status = u.status;
+    // Ignora notas en blanco para no ensuciar la descripción.
+    if (u.note?.trim()) {
+      const prev = task.description ? `${task.description}\n` : '';
+      data.description = `${prev}${u.note}`;
+    }
+    items.push({ id: task.id, data, version: task.version });
+  }
+  return { items };
+}
 
 export function registerWriteTools(server: McpServer, client: ApiClient): void {
   server.registerTool(
@@ -161,67 +222,25 @@ export function registerWriteTools(server: McpServer, client: ApiClient): void {
     },
     async ({ projectId, updates }) => {
       try {
-        const tasks = await client.listTasks(projectId);
-        const byId = new Map(tasks.map((t) => [t.id, t]));
-        // Índice por nombre a lista: un mismo nombre puede repetirse entre tareas.
-        const byName = new Map<string, typeof tasks>();
-        for (const t of tasks) {
-          const key = t.name.toLowerCase();
-          const bucket = byName.get(key);
-          if (bucket) bucket.push(t);
-          else byName.set(key, [t]);
-        }
-
         // Resolución de refs antes de tocar la API: cualquier ref no resuelta aborta.
-        const resolved: { id: string; data: UpdateTaskDto; version: number }[] = [];
-        for (const u of updates) {
-          // El id exacto tiene prioridad y no pasa por el chequeo de ambigüedad de nombre.
-          let task = byId.get(u.taskRef);
-          if (!task) {
-            const matches = byName.get(u.taskRef.toLowerCase()) ?? [];
-            if (matches.length > 1) {
-              const candidates = matches.map((t) => `[${t.id}] ${t.name}`).join(', ');
-              return errorResult(
-                new Error(
-                  `la tarea "${u.taskRef}" es ambigua en el proyecto ${projectId}; ` +
-                    `vuelve a llamar con el id exacto. Candidatos: ${candidates}`,
-                ),
-              );
-            }
-            task = matches[0];
-          }
-          if (!task)
-            return errorResult(
-              new Error(`no pude resolver la tarea "${u.taskRef}" en el proyecto ${projectId}`),
-            );
-          const data: UpdateTaskDto = {};
-          if (u.progress !== undefined) data.progress = u.progress;
-          if (u.status !== undefined) data.status = u.status;
-          // Ignora notas en blanco para no ensuciar la descripción.
-          if (u.note?.trim()) {
-            const prev = task.description ? `${task.description}\n` : '';
-            data.description = `${prev}${u.note}`;
-          }
-          resolved.push({ id: task.id, data, version: task.version });
-        }
+        const tasks = await client.listTasks(projectId);
+        const initial = resolveDailyUpdates(tasks, updates, projectId);
+        if ('error' in initial) return errorResult(initial.error);
 
-        const buildItems = (versionById: Map<string, number>) =>
-          resolved.map((r) => ({
-            id: r.id,
-            data: r.data,
-            expectedVersion: versionById.get(r.id) ?? r.version,
-          }));
+        const buildItems = (items: ResolvedDailyUpdate[]) =>
+          items.map((r) => ({ id: r.id, data: r.data, expectedVersion: r.version }));
 
-        let versionById = new Map(resolved.map((r) => [r.id, r.version]));
         try {
-          const res = await client.bulkUpdateTasks(projectId, buildItems(versionById));
+          const res = await client.bulkUpdateTasks(projectId, buildItems(initial.items));
           return textResult(`Actualicé ${res.tasks.length} tarea(s).`);
         } catch (err) {
-          // El bulk es atómico: un conflicto revierte todo. Refresca versiones y reintenta una vez.
+          // El bulk es atómico: un conflicto revierte todo. Re-resuelve el lote COMPLETO con un
+          // snapshot fresco (no solo las versiones) para no pisar una descripción editada mientras tanto.
           if (err instanceof ApiError && err.code === 'TASK_VERSION_STALE') {
-            const fresh = await client.listTasks(projectId);
-            versionById = new Map(fresh.map((t) => [t.id, t.version]));
-            const res = await client.bulkUpdateTasks(projectId, buildItems(versionById));
+            const freshTasks = await client.listTasks(projectId);
+            const retry = resolveDailyUpdates(freshTasks, updates, projectId);
+            if ('error' in retry) return errorResult(retry.error);
+            const res = await client.bulkUpdateTasks(projectId, buildItems(retry.items));
             return textResult(`Actualicé ${res.tasks.length} tarea(s) (tras refrescar versiones).`);
           }
           throw err;
