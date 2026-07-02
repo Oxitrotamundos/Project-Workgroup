@@ -603,6 +603,17 @@ export class TasksService {
             : [];
           const fresh =
             (await tx.task.findUnique({ where: { id } })) ?? updated;
+          // DEBUG-WRITE-PERSIST (temporal): ¿update y el findUnique ven lo mismo DENTRO de la tx?
+          this.logger?.warn(
+            {
+              dbg: 'update-tx',
+              id: id.toString(),
+              whereVersion: (where as { version?: number }).version ?? null,
+              updated: { progress: updated.progress, version: updated.version },
+              fresh: { progress: fresh.progress, version: fresh.version },
+            },
+            'DEBUG-WRITE-PERSIST',
+          );
           return { fresh, patched };
         },
         {
