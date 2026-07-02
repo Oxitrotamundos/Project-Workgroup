@@ -7,6 +7,48 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-02
+
+Epic MCP: servidor Model Context Protocol sobre el API existente, con transporte HTTP
+streamable, un servidor OAuth self-hosted como Authorization Server y tools de
+lectura/escritura/flujo. No introduce breaking changes en las superficies REST `/v1/*`
+ni en el frontend; el bump Major refleja la incorporación de una épica completa
+(regla de `CONTRIBUTING.md`).
+
+### Added
+- Nuevo workspace `packages/mcp`: servidor MCP con entrypoint stdio y loader de configuración local
+- Cliente API del MCP: thin client read-only con parsing del error-envelope y, más tarde, métodos de escritura con parsing multi-shape de errores de validación de Nest
+- Read tools: `list_projects`, `get_task`, `find_person`, `list_tasks` (con filtros de status/type acotados a los enums compartidos y bounds de fecha), y un tool de project overview con descripción y fechas normalizadas
+- Write tools: `create_task`, `update_task`, `assign_task`
+- Flow tools: `daily_update` (batch con resolución de refs y retry por versión), `plan_project` (sobre el endpoint transaccional de import) y `reschedule_task`/`apply_reschedule` (preview + apply)
+- Transporte MCP HTTP streamable montado en el API (`POST /mcp`), con su request handler en `packages/mcp`
+- Servidor OAuth self-hosted montado como Authorization Server: metadata RFC 8414 (con alias del well-known a la discovery de oidc-provider), adapter Prisma y tabla propia, registro de clientes CIMD con host-allowlist estricta, consent automático para clientes allowlisted, interacción de login gated por Firebase (email/password incluido), TTL de tokens y claves de cookie desde configuración, y protected-resource metadata
+- Tercer path del `AuthGuard`: validación de JWTs OAuth de MCP (con `exp` requerido) además de Firebase ID tokens y API keys
+- Rate-limiting de las superficies públicas MCP y OAuth, keyed por IP del cliente
+- Endpoint transaccional `POST /v1/projects/import` con su servicio y DTOs de import en `packages/shared`
+- Servicio de limpieza que purga payloads OAuth expirados de forma periódica
+
+### Changed
+- Import de proyectos: auto-expansión del rango del proyecto para cubrir las tasks importadas
+- Idempotencia: la clave se reclama antes del handler para frenar escrituras duplicadas ante retries concurrentes
+- Imagen Docker del API: bump de la base de Node 20 a Node 22; el build ahora compila también el workspace `packages/mcp`
+
+### Fixed
+- Conflictos de versión de task se propagan en `update_task`/`daily_update` en lugar de reintentar a ciegas; `daily_update` re-resuelve el batch completo en el retry
+- Timeout de request del cliente MCP elevado por encima del timeout de la tx de import del servidor
+- Body-parser JSON global registrado antes de montar el AS OAuth (evitaba que Nest recibiera `req.body` en `/v1`)
+- Rate-limits aplicados antes de la autenticación y keyed por IP
+- Se niegan principals OAuth en el controlador de api-keys
+- Coerción a número del query param `limit` en la búsqueda de usuarios
+- Manejo de respuesta flat-array en la lista de proyectos del frontend
+- Rechazo de dependencias duplicadas en el import de proyectos
+- La claim de idempotencia se conserva cuando falla la persistencia de la respuesta
+- MCP: nombre de task ambiguo rechazado en `daily_update`; overflow marcado en las listas del project overview; promedio solo sobre el progreso de tasks
+
+### Security
+- CVEs parcheados vía pnpm overrides: `qs` ≥6.15.2 (DoS, GHSA-q8mj-m7cp-5q26), `esbuild` ≥0.28.1 (arbitrary file read en dev-server, GHSA-g7r4-m6w7-qqqr) y `@babel/core` ≥7.29.6 <8 (arbitrary file read, GHSA-4x5r-pxfx-6jf8)
+- Hardening de las superficies públicas: rate-limiting antes de auth, rechazo de requests destructivos para tokens OAuth de MCP y `exp` obligatorio en los JWTs
+
 ## [1.1.0] - 2026-06-25
 
 ### Added
