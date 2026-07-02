@@ -17,6 +17,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
 import { IdempotencyModule } from './common/idempotency.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { CalendarModule } from './calendar/calendar.module';
+import { McpModule } from './mcp/mcp.module';
 import { OAuthCleanupService } from './oauth/oauth-cleanup.service';
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -68,6 +69,7 @@ const isProd = process.env.NODE_ENV === 'production';
     IdempotencyModule,
     ObservabilityModule,
     CalendarModule,
+    McpModule,
   ],
   providers: [OAuthCleanupService],
 })

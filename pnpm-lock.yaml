@@ -69,6 +69,9 @@ importers:
       '@prisma/client':
         specifier: ^7.8.0
         version: 7.8.0(prisma@7.8.0(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.6.3))(typescript@5.6.3)
+      '@project-workgroup/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@project-workgroup/shared':
         specifier: workspace:*
         version: link:../../packages/shared
