@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createApiClient, ApiError } from './apiClient';
+import { createApiClient, ApiError, REQUEST_TIMEOUT_MS } from './apiClient';
 
 const okJson = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -190,5 +190,17 @@ describe('createApiClient', () => {
     const err = await client().listProjects().catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err.code).toBe('TIMEOUT');
+  });
+});
+
+describe('REQUEST_TIMEOUT_MS invariant', () => {
+  const SERVER_IMPORT_TX_TIMEOUT_MS = 30_000; // apps/api/src/projects/project-import.service.ts
+
+  it('exceeds the server import tx timeout so the server always resolves first', () => {
+    // Si el timeout del cliente <= el de la tx del import del servidor, un import lento
+    // puede hacer que el cliente aborte justo cuando la tx del servidor commitea. El
+    // reintento subsiguiente (con una Idempotency-Key nueva) duplicaría el proyecto.
+    expect(REQUEST_TIMEOUT_MS).toBeGreaterThan(SERVER_IMPORT_TX_TIMEOUT_MS);
+    expect(REQUEST_TIMEOUT_MS).toBeGreaterThanOrEqual(45_000);
   });
 });

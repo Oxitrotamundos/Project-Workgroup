@@ -58,7 +58,11 @@ export interface ApiClient {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const enc = encodeURIComponent;
-const REQUEST_TIMEOUT_MS = 30_000;
+// Invariante: debe superar el timeout de la tx del import del servidor (30s, ver
+// apps/api/src/projects/project-import.service.ts) para que el servidor resuelva el
+// desenlace (commit/rollback) antes que el cliente aborte. Si no, un abort del cliente
+// puede coincidir con un commit ya hecho, y el reintento con Idempotency-Key nueva duplica.
+export const REQUEST_TIMEOUT_MS = 45_000;
 
 export function createApiClient(config: ApiClientConfig): ApiClient {
   const base = config.baseUrl.replace(/\/+$/, '');
