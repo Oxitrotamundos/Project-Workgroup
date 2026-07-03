@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AppLayout from './components/Layout/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ProjectView from './pages/ProjectView';
@@ -9,6 +10,8 @@ import AccountApiKeys from './pages/AccountApiKeys';
 import CalendarSettingsPage from './pages/CalendarSettingsPage';
 import ProjectSettingsPage from './pages/ProjectSettingsPage';
 import SettingsPage from './pages/SettingsPage';
+import AdminUsers from './pages/AdminUsers';
+import AdminResources from './pages/AdminResources';
 
 const LoginWrapper = () => {
   const { user, loading } = useAuth();
@@ -110,6 +113,27 @@ function App() {
                     <CalendarSettingsPage />
                   </AppLayout>
                 </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/admin/users"
+              element={
+                <AdminRoute>
+                  <AppLayout>
+                    <AdminUsers />
+                  </AppLayout>
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/resources"
+              element={
+                <AdminRoute>
+                  <AppLayout>
+                    <AdminResources />
+                  </AppLayout>
+                </AdminRoute>
               }
             />
 

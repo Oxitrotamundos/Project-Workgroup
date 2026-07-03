@@ -77,6 +77,18 @@ export class UserService {
     const result = await apiClient.post<UserResponse>('/v1/auth/sync', {});
     return toDomain(result);
   }
+
+  static async adminListUsers(): Promise<UserResponse[]> {
+    const res = await apiClient.get<PagedResponse<UserResponse>>('/v1/users');
+    return res.items;
+  }
+
+  static async adminUpdateUser(
+    id: string,
+    dto: { role?: 'admin' | 'pm' | 'member'; status?: 'active' | 'disabled' }
+  ): Promise<UserResponse> {
+    return apiClient.patch<UserResponse>(`/v1/users/${id}`, dto);
+  }
 }
 
 export default UserService;
