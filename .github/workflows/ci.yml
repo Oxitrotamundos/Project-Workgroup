@@ -31,6 +31,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Nada dispara esto automáticamente en un checkout limpio (sin postinstall
+      # hook); apps/api no compila ni lintea sin el cliente generado.
+      - run: pnpm --filter @project-workgroup/api exec prisma generate
+
       # El script raíz `lint` no antepone build:shared (a diferencia de build/test),
       # y el lint de apps/api usa type-aware linting que necesita packages/shared/dist.
       - run: pnpm run build:shared
