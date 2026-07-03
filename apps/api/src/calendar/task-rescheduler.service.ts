@@ -79,7 +79,7 @@ export class TaskReschedulerService {
         if (t.assigneeId && result.workload.length > 0) {
           await tx.workload.createMany({
             data: result.workload.map((slot) => ({
-              userId: t.assigneeId!,
+              resourceId: t.assigneeId!,
               taskId: t.id,
               projectId,
               date: slot.date,

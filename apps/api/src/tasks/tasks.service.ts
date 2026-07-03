@@ -223,7 +223,7 @@ export class TasksService {
     if (!assigneeId || workload.length === 0) return;
     await tx.workload.createMany({
       data: workload.map((slot) => ({
-        userId: assigneeId,
+        resourceId: assigneeId,
         taskId,
         projectId,
         date: slot.date,
@@ -311,20 +311,27 @@ export class TasksService {
     }
   }
 
-  private async resolveAssigneeId(
+  // assigneeId apunta a un resource (entidad asignable), no a un user. Solo se
+  // permite asignar a resources activos; las asignaciones previas a uno que luego
+  // se desactive se conservan.
+  private async resolveResourceId(
     assigneeId?: string,
   ): Promise<bigint | null | undefined> {
     if (assigneeId === undefined) return undefined;
     if (!assigneeId) return null;
 
     const id = this.parseBigInt(assigneeId, 'assigneeId');
-    const user = await this.prisma.user.findUnique({
+    const resource = await this.prisma.resource.findUnique({
       where: { id },
-      select: { id: true },
+      select: { status: true },
     });
-    if (!user)
+    if (!resource)
       throw new BadRequestException(
-        'assigneeId must reference an existing user',
+        'assigneeId must reference an existing resource',
+      );
+    if (resource.status !== 'active')
+      throw new BadRequestException(
+        'assigneeId must reference an active resource',
       );
     return id;
   }
@@ -440,7 +447,7 @@ export class TasksService {
   async create(projectId: bigint, dto: CreateTaskDto): Promise<TaskResponse> {
     const startedAt = Date.now();
     const parentId = await this.validateParent(projectId, null, dto.parentId);
-    const assigneeId = await this.resolveAssigneeId(dto.assigneeId);
+    const assigneeId = await this.resolveResourceId(dto.assigneeId);
     const order = await this.resolveNeighborOrders(projectId, dto.afterTaskId);
     const schedule = await this.computeSchedule(
       projectId,
@@ -544,7 +551,7 @@ export class TasksService {
       id,
       dto.parentId,
     );
-    const assigneeId = await this.resolveAssigneeId(dto.assigneeId);
+    const assigneeId = await this.resolveResourceId(dto.assigneeId);
     const finalAssigneeId =
       assigneeId !== undefined ? assigneeId : existing.assigneeId;
 
@@ -1142,7 +1149,7 @@ export class TasksService {
             itemId,
             data.parentId,
           );
-          const assigneeId = await this.resolveAssigneeId(data.assigneeId);
+          const assigneeId = await this.resolveResourceId(data.assigneeId);
           const finalAssigneeId =
             assigneeId !== undefined ? assigneeId : existing.assigneeId;
 
