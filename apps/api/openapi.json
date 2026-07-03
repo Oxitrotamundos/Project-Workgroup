@@ -74,6 +74,33 @@
         "tags": [
           "users"
         ]
+      },
+      "post": {
+        "operationId": "UsersController_adminCreate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserAdminDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "users"
+        ]
       }
     },
     "/users/{id}": {
@@ -1797,6 +1824,10 @@
       }
     },
     "schemas": {
+      "CreateUserAdminDto": {
+        "type": "object",
+        "properties": {}
+      },
       "UpdateUserAdminDto": {
         "type": "object",
         "properties": {}

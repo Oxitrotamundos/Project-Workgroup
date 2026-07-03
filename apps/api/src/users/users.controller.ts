@@ -4,11 +4,13 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
+  CreateUserAdminDto,
   SearchUsersQueryDto,
   UpdateUserAdminDto,
 } from '@project-workgroup/shared';
@@ -47,6 +49,13 @@ export class UsersController {
   @Get()
   async search(@Query() q: SearchUsersQueryDto) {
     return this.users.search(q);
+  }
+
+  @Post()
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async adminCreate(@Body() dto: CreateUserAdminDto) {
+    return this.users.adminCreate(dto);
   }
 
   @Patch(':id')

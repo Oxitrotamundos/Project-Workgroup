@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 export const GLOBAL_ROLES = ['admin', 'pm', 'member'] as const;
 export type GlobalRole = (typeof GLOBAL_ROLES)[number];
@@ -39,4 +47,18 @@ export class UpdateUserAdminDto {
 
   @IsOptional() @IsIn(USER_STATUSES)
   status?: UserStatus;
+}
+
+export class CreateUserAdminDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString() @MinLength(6)
+  password!: string;
+
+  @IsString() @MinLength(1)
+  displayName!: string;
+
+  @IsOptional() @IsIn(GLOBAL_ROLES)
+  role?: GlobalRole;
 }
