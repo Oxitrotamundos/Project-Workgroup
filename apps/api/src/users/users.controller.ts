@@ -1,8 +1,21 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { SearchUsersQueryDto } from '@project-workgroup/shared';
+import {
+  SearchUsersQueryDto,
+  UpdateUserAdminDto,
+} from '@project-workgroup/shared';
 import { AuthGuard, AuthUser } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from './users.service';
 
@@ -26,6 +39,7 @@ export class UsersController {
       email: full.email,
       displayName: full.displayName,
       role: full.role,
+      status: full.status,
       avatarUrl: full.avatarUrl,
     };
   }
@@ -33,5 +47,12 @@ export class UsersController {
   @Get()
   async search(@Query() q: SearchUsersQueryDto) {
     return this.users.search(q);
+  }
+
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async adminUpdate(@Param('id') id: string, @Body() dto: UpdateUserAdminDto) {
+    return this.users.adminUpdate(BigInt(id), dto);
   }
 }
