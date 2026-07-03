@@ -7,6 +7,25 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-07-03
+
+### Added
+- Workflow `ci.yml`: lint + build + test en cada pull request y push a `main` (no existía ningún check automático antes de esto)
+- Workflow `dependency-review.yml`: bloquea PRs que introduzcan dependencias con vulnerabilidades conocidas de severidad alta o superior
+- Workflow `deploy-web.yml`: despliega `apps/web` a Firebase Hosting automáticamente al publicar un release en GitHub (con guardrails para prereleases y releases que no apunten a `main`), más disparo manual (`workflow_dispatch`) para reintentar un deploy
+- Environment `production` en GitHub, restringido a la rama `main` y a cualquier tag, como guardrail adicional para el deploy
+- Ruleset en `main` que exige los checks `ci` y `dependency-review` en verde antes de mergear
+
+### Changed
+- Script raíz `build`: ahora compila también `packages/mcp` antes de `apps/api` (antes solo funcionaba en local por builds viejos ya presentes en disco)
+- `.nvmrc` actualizado de `18.19.1` a `20.20.0` para ser consistente con `engines.node`
+
+### Fixed
+- `apps/api` no compilaba en un checkout limpio: faltaba generar el cliente Prisma explícitamente (no hay postinstall que lo dispare)
+
+### Security
+- `js-yaml` actualizado (override `pnpm`) a `>=4.2.0`, cerrando la alerta de Dependabot #121 (GHSA-h67p-54hq-rp68, DoS por complejidad cuadrática en merge keys)
+
 ## [2.0.0] - 2026-07-02
 
 Epic MCP: servidor Model Context Protocol sobre el API existente, con transporte HTTP

@@ -1,17 +1,18 @@
 {
   "name": "project-workgroup",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "engines": {
     "node": ">=20.0.0"
   },
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build:shared": "pnpm --filter @project-workgroup/shared run build",
+    "build:mcp": "pnpm --filter @project-workgroup/mcp run build",
     "dev": "pnpm run build:shared && concurrently -n web,api -c auto \"pnpm:dev:web\" \"pnpm:dev:api\"",
     "dev:web": "pnpm --filter @project-workgroup/web run dev",
     "dev:api": "pnpm --filter @project-workgroup/api run start:dev",
-    "build": "pnpm run build:shared && pnpm --filter @project-workgroup/web run build && pnpm --filter @project-workgroup/api run build",
+    "build": "pnpm run build:shared && pnpm run build:mcp && pnpm --filter @project-workgroup/web run build && pnpm --filter @project-workgroup/api run build",
     "lint": "pnpm --filter @project-workgroup/web run lint && pnpm --filter @project-workgroup/api run lint",
     "test": "pnpm run build:shared && pnpm --filter @project-workgroup/web run test:run && pnpm --filter @project-workgroup/api run test",
     "db:up": "docker compose -f apps/api/docker-compose.dev.yml up -d",
@@ -45,7 +46,7 @@
       "@eslint/eslintrc>ajv": "^6.14.0",
       "eslint>ajv": "^6.14.0",
       "webpack": ">=5.104.1",
-      "js-yaml": ">=4.1.1",
+      "js-yaml": ">=4.2.0",
       "tmp": ">=0.2.6",
       "shell-quote": ">=1.8.4",
       "@grpc/grpc-js": ">=1.14.4",

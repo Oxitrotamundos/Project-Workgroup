@@ -1,0 +1,68 @@
+name: Deploy Web to Firebase Hosting
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag o ref a desplegar (por defecto: main)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Solo despliega si: se disparó manualmente, o el release publicado no es
+    # prerelease y apunta a main. Si no se cumple, el job queda Skipped (no
+    # fallido). La rama workflow_dispatch va primero porque
+    # github.event.release.* no existe fuera del evento `release`.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'release' &&
+       github.event.release.prerelease == false &&
+       github.event.release.target_commitish == 'main')
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ (github.event_name == 'workflow_dispatch' && inputs.ref) || github.ref }}
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run build:shared
+
+      - name: Build web
+        run: pnpm --filter @project-workgroup/web run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+
+      - uses: FirebaseExtended/action-hosting-deploy@500ac625ca2dd40cbd15f7659af953801858032a # v0.11.0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          channelId: live
+          firebaseToolsVersion: 15.22.4
