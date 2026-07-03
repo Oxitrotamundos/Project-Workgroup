@@ -2,7 +2,7 @@ import { IsDateString, IsNumberString, IsOptional, IsString } from 'class-valida
 
 export class CreateWorkloadDto {
   @IsString()
-  userId!: string;
+  resourceId!: string;
 
   @IsString()
   taskId!: string;
@@ -19,7 +19,7 @@ export class CreateWorkloadDto {
 
 export class WorkloadQueryDto {
   @IsOptional() @IsString()
-  userId?: string;
+  resourceId?: string;
 
   @IsOptional() @IsDateString()
   dateFrom?: string;
@@ -30,7 +30,7 @@ export class WorkloadQueryDto {
 
 export interface WorkloadResponse {
   id: string;
-  userId: string;
+  resourceId: string;
   taskId: string;
   projectId: string;
   date: string;
