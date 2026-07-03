@@ -1,25 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, X, Users, AlertTriangle } from 'lucide-react';
 import { useMembers } from '../hooks/useMembers';
+import type { ProjectRole } from '@project-workgroup/shared';
 
 interface MemberManagementProps {
   projectId: string;
+  isOwner?: boolean;
   onClose?: () => void;
 }
 
-const ROLE_VARIANT: Record<string, 'err' | 'info' | 'ok' | 'outline'> = {
+// Rol global del usuario (candidatos de búsqueda vienen de /v1/users con UserRole, no ProjectRole)
+const USER_ROLE_VARIANT: Record<string, 'err' | 'info' | 'ok' | 'outline'> = {
   admin: 'err',
   pm: 'info',
   member: 'ok',
 };
 
-const ROLE_LABEL: Record<string, string> = {
+const USER_ROLE_LABEL: Record<string, string> = {
   admin: 'Admin',
   pm: 'PM',
   member: 'Miembro',
 };
 
-const MemberManagement: React.FC<MemberManagementProps> = ({ projectId, onClose }) => {
+// Rol del miembro dentro del proyecto (ProjectRole real del backend)
+const ROLE_VARIANT: Record<ProjectRole, 'err' | 'info' | 'ok' | 'outline'> = {
+  manager: 'err',
+  contributor: 'info',
+  viewer: 'ok',
+};
+
+const ROLE_LABEL: Record<ProjectRole, string> = {
+  manager: 'Gestor',
+  contributor: 'Colaborador',
+  viewer: 'Visor',
+};
+
+const ROLE_OPTIONS: ProjectRole[] = ['manager', 'contributor', 'viewer'];
+
+const MemberManagement: React.FC<MemberManagementProps> = ({ projectId, isOwner = false, onClose }) => {
   const {
     members,
     searchResults,
@@ -30,13 +48,15 @@ const MemberManagement: React.FC<MemberManagementProps> = ({ projectId, onClose 
     searchUsers,
     addMember,
     removeMember,
+    updateMemberRole,
     clearSearch,
-  } = useMembers(projectId);
+  } = useMembers(projectId, isOwner);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState<string | null>(null);
   const [isRemovingMember, setIsRemovingMember] = useState<string | null>(null);
+  const [isChangingRole, setIsChangingRole] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -80,6 +100,18 @@ const MemberManagement: React.FC<MemberManagementProps> = ({ projectId, onClose 
       alert(err instanceof Error ? err.message : 'Error al quitar miembro');
     } finally {
       setIsRemovingMember(null);
+    }
+  };
+
+  const handleRoleChange = async (userId: string, projectRole: ProjectRole) => {
+    setIsChangingRole(userId);
+    try {
+      await updateMemberRole(userId, projectRole);
+    } catch (err) {
+      console.error('Error changing member role:', err);
+      alert(err instanceof Error ? err.message : 'Error al cambiar el rol');
+    } finally {
+      setIsChangingRole(null);
     }
   };
 
@@ -180,7 +212,7 @@ const MemberManagement: React.FC<MemberManagementProps> = ({ projectId, onClose 
                         {u.email}
                       </p>
                     </div>
-                    <span className={`badge ${ROLE_VARIANT[u.role] ?? 'outline'}`}>{ROLE_LABEL[u.role] ?? u.role}</span>
+                    <span className={`badge ${USER_ROLE_VARIANT[u.role] ?? 'outline'}`}>{USER_ROLE_LABEL[u.role] ?? u.role}</span>
                   </div>
                   <button
                     onClick={() => handleAddMember(u.id)}
@@ -251,7 +283,22 @@ const MemberManagement: React.FC<MemberManagementProps> = ({ projectId, onClose 
                     {m.email}
                   </p>
                 </div>
-                <span className={`badge ${ROLE_VARIANT[m.role] ?? 'outline'}`}>{ROLE_LABEL[m.role] ?? m.role}</span>
+                {permissions?.canChangeRoles ? (
+                  <select
+                    className="select"
+                    value={m.role}
+                    disabled={isChangingRole === m.userId}
+                    onChange={(e) => handleRoleChange(m.userId, e.target.value as ProjectRole)}
+                  >
+                    {ROLE_OPTIONS.map((role) => (
+                      <option key={role} value={role}>
+                        {ROLE_LABEL[role]}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className={`badge ${ROLE_VARIANT[m.role] ?? 'outline'}`}>{ROLE_LABEL[m.role] ?? m.role}</span>
+                )}
               </div>
 
               {permissions?.canRemoveMembers && (

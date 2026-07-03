@@ -1,5 +1,5 @@
 import { apiClient } from '../lib/apiClient';
-import type { UserResponse, PagedResponse } from '@project-workgroup/shared';
+import type { UserResponse, PagedResponse, ProjectMemberResponse, ProjectRole } from '@project-workgroup/shared';
 import type {
   UserSearchResult,
   MemberSearchFilters,
@@ -36,20 +36,24 @@ export class MemberService {
 
   static async getProjectMembers(projectId: string): Promise<ProjectMember[]> {
     try {
-      const rows = await apiClient.get<Array<{ user: UserResponse; projectRole: string }>>(`/v1/projects/${projectId}/members`);
+      const rows = await apiClient.get<ProjectMemberResponse[]>(`/v1/projects/${projectId}/members`);
       return rows.map(r => ({
         userId: r.user.id,
         email: r.user.email,
         displayName: r.user.displayName,
-        role: 'member' as const,
+        role: r.projectRole,
         avatar: r.user.avatarUrl ?? undefined,
-        joinedAt: '',
+        joinedAt: r.createdAt,
         addedBy: '',
       }));
     } catch (error) {
       console.error('Error getting project members:', error);
       throw error;
     }
+  }
+
+  static async updateMemberRole(projectId: string, userId: string, projectRole: ProjectRole): Promise<void> {
+    await apiClient.patch(`/v1/projects/${projectId}/members/${userId}`, { projectRole });
   }
 
   static async addMember(projectId: string, userId: string, _performedBy: string): Promise<void> {
@@ -60,14 +64,13 @@ export class MemberService {
     await apiClient.delete(`/v1/projects/${projectId}/members/${userId}`);
   }
 
-  static async getMemberManagementPermissions(
-    _projectId: string,
-    _userId: string
-  ): Promise<MemberManagementPermissions> {
+  // Cálculo síncrono de permisos (sin llamada de red): admin/owner/manager pueden gestionar miembros.
+  static computePermissions(input: { isAdmin: boolean; isOwner: boolean; myRole: ProjectRole | null }): MemberManagementPermissions {
+    const canManage = input.isAdmin || input.isOwner || input.myRole === 'manager';
     return {
-      canAddMembers: true,
-      canRemoveMembers: true,
-      canChangeRoles: false,
+      canAddMembers: canManage,
+      canRemoveMembers: canManage,
+      canChangeRoles: canManage,
       canRemoveAdmin: false,
       canRemovePM: false,
     };
