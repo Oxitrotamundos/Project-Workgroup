@@ -15,6 +15,7 @@ import type {
   ToolbarItem,
 } from 'wx-react-gantt';
 import type { Task, TaskLink } from '../types/domain';
+import type { AssigneeOption } from './TasksView/NewTaskRow';
 import type { WorkingCalendarResponse } from '@project-workgroup/shared';
 import {
   GanttDataProvider,
@@ -47,6 +48,7 @@ interface GanttChartProps {
   onLinksChanged?: (payload: GanttLinkChangePayload) => void;
   calendar?: WorkingCalendarResponse | null;
   onSelectTask?: (taskId: string) => void;
+  assignees?: AssigneeOption[];
 }
 
 const GanttChart: React.FC<GanttChartProps> = ({
@@ -61,6 +63,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
   onLinksChanged,
   calendar: calendarFromProps,
   onSelectTask,
+  assignees,
 }) => {
   const internalApiRef = useRef<GanttApi | null>(null);
   const apiRef = externalApiRef ?? internalApiRef;
@@ -243,12 +246,50 @@ const GanttChart: React.FC<GanttChartProps> = ({
     return [{ start: today, text: 'Hoy', css: 'current-day-marker' }];
   }, []);
 
+  const assigneesById = React.useMemo(() => {
+    const map = new Map<string, AssigneeOption>();
+    (assignees ?? []).forEach((a) => map.set(a.id, a));
+    return map;
+  }, [assignees]);
+
   const columns: GanttColumn[] = React.useMemo(() => {
     const STATUS_LABEL: Record<string, string> = {
       'not-started': 'No iniciada',
       'in-progress': 'En curso',
       completed: 'Completada',
       blocked: 'Bloqueada',
+    };
+
+    // Avatar (imagen si hay) o iniciales en un círculo, con tooltip nativo (title) =
+    // nombre + especialidad. Estilos inline con tokens para no depender de un CSS aparte.
+    const assigneeCell = (
+      _v: unknown,
+      task: GanttTask & { assigneeId?: string | null },
+    ): string => {
+      const a = task.assigneeId ? assigneesById.get(String(task.assigneeId)) : undefined;
+      if (!a) return '<span style="color:var(--ink-3)">—</span>';
+      const esc = (s: string) =>
+        String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      const tip = esc(a.discipline ? `${a.displayName} — ${a.discipline}` : a.displayName);
+      const base =
+        'display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:999px;font:600 10px/1 var(--font-sans);overflow:hidden;vertical-align:middle';
+      if (a.avatar) {
+        return `<span title="${tip}" style="${base}"><img src="${esc(a.avatar)}" alt="" style="width:100%;height:100%;object-fit:cover" /></span>`;
+      }
+      const initials = esc(
+        a.displayName
+          .trim()
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((w) => w[0] ?? '')
+          .join('')
+          .toUpperCase() || '?',
+      );
+      return `<span title="${tip}" style="${base};background:var(--p-100);color:var(--p-700)">${initials}</span>`;
     };
 
     return [
@@ -303,6 +344,13 @@ const GanttChart: React.FC<GanttChartProps> = ({
         },
       },
       {
+        id: 'assignee',
+        header: 'Responsable',
+        align: 'center',
+        width: 96,
+        template: assigneeCell,
+      },
+      {
         id: 'action',
         header: 'Acciones',
         align: 'center',
@@ -319,7 +367,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         },
       },
     ];
-  }, []);
+  }, [assigneesById]);
 
   const handleAddTaskFromToolbar = async () => {
     try {

@@ -143,6 +143,7 @@ export class GanttDataProvider {
         cached.type === fresh.type &&
         cached.parentId === fresh.parentId &&
         cached.order === fresh.order &&
+        cached.assigneeId === fresh.assigneeId &&
         cached.open === fresh.open;
       if (sameShape) continue;
 
@@ -422,7 +423,8 @@ export class GanttDataProvider {
       hoursPerDay: Number.isFinite(task.hoursPerDay) ? task.hoursPerDay : undefined,
       status: task.status,
       priority: task.priority,
-    } as GanttTask & { status: string; priority: string };
+      assigneeId: task.assigneeId ?? null,
+    } as GanttTask & { status: string; priority: string; assigneeId: string | null };
 
     if (childrenByParent) {
       const hasChildren = childrenByParent.has(task.id);
