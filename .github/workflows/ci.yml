@@ -35,9 +35,12 @@ jobs:
       # hook); apps/api no compila ni lintea sin el cliente generado.
       - run: pnpm --filter @project-workgroup/api exec prisma generate
 
-      # El script raíz `lint` no antepone build:shared (a diferencia de build/test),
-      # y el lint de apps/api usa type-aware linting que necesita packages/shared/dist.
+      # El script raíz `lint` no antepone estos builds (a diferencia de `build`),
+      # y el lint de apps/api usa type-aware linting que necesita ambos dist
+      # (apps/api importa de @project-workgroup/shared y @project-workgroup/mcp).
       - run: pnpm run build:shared
+
+      - run: pnpm run build:mcp
 
       - run: pnpm run lint
 

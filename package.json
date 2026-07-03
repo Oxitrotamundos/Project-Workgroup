@@ -8,10 +8,11 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build:shared": "pnpm --filter @project-workgroup/shared run build",
+    "build:mcp": "pnpm --filter @project-workgroup/mcp run build",
     "dev": "pnpm run build:shared && concurrently -n web,api -c auto \"pnpm:dev:web\" \"pnpm:dev:api\"",
     "dev:web": "pnpm --filter @project-workgroup/web run dev",
     "dev:api": "pnpm --filter @project-workgroup/api run start:dev",
-    "build": "pnpm run build:shared && pnpm --filter @project-workgroup/web run build && pnpm --filter @project-workgroup/api run build",
+    "build": "pnpm run build:shared && pnpm run build:mcp && pnpm --filter @project-workgroup/web run build && pnpm --filter @project-workgroup/api run build",
     "lint": "pnpm --filter @project-workgroup/web run lint && pnpm --filter @project-workgroup/api run lint",
     "test": "pnpm run build:shared && pnpm --filter @project-workgroup/web run test:run && pnpm --filter @project-workgroup/api run test",
     "db:up": "docker compose -f apps/api/docker-compose.dev.yml up -d",
