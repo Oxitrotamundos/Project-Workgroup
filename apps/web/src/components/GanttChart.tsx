@@ -28,6 +28,7 @@ import { createHighlightTime } from '../services/workingCalendarMarkers';
 import { LocaleProvider } from './LocaleProvider';
 import { setupAutoLocalization } from '../utils/ganttLocalizer';
 import { applyBarTooltips } from '../utils/ganttBarTooltips';
+import { applyAssigneeCells, type AssigneeCellInfo } from '../utils/ganttAssigneeCells';
 import { GanttDragTooltip, type DragTooltipContext } from '../utils/ganttDragTooltip';
 import { computeStructuralKey } from '../utils/ganttStructuralKey';
 import { GanttTimeline } from './GanttTimeline';
@@ -247,7 +248,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
   }, []);
 
   const assigneesById = React.useMemo(() => {
-    const map = new Map<string, AssigneeOption>();
+    const map = new Map<string, AssigneeCellInfo>();
     (assignees ?? []).forEach((a) => map.set(a.id, a));
     return map;
   }, [assignees]);
@@ -258,38 +259,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
       'in-progress': 'En curso',
       completed: 'Completada',
       blocked: 'Bloqueada',
-    };
-
-    // Avatar (imagen si hay) o iniciales en un círculo, con tooltip nativo (title) =
-    // nombre + especialidad. Estilos inline con tokens para no depender de un CSS aparte.
-    const assigneeCell = (
-      _v: unknown,
-      task: GanttTask & { assigneeId?: string | null },
-    ): string => {
-      const a = task.assigneeId ? assigneesById.get(String(task.assigneeId)) : undefined;
-      if (!a) return '<span style="color:var(--ink-3)">—</span>';
-      const esc = (s: string) =>
-        String(s)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;');
-      const tip = esc(a.discipline ? `${a.displayName} — ${a.discipline}` : a.displayName);
-      const base =
-        'display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:999px;font:600 10px/1 var(--font-sans);overflow:hidden;vertical-align:middle';
-      if (a.avatar) {
-        return `<span title="${tip}" style="${base}"><img src="${esc(a.avatar)}" alt="" style="width:100%;height:100%;object-fit:cover" /></span>`;
-      }
-      const initials = esc(
-        a.displayName
-          .trim()
-          .split(/\s+/)
-          .slice(0, 2)
-          .map((w) => w[0] ?? '')
-          .join('')
-          .toUpperCase() || '?',
-      );
-      return `<span title="${tip}" style="${base};background:var(--p-100);color:var(--p-700)">${initials}</span>`;
     };
 
     return [
@@ -348,7 +317,9 @@ const GanttChart: React.FC<GanttChartProps> = ({
         header: 'Responsable',
         align: 'center',
         width: 96,
-        template: assigneeCell,
+        // El contenido (avatar) se inyecta por DOM en un effect: el grid escapa el HTML
+        // del template. Se deja vacío para no mostrar texto crudo.
+        template: () => '',
       },
       {
         id: 'action',
@@ -367,7 +338,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         },
       },
     ];
-  }, [assigneesById]);
+  }, []);
 
   const handleAddTaskFromToolbar = async () => {
     try {
@@ -545,6 +516,39 @@ const GanttChart: React.FC<GanttChartProps> = ({
       observer.disconnect();
     };
   }, [apiRef, dataProvider]);
+
+  // Inyecta el avatar del responsable en las celdas de la columna "assignee": el grid
+  // renderiza el template como texto, así que se hace por DOM (patrón de applyBarTooltips).
+  // El MutationObserver re-aplica al re-renderizar el grid (scroll/virtualización/updates);
+  // el guard idempotente del util evita bucles. Re-corre al cambiar tareas o asignados.
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+    const THROTTLE_MS = 150;
+    let scheduled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const apply = () => {
+      scheduled = false;
+      applyAssigneeCells(apiRef.current, root, assigneesById);
+    };
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      timeoutId = setTimeout(apply, THROTTLE_MS);
+    };
+
+    schedule();
+    const grid = root.querySelector('.wx-grid') ?? root;
+    const observer = new MutationObserver(schedule);
+    observer.observe(grid, { childList: true, subtree: true });
+
+    return () => {
+      scheduled = false;
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      observer.disconnect();
+    };
+  }, [apiRef, assigneesById, tasks, dataProvider, toolbarApi]);
 
   // Tooltip en vivo durante el arrastre: se monta cuando el contenedor del Gantt existe.
   useEffect(() => {
