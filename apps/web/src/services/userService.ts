@@ -89,6 +89,15 @@ export class UserService {
   ): Promise<UserResponse> {
     return apiClient.patch<UserResponse>(`/v1/users/${id}`, dto);
   }
+
+  static async adminCreateUser(dto: {
+    email: string;
+    displayName: string;
+    password: string;
+    role?: 'admin' | 'pm' | 'member';
+  }): Promise<UserResponse> {
+    return apiClient.post<UserResponse>('/v1/users', dto);
+  }
 }
 
 export default UserService;
