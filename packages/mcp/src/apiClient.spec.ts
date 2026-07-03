@@ -42,6 +42,18 @@ describe('createApiClient', () => {
     expect(result.items).toEqual(items);
   });
 
+  it('builds the resources search query and forces status=active', async () => {
+    const items = [
+      { id: '3', name: 'Ana', email: 'ana@x.com', kind: 'user', status: 'active', userId: '30', avatarUrl: null, discipline: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+    ];
+    fetchMock.mockResolvedValueOnce(okJson({ items, nextCursor: null }));
+    const result = await client().searchResources({ search: 'ana', limit: 5 });
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://api.test/v1/resources?search=ana&limit=5&status=active',
+    );
+    expect(result.items).toEqual(items);
+  });
+
   it('translates the error envelope into an ApiError', async () => {
     fetchMock.mockResolvedValueOnce(
       okJson(

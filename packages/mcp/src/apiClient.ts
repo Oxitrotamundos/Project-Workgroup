@@ -3,6 +3,7 @@ import type {
   ProjectResponse,
   TaskResponse,
   UserResponse,
+  ResourceResponse,
   PagedResponse,
   CreateTaskDto,
   UpdateTaskDto,
@@ -42,6 +43,10 @@ export interface ApiClient {
     search?: string;
     limit?: number;
   }): Promise<PagedResponse<UserResponse>>;
+  searchResources(params: {
+    search?: string;
+    limit?: number;
+  }): Promise<PagedResponse<ResourceResponse>>;
   createTask(projectId: string, dto: CreateTaskDto): Promise<TaskResponse>;
   updateTask(id: string, dto: UpdateTaskDto): Promise<TaskMutationResponse>;
   bulkUpdateTasks(
@@ -145,6 +150,18 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       return request<PagedResponse<UserResponse>>(
         'GET',
         `/v1/users${query ? `?${query}` : ''}`,
+      );
+    },
+    searchResources: ({ search, limit }) => {
+      const qs = new URLSearchParams();
+      if (search) qs.set('search', search);
+      if (limit !== undefined) qs.set('limit', String(limit));
+      // Solo recursos activos: uno inactivo no debería ser asignable a tareas nuevas.
+      qs.set('status', 'active');
+      const query = qs.toString();
+      return request<PagedResponse<ResourceResponse>>(
+        'GET',
+        `/v1/resources${query ? `?${query}` : ''}`,
       );
     },
 

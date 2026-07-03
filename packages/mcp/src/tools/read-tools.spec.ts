@@ -19,6 +19,7 @@ const clientStub = (over: Partial<ApiClient> = {}): ApiClient => ({
   listTasks: vi.fn(),
   getTask: vi.fn(),
   searchUsers: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+  searchResources: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
   createTask: vi.fn(),
   updateTask: vi.fn(),
   bulkUpdateTasks: vi.fn(),
