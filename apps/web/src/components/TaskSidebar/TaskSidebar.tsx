@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Save } from 'lucide-react';
 import type { Task, TaskStatus, TaskPriority, TaskType } from '../../types/domain';
+import type { AssigneeOption } from '../TasksView/NewTaskRow';
 import { useProjectSettings } from '../../contexts/ProjectSettingsContext';
 import './taskSidebar.css';
 
@@ -14,6 +15,7 @@ interface UpdatePatch {
   progress?: number;
   startDate?: string;
   endDate?: string;
+  assigneeId?: string | null;
 }
 
 interface Props {
@@ -21,6 +23,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSave: (taskId: string, patch: UpdatePatch, expectedVersion?: number) => Promise<void>;
+  assignees?: AssigneeOption[];
 }
 
 const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
@@ -76,7 +79,7 @@ const inputToIso = (value: string): string | null => {
   return new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), 0, 0, 0)).toISOString();
 };
 
-const TaskSidebar: React.FC<Props> = ({ task, open, onClose, onSave }) => {
+const TaskSidebar: React.FC<Props> = ({ task, open, onClose, onSave, assignees }) => {
   const { isDays } = useProjectSettings();
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -87,6 +90,7 @@ const TaskSidebar: React.FC<Props> = ({ task, open, onClose, onSave }) => {
   const [progress, setProgress] = React.useState('0');
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
+  const [assigneeId, setAssigneeId] = React.useState<string>('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -101,6 +105,7 @@ const TaskSidebar: React.FC<Props> = ({ task, open, onClose, onSave }) => {
     setProgress(String(task.progress ?? 0));
     setStartDate(isDays ? isoToDateInput(task.startDate) : isoToDateTimeInput(task.startDate));
     setEndDate(isDays ? isoToDateInput(task.endDate) : isoToDateTimeInput(task.endDate));
+    setAssigneeId(task.assigneeId ?? '');
     setError(null);
   }, [task, isDays]);
 
@@ -126,6 +131,7 @@ const TaskSidebar: React.FC<Props> = ({ task, open, onClose, onSave }) => {
     if (startIso && startIso !== new Date(task.startDate).toISOString()) patch.startDate = startIso;
     const endIso = inputToIso(endDate);
     if (endIso && endIso !== new Date(task.endDate).toISOString()) patch.endDate = endIso;
+    if ((assigneeId || null) !== (task.assigneeId ?? null)) patch.assigneeId = assigneeId || null;
     if (Object.keys(patch).length === 0) {
       onClose();
       return;
@@ -206,6 +212,16 @@ const TaskSidebar: React.FC<Props> = ({ task, open, onClose, onSave }) => {
             <select className="ts-input" value={taskType} onChange={(e) => setTaskType(e.target.value as TaskType)}>
               {TYPE_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="ts-field">
+            <span className="ts-label">Responsable</span>
+            <select className="ts-input" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+              <option value="">Sin asignar</option>
+              {(assignees ?? []).map((a) => (
+                <option key={a.id} value={a.id}>{a.displayName}{a.discipline ? ` · ${a.discipline}` : ''}</option>
               ))}
             </select>
           </label>

@@ -183,7 +183,13 @@ const ProjectView: React.FC = () => {
   );
 
   const assigneeOptions = React.useMemo(
-    () => resources.map((r) => ({ id: r.id, displayName: r.name, avatar: r.avatarUrl ?? undefined })),
+    () =>
+      resources.map((r) => ({
+        id: r.id,
+        displayName: r.name,
+        avatar: r.avatarUrl ?? undefined,
+        discipline: r.discipline ?? undefined,
+      })),
     [resources],
   );
 
@@ -200,6 +206,7 @@ const ProjectView: React.FC = () => {
         progress?: number;
         startDate?: string;
         endDate?: string;
+        assigneeId?: string | null;
       },
       expectedVersion?: number,
     ) => {
@@ -214,6 +221,7 @@ const ProjectView: React.FC = () => {
           ...(patch.startDate !== undefined && { startDate: patch.startDate }),
           ...(patch.endDate !== undefined && { endDate: patch.endDate }),
           ...(patch.progress !== undefined && { progress: patch.progress }),
+          ...(patch.assigneeId !== undefined && { assigneeId: patch.assigneeId ?? '' }),
           ...(expectedVersion !== undefined && { expectedVersion }),
         });
         applyTasksPayload({

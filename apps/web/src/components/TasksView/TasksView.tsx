@@ -35,6 +35,7 @@ interface Props {
       progress?: number;
       startDate?: string;
       endDate?: string;
+      assigneeId?: string | null;
     },
     expectedVersion?: number,
   ) => Promise<void>;
@@ -135,6 +136,7 @@ const TasksView: React.FC<Props> = ({
               onLinksChanged={onLinksChanged}
               calendar={calendar}
               onSelectTask={handleSelectTask}
+              assignees={assignees}
             />
           </div>
         ) : (
@@ -153,6 +155,7 @@ const TasksView: React.FC<Props> = ({
         task={selectedTask}
         open={selectedTask !== null}
         onClose={handleCloseSidebar}
+        assignees={assignees}
         onSave={async (taskId, patch, expectedVersion) => {
           if (onUpdateTask) await onUpdateTask(taskId, patch, expectedVersion);
         }}

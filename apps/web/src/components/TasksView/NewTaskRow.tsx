@@ -15,6 +15,7 @@ export interface AssigneeOption {
   id: string;
   displayName: string;
   avatar?: string;
+  discipline?: string;
 }
 
 interface Props {
