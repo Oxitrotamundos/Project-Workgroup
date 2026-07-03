@@ -17,6 +17,7 @@ describe('Workload (e2e)', () => {
   let outsiderId: bigint;
   let projectId: bigint;
   let taskId: bigint;
+  let resourceId: bigint;
   let currentUser: MockUser;
 
   beforeAll(async () => {
@@ -42,6 +43,11 @@ describe('Workload (e2e)', () => {
       },
     });
     ownerId = owner.id;
+    // El workload apunta a un resource, no a un user: creamos el resource enlazado del owner.
+    const resource = await prisma.resource.create({
+      data: { name: 'WL Owner', kind: 'user', userId: ownerId },
+    });
+    resourceId = resource.id;
     const outsider = await prisma.user.create({
       data: {
         firebaseUid: 'wl-outsider-uid',
@@ -101,7 +107,7 @@ describe('Workload (e2e)', () => {
       .post(`/v1/projects/${projectId}/workload`)
       .set('Authorization', 'Bearer fake-token')
       .send({
-        userId: ownerId.toString(),
+        resourceId: resourceId.toString(),
         taskId: taskId.toString(),
         date: '2026-01-15',
         allocatedHours: '8',
@@ -116,7 +122,7 @@ describe('Workload (e2e)', () => {
       .post(`/v1/projects/${projectId}/workload`)
       .set('Authorization', 'Bearer fake-token')
       .send({
-        userId: ownerId.toString(),
+        resourceId: resourceId.toString(),
         taskId: taskId.toString(),
         date: '2026-02-10',
         allocatedHours: '4',
@@ -135,7 +141,7 @@ describe('Workload (e2e)', () => {
   it('DELETE /v1/workload/:id → 403 when caller is not a project member', async () => {
     const created = await prisma.workload.create({
       data: {
-        userId: ownerId,
+        resourceId: resourceId,
         taskId,
         projectId,
         date: new Date('2026-03-01'),
@@ -164,7 +170,7 @@ describe('Workload (e2e)', () => {
   it('DELETE /v1/workload/:id → 204 when caller is project owner', async () => {
     const created = await prisma.workload.create({
       data: {
-        userId: ownerId,
+        resourceId: resourceId,
         taskId,
         projectId,
         date: new Date('2026-04-01'),
