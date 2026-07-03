@@ -99,9 +99,9 @@ export class ResourcesService {
     const updated = await this.prisma.resource.update({
       where: { id },
       data: {
-        name: isUserLinked ? undefined : dto.name ?? undefined,
-        email: isUserLinked ? undefined : dto.email ?? undefined,
-        avatarUrl: isUserLinked ? undefined : dto.avatarUrl ?? undefined,
+        name: isUserLinked ? undefined : (dto.name ?? undefined),
+        email: isUserLinked ? undefined : (dto.email ?? undefined),
+        avatarUrl: isUserLinked ? undefined : (dto.avatarUrl ?? undefined),
         discipline: dto.discipline ?? undefined,
         status: dto.status ?? undefined,
       },
@@ -156,7 +156,9 @@ export class ResourcesService {
     });
     if (!resource) throw new NotFoundException('resource not found');
     if (resource.kind !== 'placeholder')
-      throw new BadRequestException('only placeholder resources can be deleted');
+      throw new BadRequestException(
+        'only placeholder resources can be deleted',
+      );
     if (resource._count.assignedTasks > 0 || resource._count.workload > 0)
       throw new ConflictException(
         'resource has assigned tasks or workload; reassign them first',

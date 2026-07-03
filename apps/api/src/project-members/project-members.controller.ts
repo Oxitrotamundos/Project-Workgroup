@@ -48,7 +48,11 @@ export class ProjectMembersController {
     @Param('userId') userId: string,
     @Body() dto: UpdateProjectMemberDto,
   ) {
-    return this.members.updateRole(BigInt(projectId), BigInt(userId), dto.projectRole);
+    return this.members.updateRole(
+      BigInt(projectId),
+      BigInt(userId),
+      dto.projectRole,
+    );
   }
 
   @Delete(':userId')
