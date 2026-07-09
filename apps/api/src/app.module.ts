@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ProjectsModule } from './projects/projects.module';
 import { ProjectMembersModule } from './project-members/project-members.module';
+import { ResourcesModule } from './resources/resources.module';
 import { TasksModule } from './tasks/tasks.module';
 import { TaskLinksModule } from './task-links/task-links.module';
 import { WorkloadModule } from './workload/workload.module';
@@ -66,6 +67,7 @@ const isProd = process.env.NODE_ENV === 'production';
     UsersModule,
     ProjectsModule,
     ProjectMembersModule,
+    ResourcesModule,
     TasksModule,
     TaskLinksModule,
     WorkloadModule,

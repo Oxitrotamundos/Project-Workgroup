@@ -5,7 +5,7 @@ import 'wx-react-gantt/dist/gantt.css';
 import '../styles/gantt-custom.css';
 import { useTasks } from '../hooks/usetasks';
 import { useProject } from '../hooks/useProject';
-import { useMembers } from '../hooks/useMembers';
+import { useResources } from '../hooks/useResources';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '../contexts/NavigationContext';
 import { ProjectActions, ProjectMeta } from '../components/Layout';
@@ -25,6 +25,9 @@ import type { WorkingCalendarResponse } from '@project-workgroup/shared';
 import type { Task, TaskLink, TaskPriority, TaskStatus, TaskType } from '../types/domain';
 import type { GanttApi } from 'wx-react-gantt';
 
+// Referencia estable para no reiniciar useResources en cada render.
+const ACTIVE_RESOURCE_FILTER = { status: 'active' } as const;
+
 const ProjectView: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -37,7 +40,7 @@ const ProjectView: React.FC = () => {
   const { tasks, loading: tasksLoading, error: tasksError, refetch: refetchTasks } = useTasks(projectId);
   const { data: taskLinks = [] } = useProjectTaskLinksQuery(user ? projectId : undefined);
   const { data: projectSettings } = useProjectSettingsQuery(user ? projectId : undefined);
-  const { members, loadMembers } = useMembers(projectId ?? null);
+  const { resources } = useResources(ACTIVE_RESOURCE_FILTER);
   const [calendar, setCalendar] = React.useState<WorkingCalendarResponse | null>(null);
 
   React.useEffect(() => {
@@ -101,12 +104,6 @@ const ProjectView: React.FC = () => {
     },
     [projectId, queryClient],
   );
-
-  React.useEffect(() => {
-    if (projectId) {
-      loadMembers();
-    }
-  }, [projectId, loadMembers]);
 
   const handleOpenCalendar = React.useCallback(() => {
     if (projectId) navigate(`/project/${projectId}/settings`);
@@ -186,8 +183,14 @@ const ProjectView: React.FC = () => {
   );
 
   const assigneeOptions = React.useMemo(
-    () => members.map((m) => ({ id: m.userId, displayName: m.displayName, avatar: m.avatar })),
-    [members],
+    () =>
+      resources.map((r) => ({
+        id: r.id,
+        displayName: r.name,
+        avatar: r.avatarUrl ?? undefined,
+        discipline: r.discipline ?? undefined,
+      })),
+    [resources],
   );
 
   const handleUpdateTaskInline = React.useCallback(
@@ -203,6 +206,7 @@ const ProjectView: React.FC = () => {
         progress?: number;
         startDate?: string;
         endDate?: string;
+        assigneeId?: string | null;
       },
       expectedVersion?: number,
     ) => {
@@ -217,6 +221,7 @@ const ProjectView: React.FC = () => {
           ...(patch.startDate !== undefined && { startDate: patch.startDate }),
           ...(patch.endDate !== undefined && { endDate: patch.endDate }),
           ...(patch.progress !== undefined && { progress: patch.progress }),
+          ...(patch.assigneeId !== undefined && { assigneeId: patch.assigneeId ?? '' }),
           ...(expectedVersion !== undefined && { expectedVersion }),
         });
         applyTasksPayload({

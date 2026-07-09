@@ -1,12 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { MemberService } from '../services/memberService';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserRole } from './useUserRole';
 import type {
   ProjectMember,
   UserSearchResult,
   MemberSearchFilters,
   MemberManagementPermissions
 } from '../types/domain';
+import type { ProjectRole } from '@project-workgroup/shared';
 
 interface UseMembersState {
   members: ProjectMember[];
@@ -22,14 +24,16 @@ interface UseMembersActions {
   searchUsers: (filters: MemberSearchFilters) => Promise<void>;
   addMember: (userId: string) => Promise<void>;
   removeMember: (userId: string) => Promise<void>;
+  updateMemberRole: (userId: string, projectRole: ProjectRole) => Promise<void>;
   clearSearch: () => void;
   refreshPermissions: () => Promise<void>;
 }
 
 interface UseMembersReturn extends UseMembersState, UseMembersActions {}
 
-export function useMembers(projectId: string | null): UseMembersReturn {
+export function useMembers(projectId: string | null, isOwner: boolean = false): UseMembersReturn {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const [state, setState] = useState<UseMembersState>({
     members: [],
     searchResults: [],
@@ -122,7 +126,7 @@ export function useMembers(projectId: string | null): UseMembersReturn {
 
     try {
       await MemberService.removeMember(projectId, userId, user.uid);
-      
+
       // Recargar miembros después de quitar
       await loadMembers();
     } catch (error) {
@@ -131,43 +135,52 @@ export function useMembers(projectId: string | null): UseMembersReturn {
     }
   }, [projectId, user, loadMembers]);
 
+  // Cambiar el rol de un miembro
+  const updateMemberRole = useCallback(async (userId: string, projectRole: ProjectRole): Promise<void> => {
+    if (!projectId) {
+      throw new Error('Proyecto no disponible');
+    }
+
+    try {
+      await MemberService.updateMemberRole(projectId, userId, projectRole);
+
+      // Recargar miembros después de cambiar el rol
+      await loadMembers();
+    } catch (error) {
+      console.error('Error updating member role:', error);
+      throw error;
+    }
+  }, [projectId, loadMembers]);
+
   // Limpiar resultados de búsqueda
   const clearSearch = useCallback((): void => {
     setState(prev => ({ ...prev, searchResults: [] }));
   }, []);
 
-  // Refrescar permisos
-  const refreshPermissions = useCallback(async (): Promise<void> => {
-    if (!projectId || !user) {
-      setState(prev => ({ ...prev, permissions: null }));
-      return;
-    }
+  // Rol propio dentro del proyecto: el uid de Firebase no mapea directo al userId del backend,
+  // así que se busca por email (sí disponible en ambos lados) entre los miembros cargados.
+  const myRole = useMemo<ProjectRole | null>(() => {
+    return state.members.find(m => m.email === user?.email)?.role ?? null;
+  }, [state.members, user]);
 
-    try {
-      const permissions = await MemberService.getMemberManagementPermissions(projectId, user.uid);
-      setState(prev => ({ ...prev, permissions }));
-    } catch (error) {
-      console.error('Error loading permissions:', error);
-      setState(prev => ({
-        ...prev,
-        permissions: {
-          canAddMembers: false,
-          canRemoveMembers: false,
-          canChangeRoles: false,
-          canRemoveAdmin: false,
-          canRemovePM: false
-        }
-      }));
-    }
-  }, [projectId, user]);
+  // Cálculo síncrono de permisos (sin llamada de red)
+  const refreshPermissions = useCallback(async (): Promise<void> => {
+    const permissions = MemberService.computePermissions({ isAdmin, isOwner, myRole });
+    setState(prev => ({ ...prev, permissions }));
+  }, [isAdmin, isOwner, myRole]);
+
+  // Recomputa permisos cada vez que cambian miembros, rol de admin o de owner
+  useEffect(() => {
+    const permissions = MemberService.computePermissions({ isAdmin, isOwner, myRole });
+    setState(prev => ({ ...prev, permissions }));
+  }, [isAdmin, isOwner, myRole]);
 
   // Cargar datos iniciales
   useEffect(() => {
     if (projectId && user) {
       loadMembers();
-      refreshPermissions();
     }
-  }, [projectId, user, loadMembers, refreshPermissions]);
+  }, [projectId, user, loadMembers]);
 
   return {
     ...state,
@@ -175,6 +188,7 @@ export function useMembers(projectId: string | null): UseMembersReturn {
     searchUsers,
     addMember,
     removeMember,
+    updateMemberRole,
     clearSearch,
     refreshPermissions
   };

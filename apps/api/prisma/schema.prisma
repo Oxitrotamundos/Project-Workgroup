@@ -63,6 +63,21 @@ enum CalendarScope {
   project
 }
 
+enum ResourceKind {
+  user
+  placeholder
+}
+
+enum ResourceStatus {
+  active
+  inactive
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model User {
@@ -71,17 +86,37 @@ model User {
   email       String     @unique
   displayName String     @map("display_name")
   role        GlobalRole @default(member)
+  status      UserStatus @default(active)
   avatarUrl   String?    @map("avatar_url")
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
 
   ownedProjects      Project[]       @relation("ProjectOwner")
   projectMemberships ProjectMember[]
-  assignedTasks      Task[]          @relation("TaskAssignee")
-  workload           Workload[]
   apiKeys            ApiKey[]
+  resource           Resource?
 
   @@map("users")
+}
+
+model Resource {
+  id         BigInt         @id @default(autoincrement())
+  name       String
+  email      String?
+  kind       ResourceKind   @default(placeholder)
+  status     ResourceStatus @default(active)
+  userId     BigInt?        @unique @map("user_id")
+  avatarUrl  String?        @map("avatar_url")
+  discipline String?
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+
+  user          User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assignedTasks Task[]     @relation("TaskAssignee")
+  workload      Workload[]
+
+  @@index([kind, status])
+  @@map("resources")
 }
 
 model Project {
@@ -161,7 +196,7 @@ model Task {
   project  Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent   Task?      @relation("TaskChildren", fields: [parentId], references: [id], onDelete: Cascade)
   children Task[]     @relation("TaskChildren")
-  assignee User?      @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignee Resource?  @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   linksOut TaskLink[] @relation("LinkSource")
   linksIn  TaskLink[] @relation("LinkTarget")
   workload Workload[]
@@ -195,7 +230,7 @@ model TaskLink {
 
 model Workload {
   id             BigInt   @id @default(autoincrement())
-  userId         BigInt   @map("user_id")
+  resourceId     BigInt   @map("resource_id")
   taskId         BigInt   @map("task_id")
   projectId      BigInt   @map("project_id")
   date           DateTime @db.Date
@@ -204,11 +239,12 @@ model Workload {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([userId, date])
+  @@unique([taskId, resourceId, date], map: "workload_task_user_date_unique")
+  @@index([resourceId, date])
   @@index([projectId, date])
   @@map("workload")
 }

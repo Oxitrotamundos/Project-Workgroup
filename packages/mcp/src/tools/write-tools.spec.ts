@@ -8,7 +8,7 @@ function makeServerSpy() {
 }
 const clientStub = (over: Partial<ApiClient> = {}): ApiClient => ({
   listProjects: vi.fn(), getProject: vi.fn(), listTasks: vi.fn(),
-  getTask: vi.fn(), searchUsers: vi.fn(),
+  getTask: vi.fn(), searchUsers: vi.fn(), searchResources: vi.fn(),
   createTask: vi.fn(), updateTask: vi.fn(), bulkUpdateTasks: vi.fn(),
   propagatePreview: vi.fn(), propagateApply: vi.fn(), importProject: vi.fn(),
   ...over,
@@ -37,22 +37,22 @@ describe('registerWriteTools — fine tools', () => {
   });
 
   it('assign_task resolves a single person and assigns', async () => {
-    const searchUsers = vi.fn().mockResolvedValue({ items: [{ id: '3', displayName: 'Ana', email: 'ana@x', role: 'pm', avatarUrl: null }], nextCursor: null });
+    const searchResources = vi.fn().mockResolvedValue({ items: [{ id: '3', name: 'Ana', email: 'ana@x', kind: 'user', status: 'active', userId: '30', avatarUrl: null, discipline: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }], nextCursor: null });
     const getTask = vi.fn().mockResolvedValue({ id: '5', version: 2 });
     const updateTask = vi.fn().mockResolvedValue({ id: '5', version: 3, assigneeId: '3', summariesPatched: [] });
     const { server, handlers } = makeServerSpy();
-    registerWriteTools(server, clientStub({ searchUsers, getTask, updateTask }));
+    registerWriteTools(server, clientStub({ searchResources, getTask, updateTask }));
     const res = await handlers.get('assign_task')!({ taskId: '5', person: 'ana' });
     expect(updateTask.mock.calls[0][1]).toMatchObject({ assigneeId: '3', expectedVersion: 2 });
     expect(res.content[0].text).toContain('Ana');
   });
 
   it('assign_task lists candidates when the query is ambiguous', async () => {
-    const searchUsers = vi.fn().mockResolvedValue({ items: [{ id: '3', displayName: 'Ana Uno', email: 'a1@x', role: 'pm', avatarUrl: null }, { id: '4', displayName: 'Ana Dos', email: 'a2@x', role: 'member', avatarUrl: null }], nextCursor: null });
+    const searchResources = vi.fn().mockResolvedValue({ items: [{ id: '3', name: 'Ana Uno', email: 'a1@x', kind: 'user', status: 'active', userId: '30', avatarUrl: null, discipline: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }, { id: '4', name: 'Ana Dos', email: 'a2@x', kind: 'user', status: 'active', userId: '31', avatarUrl: null, discipline: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }], nextCursor: null });
     const { server, handlers } = makeServerSpy();
-    registerWriteTools(server, clientStub({ searchUsers }));
+    registerWriteTools(server, clientStub({ searchResources }));
     const res = await handlers.get('assign_task')!({ taskId: '5', person: 'ana' });
-    expect(res.content[0].text).toContain('varias');
+    expect(res.content[0].text).toContain('varios');
     expect(res.content[0].text).toContain('a1@x');
   });
 });

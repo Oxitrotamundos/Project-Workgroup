@@ -7,9 +7,10 @@ interface MemberModalProps {
   onClose: () => void;
   projectId: string;
   projectName: string;
+  isOwner?: boolean;
 }
 
-const MemberModal: React.FC<MemberModalProps> = ({ isOpen, onClose, projectId, projectName }) => {
+const MemberModal: React.FC<MemberModalProps> = ({ isOpen, onClose, projectId, projectName, isOwner = false }) => {
   if (!isOpen) return null;
 
   return (
@@ -34,7 +35,7 @@ const MemberModal: React.FC<MemberModalProps> = ({ isOpen, onClose, projectId, p
         </div>
 
         <div className="modal-body">
-          <MemberManagement projectId={projectId} />
+          <MemberManagement projectId={projectId} isOwner={isOwner} />
         </div>
       </div>
     </div>

@@ -15,6 +15,7 @@ import type {
   ToolbarItem,
 } from 'wx-react-gantt';
 import type { Task, TaskLink } from '../types/domain';
+import type { AssigneeOption } from './TasksView/NewTaskRow';
 import type { WorkingCalendarResponse } from '@project-workgroup/shared';
 import {
   GanttDataProvider,
@@ -27,6 +28,7 @@ import { createHighlightTime } from '../services/workingCalendarMarkers';
 import { LocaleProvider } from './LocaleProvider';
 import { setupAutoLocalization } from '../utils/ganttLocalizer';
 import { applyBarTooltips } from '../utils/ganttBarTooltips';
+import { applyAssigneeCells, type AssigneeCellInfo } from '../utils/ganttAssigneeCells';
 import { GanttDragTooltip, type DragTooltipContext } from '../utils/ganttDragTooltip';
 import { computeStructuralKey } from '../utils/ganttStructuralKey';
 import { GanttTimeline } from './GanttTimeline';
@@ -47,6 +49,7 @@ interface GanttChartProps {
   onLinksChanged?: (payload: GanttLinkChangePayload) => void;
   calendar?: WorkingCalendarResponse | null;
   onSelectTask?: (taskId: string) => void;
+  assignees?: AssigneeOption[];
 }
 
 const GanttChart: React.FC<GanttChartProps> = ({
@@ -61,6 +64,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
   onLinksChanged,
   calendar: calendarFromProps,
   onSelectTask,
+  assignees,
 }) => {
   const internalApiRef = useRef<GanttApi | null>(null);
   const apiRef = externalApiRef ?? internalApiRef;
@@ -243,6 +247,12 @@ const GanttChart: React.FC<GanttChartProps> = ({
     return [{ start: today, text: 'Hoy', css: 'current-day-marker' }];
   }, []);
 
+  const assigneesById = React.useMemo(() => {
+    const map = new Map<string, AssigneeCellInfo>();
+    (assignees ?? []).forEach((a) => map.set(a.id, a));
+    return map;
+  }, [assignees]);
+
   const columns: GanttColumn[] = React.useMemo(() => {
     const STATUS_LABEL: Record<string, string> = {
       'not-started': 'No iniciada',
@@ -301,6 +311,15 @@ const GanttChart: React.FC<GanttChartProps> = ({
           const value = Math.max(0, Math.min(100, Math.round(Number(task.progress) || 0)));
           return `${value}%`;
         },
+      },
+      {
+        id: 'assignee',
+        header: 'Responsable',
+        align: 'center',
+        width: 96,
+        // El contenido (avatar) se inyecta por DOM en un effect: el grid escapa el HTML
+        // del template. Se deja vacío para no mostrar texto crudo.
+        template: () => '',
       },
       {
         id: 'action',
@@ -497,6 +516,39 @@ const GanttChart: React.FC<GanttChartProps> = ({
       observer.disconnect();
     };
   }, [apiRef, dataProvider]);
+
+  // Inyecta el avatar del responsable en las celdas de la columna "assignee": el grid
+  // renderiza el template como texto, así que se hace por DOM (patrón de applyBarTooltips).
+  // El MutationObserver re-aplica al re-renderizar el grid (scroll/virtualización/updates);
+  // el guard idempotente del util evita bucles. Re-corre al cambiar tareas o asignados.
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+    const THROTTLE_MS = 150;
+    let scheduled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const apply = () => {
+      scheduled = false;
+      applyAssigneeCells(apiRef.current, root, assigneesById);
+    };
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      timeoutId = setTimeout(apply, THROTTLE_MS);
+    };
+
+    schedule();
+    const grid = root.querySelector('.wx-grid') ?? root;
+    const observer = new MutationObserver(schedule);
+    observer.observe(grid, { childList: true, subtree: true });
+
+    return () => {
+      scheduled = false;
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      observer.disconnect();
+    };
+  }, [apiRef, assigneesById, tasks, dataProvider, toolbarApi]);
 
   // Tooltip en vivo durante el arrastre: se monta cuando el contenedor del Gantt existe.
   useEffect(() => {

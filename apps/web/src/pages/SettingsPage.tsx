@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Key, Clock, User, ChevronRight } from 'lucide-react';
+import { Key, Clock, User, ChevronRight, Users, Contact } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserRole } from '../hooks/useUserRole';
 import { calendarService } from '../services/calendarService';
 import type { WorkingCalendarResponse } from '@project-workgroup/shared';
 
@@ -64,6 +65,7 @@ const SettingsCard: React.FC<SettingsCardProps> = ({ to, icon, title, descriptio
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const [globalCal, setGlobalCal] = useState<WorkingCalendarResponse | null>(null);
 
   useEffect(() => {
@@ -120,6 +122,26 @@ export default function SettingsPage() {
           meta={globalCal ? `${globalCal.hoursPerDay} h/día · ${globalCal.timezone}` : undefined}
         />
       </div>
+
+      {isAdmin && (
+        <div className="space-y-3">
+          <p className="eyebrow" style={{ marginBottom: 'var(--s-2)' }}>Administración</p>
+
+          <SettingsCard
+            to="/admin/users"
+            icon={<Users className="w-5 h-5" />}
+            title="Usuarios"
+            description="Roles y estado de acceso de los usuarios"
+          />
+
+          <SettingsCard
+            to="/admin/resources"
+            icon={<Contact className="w-5 h-5" />}
+            title="Recursos"
+            description="Personas y placeholders asignables a tareas y workload"
+          />
+        </div>
+      )}
     </section>
   );
 }

@@ -8,7 +8,7 @@ async function main() {
   const firebaseUid = process.env.SEED_ADMIN_UID ?? 'dev-admin-placeholder';
   const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@example.local';
 
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { firebaseUid },
     update: { role: 'admin' },
     create: {
@@ -19,7 +19,19 @@ async function main() {
     },
   });
 
-  console.log('Seeded admin user');
+  // Mantiene la invariante "cada user real tiene un resource enlazado".
+  await prisma.resource.upsert({
+    where: { userId: admin.id },
+    update: {},
+    create: {
+      name: admin.displayName,
+      email: admin.email,
+      kind: 'user',
+      userId: admin.id,
+    },
+  });
+
+  console.log('Seeded admin user and resource');
 }
 
 main()

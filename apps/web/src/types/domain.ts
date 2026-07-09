@@ -1,3 +1,5 @@
+import type { ProjectRole } from '@project-workgroup/shared';
+
 // Tipos base
 export type UserRole = 'admin' | 'pm' | 'member';
 export type ProjectStatus = 'planning' | 'active' | 'completed' | 'on-hold';
@@ -410,7 +412,7 @@ export interface ProjectMember {
   userId: string;
   email: string;
   displayName: string;
-  role: UserRole;
+  role: ProjectRole;
   avatar?: string;
   joinedAt: string;
   addedBy: string;

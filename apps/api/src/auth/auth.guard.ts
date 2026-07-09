@@ -105,6 +105,7 @@ export class AuthGuard implements CanActivate {
         where: { firebaseUid: decoded.uid },
       });
       if (!user) return null;
+      if (user.status === 'disabled') return null;
       return {
         id: user.id,
         firebaseUid: user.firebaseUid,
@@ -131,6 +132,7 @@ export class AuthGuard implements CanActivate {
         where: { id: BigInt(payload.sub) },
       });
       if (!user) return null;
+      if (user.status === 'disabled') return null;
       const scope =
         typeof payload.scope === 'string' ? payload.scope : undefined;
       return {
@@ -157,6 +159,7 @@ export class AuthGuard implements CanActivate {
     });
     for (const cand of candidates) {
       if (await argon2.verify(cand.keyHash, token)) {
+        if (cand.user.status === 'disabled') return null;
         await this.prisma.apiKey.update({
           where: { id: cand.id },
           data: { lastUsedAt: new Date() },

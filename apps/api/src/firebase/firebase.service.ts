@@ -27,4 +27,27 @@ export class FirebaseService implements OnModuleInit {
     if (!this.app) throw new Error('Firebase not initialized');
     return this.app.auth().verifyIdToken(token);
   }
+
+  async createUser(input: {
+    email: string;
+    password: string;
+    displayName: string;
+  }): Promise<string> {
+    if (!this.app) throw new Error('Firebase not initialized');
+    const rec = await this.app.auth().createUser({
+      email: input.email,
+      password: input.password,
+      displayName: input.displayName,
+    });
+    return rec.uid;
+  }
+
+  // Compensación: borra el usuario de Firebase si la transacción DB falla tras crearlo.
+  async deleteUser(uid: string): Promise<void> {
+    if (!this.app) return;
+    await this.app
+      .auth()
+      .deleteUser(uid)
+      .catch(() => undefined);
+  }
 }

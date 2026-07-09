@@ -17,7 +17,7 @@ export class WorkloadService {
 
   private toResponse(w: {
     id: bigint;
-    userId: bigint;
+    resourceId: bigint;
     taskId: bigint;
     projectId: bigint;
     date: Date;
@@ -28,7 +28,7 @@ export class WorkloadService {
   }): WorkloadResponse {
     return {
       id: w.id.toString(),
-      userId: w.userId.toString(),
+      resourceId: w.resourceId.toString(),
       taskId: w.taskId.toString(),
       projectId: w.projectId.toString(),
       date: w.date.toISOString().slice(0, 10),
@@ -48,9 +48,14 @@ export class WorkloadService {
     });
     if (!task) throw new NotFoundException('task not found');
 
+    const resource = await this.prisma.resource.findUnique({
+      where: { id: BigInt(dto.resourceId) },
+    });
+    if (!resource) throw new NotFoundException('resource not found');
+
     const workload = await this.prisma.workload.create({
       data: {
-        userId: BigInt(dto.userId),
+        resourceId: BigInt(dto.resourceId),
         taskId: BigInt(dto.taskId),
         projectId,
         date: new Date(dto.date),
@@ -66,7 +71,7 @@ export class WorkloadService {
     q: WorkloadQueryDto,
   ): Promise<WorkloadResponse[]> {
     const where: any = { projectId };
-    if (q.userId) where.userId = BigInt(q.userId);
+    if (q.resourceId) where.resourceId = BigInt(q.resourceId);
     if (q.dateFrom || q.dateTo) {
       where.date = {};
       if (q.dateFrom) where.date.gte = new Date(q.dateFrom);
@@ -74,7 +79,7 @@ export class WorkloadService {
     }
     const rows = await this.prisma.workload.findMany({
       where,
-      orderBy: [{ date: 'asc' }, { userId: 'asc' }],
+      orderBy: [{ date: 'asc' }, { resourceId: 'asc' }],
     });
     return rows.map((w) => this.toResponse(w));
   }

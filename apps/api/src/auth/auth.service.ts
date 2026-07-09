@@ -13,21 +13,45 @@ export class AuthService {
     const decoded = await this.firebase.verifyIdToken(token).catch(() => {
       throw new UnauthorizedException('invalid id token');
     });
-    const user = await this.prisma.user.upsert({
-      where: { firebaseUid: decoded.uid },
-      update: {
-        email: decoded.email ?? undefined,
-        displayName: decoded.name ?? decoded.email ?? 'User',
-        avatarUrl: decoded.picture ?? undefined,
-      },
-      create: {
-        firebaseUid: decoded.uid,
-        email: decoded.email ?? `${decoded.uid}@unknown.local`,
-        displayName: decoded.name ?? decoded.email ?? 'User',
-        avatarUrl: decoded.picture ?? undefined,
-        role: 'member',
-      },
+    const displayName = decoded.name ?? decoded.email ?? 'User';
+    const avatarUrl = decoded.picture ?? undefined;
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.upsert({
+        where: { firebaseUid: decoded.uid },
+        update: {
+          email: decoded.email ?? undefined,
+          displayName,
+          avatarUrl,
+        },
+        create: {
+          firebaseUid: decoded.uid,
+          email: decoded.email ?? `${decoded.uid}@unknown.local`,
+          displayName,
+          avatarUrl,
+          role: 'member',
+        },
+      });
+
+      // Invariante: cada user real tiene un resource enlazado (kind='user'). Se crea
+      // al alta y se mantiene sincronizado con el perfil de Firebase en cada login.
+      await tx.resource.upsert({
+        where: { userId: user.id },
+        update: {
+          name: user.displayName,
+          email: user.email,
+          avatarUrl: user.avatarUrl,
+        },
+        create: {
+          name: user.displayName,
+          email: user.email,
+          avatarUrl: user.avatarUrl,
+          kind: 'user',
+          userId: user.id,
+        },
+      });
+
+      return user;
     });
-    return user;
   }
 }

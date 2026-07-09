@@ -25,6 +25,7 @@ type InlinePatch = {
   progress?: number;
   startDate?: string;
   endDate?: string;
+  assigneeId?: string | null;
 };
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -127,6 +128,16 @@ const formatHours = (n: number | undefined): string => {
   return `${v.toLocaleString('es', { maximumFractionDigits: 1 })} h`;
 };
 
+// Iniciales (1-2 letras) a partir del nombre completo, para el avatar sin imagen
+const getInitials = (displayName: string): string =>
+  displayName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0] ?? '')
+    .join('')
+    .toUpperCase() || '?';
+
 interface TreeNode {
   task: Task;
   depth: number;
@@ -180,6 +191,12 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, onSelectTask
   const [dateEdit, setDateEdit] = useState<DateEdit>(null);
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+
+  const assigneesById = useMemo(() => {
+    const m = new Map<string, AssigneeOption>();
+    (assignees ?? []).forEach((a) => m.set(a.id, a));
+    return m;
+  }, [assignees]);
 
   const ordered = useMemo(() => {
     if (sortKey === 'order') return buildOrderedTree(tasks);
@@ -356,6 +373,9 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, onSelectTask
               <th className="tv-th tv-th-sortable" onClick={() => toggleSort('name')}>
                 Tarea <SortArrow active={sortKey === 'name'} dir={sortDir} />
               </th>
+              <th className="tv-th tv-th--center" style={{ width: 120 }}>
+                Responsable
+              </th>
               <th className="tv-th tv-th--center tv-th-sortable" onClick={() => toggleSort('priority')} style={{ width: 64 }}>
                 Prio <SortArrow active={sortKey === 'priority'} dir={sortDir} />
               </th>
@@ -380,6 +400,10 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, onSelectTask
             {ordered.map(({ task, depth }) => {
               const typeMark = TYPE_MARK[task.type];
               const isSaving = savingIds.has(task.id);
+              const assignee = task.assigneeId ? assigneesById.get(task.assigneeId) : undefined;
+              const assigneeTitle = assignee
+                ? (assignee.discipline ? `${assignee.displayName} — ${assignee.discipline}` : assignee.displayName)
+                : 'Sin asignar';
               return (
                 <tr
                   key={task.id}
@@ -430,6 +454,52 @@ const TaskListView: React.FC<Props> = ({ tasks, onCreate, onUpdate, onSelectTask
                       )}
                       {typeMark && (
                         <span className="tv-type-mark" data-type={task.type}>{typeMark}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="tv-td tv-td--center">
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                      {assignee?.avatar ? (
+                        <img
+                          src={assignee.avatar}
+                          alt=""
+                          title={assigneeTitle}
+                          style={{ width: 24, height: 24, borderRadius: 999, objectFit: 'cover' }}
+                        />
+                      ) : assignee ? (
+                        <span
+                          title={assigneeTitle}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 24,
+                            height: 24,
+                            borderRadius: 999,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            background: 'var(--p-100)',
+                            color: 'var(--p-700)',
+                          }}
+                        >
+                          {getInitials(assignee.displayName)}
+                        </span>
+                      ) : (
+                        <span title="Sin asignar" style={{ color: 'var(--ink-3)' }}>—</span>
+                      )}
+                      {onUpdate && assignees && assignees.length > 0 && (
+                        <select
+                          className="tv-create-mini"
+                          aria-label={`Reasignar responsable de ${task.name}`}
+                          value={task.assigneeId ?? ''}
+                          onChange={(e) => applyPatch(task, { assigneeId: e.target.value || null })}
+                          style={{ width: 'auto', minWidth: 96 }}
+                        >
+                          <option value="">Sin asignar</option>
+                          {assignees.map((a) => (
+                            <option key={a.id} value={a.id}>{a.displayName}</option>
+                          ))}
+                        </select>
                       )}
                     </div>
                   </td>

@@ -204,6 +204,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
   onDeleteProject,
   onLoadMore,
 }) => {
+  const { user } = useAuth();
   const { isAdmin, isPM } = useUserRole();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
@@ -382,6 +383,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
           onClose={closeMemberModal}
           projectId={selectedProject.id}
           projectName={selectedProject.name}
+          isOwner={user?.uid === selectedProject.ownerId}
         />
       )}
     </div>

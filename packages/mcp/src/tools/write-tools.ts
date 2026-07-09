@@ -173,25 +173,25 @@ export function registerWriteTools(server: McpServer, client: ApiClient): void {
     },
     async ({ taskId, person }) => {
       try {
-        const page = await client.searchUsers({ search: person, limit: 10 });
+        const page = await client.searchResources({ search: person, limit: 10 });
         if (page.items.length === 0)
-          return textResult(`No encontré a nadie que coincida con "${person}".`);
+          return textResult(`No encontré ningún recurso que coincida con "${person}".`);
         if (page.items.length > 1) {
           const lines = page.items
-            .map((u) => `- [${u.id}] ${u.displayName} <${u.email}>`)
+            .map((r) => `- [${r.id}] ${r.name} <${r.email ?? 'sin email'}>`)
             .join('\n');
           return textResult(
-            `Hay varias coincidencias para "${person}"; vuelve a llamar con el email exacto:\n${lines}`,
+            `Hay varios recursos que coinciden con "${person}"; vuelve a llamar con el email exacto:\n${lines}`,
           );
         }
-        const user = page.items[0];
+        const resource = page.items[0];
         const current = await client.getTask(taskId);
         const res = await client.updateTask(taskId, {
-          assigneeId: user.id,
+          assigneeId: resource.id,
           expectedVersion: current.version,
         });
         return textResult(
-          `Asignada [${res.id}] ${res.name} a ${user.displayName} <${user.email}>.`,
+          `Asignada [${res.id}] ${res.name} a ${resource.name} <${resource.email ?? 'sin email'}>.`,
         );
       } catch (err) {
         return errorResult(err);
