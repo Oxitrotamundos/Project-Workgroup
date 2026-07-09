@@ -7,6 +7,67 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-07-08
+
+Epic recursos asignables + panel admin: nueva entidad `resources` (kind
+`user`|`placeholder`) desacopla la asignación de tareas y workload de `users`,
+permitiendo asignar trabajo a personas sin cuenta (placeholders) y vincularlas
+después a un usuario real. Incluye un panel de administración para gestionar
+usuarios y recursos. A diferencia del bump Major anterior (v2.0.0), este PR **sí
+introduce breaking changes** de contrato REST: ver sección Changed.
+
+### Added
+- Módulo `resources` (`/v1/resources`): CRUD admin-only, lectura abierta a
+  cualquier autenticado (la necesita el selector de responsable del Gantt),
+  `PATCH /v1/resources/:id/link-user` para vincular un placeholder a un usuario
+  real (reasigna sus tasks/workload y borra el resource huérfano en una
+  transacción), y `remove` restringido a placeholders sin tasks ni workload
+  asociados
+- `POST /v1/users` (admin): crea usuario en Firebase y en DB (con su `resource`
+  `kind='user'`) en una transacción; compensa borrando el usuario de Firebase si
+  la transacción DB falla
+- `PATCH /v1/users/:id` (admin): edita `role`/`status`, con invariante que impide
+  dejar el sistema sin ningún admin activo
+- `PATCH /v1/projects/:projectId/members/:userId` (manager de proyecto): edita el
+  rol de un miembro
+- `UserStatus` (`active`/`disabled`): los usuarios `disabled` quedan bloqueados en
+  los tres paths de resolución de identidad del `AuthGuard`
+- Panel de administración `/admin/users` y `/admin/resources`, protegido por
+  `AdminRoute` (rol global `admin`)
+- Columna de avatar de responsable en el Gantt, inyectada por DOM
+  (`ganttAssigneeCells.ts`) sobre las celdas `.wx-cell[data-col-id="assignee"]`
+- 4 migraciones Prisma: `add_resources_and_user_status`,
+  `backfill_resources_from_users`, `repoint_task_assignee_to_resources`,
+  `repoint_workload_to_resources`
+- Tests: 12 unitarios (`resources.service.spec.ts`) y 11 e2e
+  (`resources.e2e-spec.ts`)
+
+### Changed
+- **BREAKING**: `tasks.assigneeId` y `workload` ahora referencian `resources.id`
+  en lugar de `users.id` (remapeado con backfill en las 4 migraciones nuevas)
+- **BREAKING**: `WorkloadResponse`, `CreateWorkloadDto` y `WorkloadQueryDto`
+  renombran el campo `userId` a `resourceId`
+- MCP: la tool `assign_task` busca contra `resources` (`searchResources`) en
+  lugar de `users`; la búsqueda filtra `status=active` server-side
+- `resolveAssigneeId` (tasks) renombrado a `resolveResourceId`; exige que el
+  resource exista y esté `status='active'`
+- `MemberService`/`useMembers`: roles y permisos de proyecto calculados a partir
+  de datos reales (`projectRole`, `computePermissions`) en lugar de valores
+  hardcodeados
+- `ProjectMember.role` (frontend, `domain.ts`) tipado como `ProjectRole` en lugar
+  de `UserRole`
+
+### Fixed
+- El template de assignee del Gantt se renderizaba como texto escapado (wx-react-gantt
+  no interpreta HTML devuelto por `template`); reemplazado por inyección DOM
+- Roles y permisos de miembros de proyecto mostraban etiquetas incorrectas al
+  reutilizar las constantes de rol global (`admin`/`pm`/`member`) para el rol de
+  proyecto (`manager`/`contributor`/`viewer`)
+
+### Security
+- Usuarios con `status='disabled'` no pueden autenticarse por ninguno de los tres
+  paths del `AuthGuard` (Firebase ID token, JWT OAuth interno, API key)
+
 ## [2.1.0] - 2026-07-03
 
 ### Added
