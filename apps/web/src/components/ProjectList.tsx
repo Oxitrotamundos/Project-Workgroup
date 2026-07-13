@@ -192,7 +192,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, currentUser
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5" style={{ font: '400 var(--t-small)/1 var(--font-sans)', color: 'var(--ink-2)' }}>
             <Users className="w-3.5 h-3.5" style={{ color: 'var(--ink-3)' }} />
-            <span>{project.members.length} miembro{project.members.length !== 1 ? 's' : ''}</span>
+            <span>{project.memberCount ?? 0} miembro{(project.memberCount ?? 0) !== 1 ? 's' : ''}</span>
           </div>
           <div className="flex items-center gap-1" style={{ font: '400 var(--t-caption)/1 var(--font-mono)', color: 'var(--ink-4)' }}>
             <Clock className="w-3 h-3" />

@@ -19,18 +19,21 @@ import { toPrisma, toWire } from './status.mapper';
 export class ProjectsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toResponse(p: {
-    id: bigint;
-    name: string;
-    description: string | null;
-    startDate: Date;
-    endDate: Date;
-    status: string;
-    ownerId: bigint;
-    color: string;
-    createdAt: Date;
-    updatedAt: Date;
-  }): ProjectResponse {
+  private toResponse(
+    p: {
+      id: bigint;
+      name: string;
+      description: string | null;
+      startDate: Date;
+      endDate: Date;
+      status: string;
+      ownerId: bigint;
+      color: string;
+      createdAt: Date;
+      updatedAt: Date;
+    },
+    memberCount?: number,
+  ): ProjectResponse {
     return {
       id: p.id.toString(),
       name: p.name,
@@ -42,6 +45,7 @@ export class ProjectsService {
       color: p.color,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
+      ...(memberCount !== undefined && { memberCount }),
     };
   }
 
@@ -69,14 +73,19 @@ export class ProjectsService {
         OR: [{ ownerId: userId }, { members: { some: { userId } } }],
       },
       orderBy: { createdAt: 'desc' },
+      include: { _count: { select: { members: true } } },
     });
-    return projects.map((p) => this.toResponse(p));
+    // El owner no está en project_members; se suma aparte para el total con acceso.
+    return projects.map((p) => this.toResponse(p, p._count.members + 1));
   }
 
   async getById(id: bigint): Promise<ProjectResponse> {
-    const project = await this.prisma.project.findUnique({ where: { id } });
+    const project = await this.prisma.project.findUnique({
+      where: { id },
+      include: { _count: { select: { members: true } } },
+    });
     if (!project) throw new NotFoundException('project not found');
-    return this.toResponse(project);
+    return this.toResponse(project, project._count.members + 1);
   }
 
   async update(id: bigint, dto: UpdateProjectDto): Promise<ProjectResponse> {

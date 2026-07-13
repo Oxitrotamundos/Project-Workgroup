@@ -33,6 +33,7 @@ const toDomain = (r: RawProject): Project => ({
   status: r.status,
   ownerId: r.ownerId,
   members: r.members ?? [],
+  memberCount: r.memberCount ?? 0,
   color: r.color ?? '#3B82F6',
   createdAt: r.createdAt ?? '',
   updatedAt: r.updatedAt ?? '',

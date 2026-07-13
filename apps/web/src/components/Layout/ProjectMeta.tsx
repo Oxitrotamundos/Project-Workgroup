@@ -32,7 +32,7 @@ const formatStatus = (status: string) =>
 const ProjectMeta: React.FC<ProjectMetaProps> = ({ project, tasksCount }) => {
   const status = project.status || 'planning';
   const variant = STATUS_VARIANT[status.toLowerCase()] ?? 'outline';
-  const memberCount = project.members?.length ?? 0;
+  const memberCount = project.memberCount ?? 0;
 
   return (
     <div

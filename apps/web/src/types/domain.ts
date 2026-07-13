@@ -46,6 +46,7 @@ export interface Project extends BaseDocument {
   status: ProjectStatus;
   ownerId: string;
   members: string[];
+  memberCount?: number;
   color: string;
 }
 
