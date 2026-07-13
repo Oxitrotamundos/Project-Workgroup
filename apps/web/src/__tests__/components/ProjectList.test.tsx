@@ -62,6 +62,7 @@ const defaultUseProjectsReturn = {
 
 const defaultUseUserRoleReturn = {
   userRole: 'member' as const,
+  userId: null,
   loading: false,
   error: null,
   isAdmin: false,
