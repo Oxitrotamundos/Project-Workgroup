@@ -223,10 +223,20 @@ describe('ProjectList Component', () => {
         ...defaultUseProjectsReturn,
         hasMore: false
       })
-      
+
       renderProjectList({ hasMore: false })
-      
+
       expect(screen.queryByText('Cargar Más Proyectos')).not.toBeInTheDocument()
+    })
+
+    it('debe navegar al proyecto al hacer click en su nombre', async () => {
+      const onViewProject = vi.fn()
+      const user = userEvent.setup()
+      renderProjectList({ onViewProject })
+
+      await user.click(screen.getByRole('button', { name: 'Proyecto Test 1' }))
+
+      expect(onViewProject).toHaveBeenCalledWith('project-1')
     })
   })
 
@@ -241,12 +251,10 @@ describe('ProjectList Component', () => {
       })
       
       renderProjectList()
-      
-      const viewButtons = screen.getAllByLabelText('Ver proyecto')
+
       const editButtons = screen.getAllByLabelText('Editar proyecto')
       const deleteButtons = screen.getAllByLabelText('Eliminar proyecto')
-      
-      expect(viewButtons.length).toBeGreaterThan(0)
+
       expect(editButtons.length).toBeGreaterThan(0)
       expect(deleteButtons.length).toBeGreaterThan(0)
     })
@@ -261,9 +269,6 @@ describe('ProjectList Component', () => {
       })
 
       renderProjectList()
-
-      const viewButtons = screen.getAllByLabelText('Ver proyecto')
-      expect(viewButtons.length).toBeGreaterThan(0)
 
       expect(screen.queryByLabelText('Editar proyecto')).not.toBeInTheDocument()
       expect(screen.queryByLabelText('Gestionar miembros')).not.toBeInTheDocument()

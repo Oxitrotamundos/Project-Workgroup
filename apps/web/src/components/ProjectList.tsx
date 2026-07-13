@@ -3,7 +3,6 @@ import type { Project, ProjectStatus } from '../types/domain';
 import { useUserRole } from '../hooks/useUserRole';
 import MemberModal from './MemberModal';
 import {
-  Eye,
   Users,
   Edit3,
   Trash2,
@@ -48,8 +47,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, currentUser
   const canEdit = isAdmin || isOwner;
   const canDelete = isAdmin || isOwner;
   const canManageMembers = isAdmin || isOwner;
-  // Todo proyecto presente en la lista ya es visible para el usuario (el backend la filtra).
-  const canView = true;
 
   const variant = STATUS_VARIANT[project.status] ?? 'outline';
 
@@ -59,7 +56,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, currentUser
       style={{
         boxShadow: 'var(--sh-1)',
         transition: 'box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease)',
+        cursor: 'pointer',
       }}
+      // Toda la tarjeta abre el proyecto; los botones de acción detienen la propagación.
+      onClick={() => onView(project.id)}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = 'var(--sh-2)';
         e.currentTarget.style.borderColor = 'var(--line-2)';
@@ -83,28 +83,45 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, currentUser
                 letterSpacing: 'var(--tr-h3)',
                 color: 'var(--ink)',
                 margin: 0,
+                minWidth: 0,
               }}
             >
-              {project.name}
+              {/* Control enfocable por teclado que abre el proyecto (la tarjeta no es un botón). */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onView(project.id);
+                }}
+                className="truncate"
+                title={project.name}
+                style={{
+                  font: 'inherit',
+                  letterSpacing: 'inherit',
+                  color: 'inherit',
+                  background: 'none',
+                  border: 0,
+                  padding: 0,
+                  margin: 0,
+                  maxWidth: '100%',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+              >
+                {project.name}
+              </button>
             </h3>
           </div>
           <span className={`badge ${variant} dot`}>{STATUS_LABEL[project.status]}</span>
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0">
-          {canView && (
-            <button
-              onClick={() => onView(project.id)}
-              className="btn btn-ghost btn-icon btn-sm"
-              title="Ver proyecto"
-              aria-label="Ver proyecto"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-          )}
           {canManageMembers && (
             <button
-              onClick={() => onManageMembers(project)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onManageMembers(project);
+              }}
               className="btn btn-ghost btn-icon btn-sm"
               title="Gestionar miembros"
               aria-label="Gestionar miembros"
@@ -114,7 +131,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, currentUser
           )}
           {canEdit && (
             <button
-              onClick={() => onEdit(project)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(project);
+              }}
               className="btn btn-ghost btn-icon btn-sm"
               title="Editar proyecto"
               aria-label="Editar proyecto"
@@ -124,7 +144,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, currentUser
           )}
           {canDelete && (
             <button
-              onClick={() => onDelete(project.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(project.id);
+              }}
               className="btn btn-ghost btn-icon btn-sm"
               title="Eliminar proyecto"
               aria-label="Eliminar proyecto"
