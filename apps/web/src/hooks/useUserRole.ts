@@ -8,6 +8,8 @@ import { useAuth } from '../contexts/AuthContext';
 export function useUserRole() {
   const { user } = useAuth();
   const [userRole, setUserRole] = useState<string | null>(null);
+  // Id numérico del backend (distinto del uid de Firebase); habilita comparar contra ownerId.
+  const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,6 +17,7 @@ export function useUserRole() {
     const fetchUserRole = async () => {
       if (!user) {
         setUserRole(null);
+        setUserId(null);
         setLoading(false);
         return;
       }
@@ -24,10 +27,12 @@ export function useUserRole() {
         setError(null);
         const userData = await UserService.getUser(user.uid);
         setUserRole(userData?.role || 'member');
+        setUserId(userData?.id ?? null);
       } catch (err) {
         console.error('Error fetching user role:', err);
         setError('Error al obtener el rol del usuario');
         setUserRole('member'); // Rol por defecto
+        setUserId(null);
       } finally {
         setLoading(false);
       }
@@ -38,6 +43,7 @@ export function useUserRole() {
 
   return {
     userRole,
+    userId,
     loading,
     error,
     isAdmin: userRole === 'admin',

@@ -4,11 +4,16 @@ import { useQueryClient } from '@tanstack/react-query';
 import 'wx-react-gantt/dist/gantt.css';
 import '../styles/gantt-custom.css';
 import { useTasks } from '../hooks/usetasks';
+import { Users, Edit3 } from 'lucide-react';
 import { useProject } from '../hooks/useProject';
 import { useResources } from '../hooks/useResources';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserRole } from '../hooks/useUserRole';
 import { useNavigation } from '../contexts/NavigationContext';
 import { ProjectActions, ProjectMeta } from '../components/Layout';
+import MemberModal from '../components/MemberModal';
+import ProjectModal from '../components/ProjectModal';
+import { ProjectService } from '../services/projectService';
 import TasksView from '../components/TasksView/TasksView';
 import type { NewTaskInput } from '../components/TasksView/NewTaskRow';
 import { ProjectStateManager } from '../components/ProjectLoadingStates';
@@ -22,7 +27,7 @@ import { ProjectSettingsProvider } from '../contexts/ProjectSettingsContext';
 import { applySummaryPatches } from '../lib/summaryPatches';
 import { calendarService } from '../services/calendarService';
 import type { WorkingCalendarResponse } from '@project-workgroup/shared';
-import type { Task, TaskLink, TaskPriority, TaskStatus, TaskType } from '../types/domain';
+import type { CreateProjectData, Task, TaskLink, TaskPriority, TaskStatus, TaskType, UpdateProjectData } from '../types/domain';
 import type { GanttApi } from 'wx-react-gantt';
 
 // Referencia estable para no reiniciar useResources en cada render.
@@ -33,10 +38,16 @@ const ProjectView: React.FC = () => {
   const navigate = useNavigate();
   const ganttApiRef = useRef<GanttApi | null>(null);
   const { user } = useAuth();
+  const { isAdmin, userId } = useUserRole();
   const { updateNavigation } = useNavigation();
   const queryClient = useQueryClient();
 
   const { project, loading, error, refetch } = useProject(projectId);
+  const [memberModalOpen, setMemberModalOpen] = React.useState(false);
+  const [editModalOpen, setEditModalOpen] = React.useState(false);
+
+  // Solo admin u owner gestionan el proyecto (alineado con lo que autoriza el backend).
+  const canManage = isAdmin || (!!userId && userId === project?.ownerId);
   const { tasks, loading: tasksLoading, error: tasksError, refetch: refetchTasks } = useTasks(projectId);
   const { data: taskLinks = [] } = useProjectTaskLinksQuery(user ? projectId : undefined);
   const { data: projectSettings } = useProjectSettingsQuery(user ? projectId : undefined);
@@ -109,6 +120,16 @@ const ProjectView: React.FC = () => {
     if (projectId) navigate(`/project/${projectId}/settings`);
   }, [projectId, navigate]);
 
+  const handleEditSubmit = React.useCallback(
+    async (data: CreateProjectData | UpdateProjectData) => {
+      if (!project) return;
+      await ProjectService.updateProject(project.id, data as UpdateProjectData);
+      setEditModalOpen(false);
+      await refetch();
+    },
+    [project, refetch],
+  );
+
   const tasksCount = tasks.length;
 
   const projectActions = React.useMemo(() => {
@@ -121,10 +142,32 @@ const ProjectView: React.FC = () => {
           className="hidden md:block"
           style={{ width: 1, height: 18, background: 'var(--line-2)' }}
         />
-        <ProjectActions onOpenCalendar={handleOpenCalendar} calendar={calendar} />
+        <div className="flex items-center gap-1">
+          {canManage && (
+            <>
+              <button
+                onClick={() => setMemberModalOpen(true)}
+                className="btn btn-ghost btn-icon btn-sm"
+                title="Gestionar miembros"
+                aria-label="Gestionar miembros"
+              >
+                <Users className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setEditModalOpen(true)}
+                className="btn btn-ghost btn-icon btn-sm"
+                title="Editar proyecto"
+                aria-label="Editar proyecto"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+            </>
+          )}
+          <ProjectActions onOpenCalendar={handleOpenCalendar} calendar={calendar} />
+        </div>
       </div>
     );
-  }, [project, tasksCount, handleOpenCalendar, calendar]);
+  }, [project, tasksCount, handleOpenCalendar, calendar, canManage]);
 
   const crumbs = React.useMemo(
     () =>
@@ -272,6 +315,25 @@ const ProjectView: React.FC = () => {
             />
           </div>
         </div>
+
+        {project && (
+          <>
+            <MemberModal
+              isOpen={memberModalOpen}
+              onClose={() => setMemberModalOpen(false)}
+              projectId={project.id}
+              projectName={project.name}
+              isOwner={!!userId && userId === project.ownerId}
+            />
+            <ProjectModal
+              isOpen={editModalOpen}
+              onClose={() => setEditModalOpen(false)}
+              onSubmit={handleEditSubmit}
+              project={project}
+              mode="edit"
+            />
+          </>
+        )}
       </ProjectSettingsProvider>
     </ProjectStateManager>
   );

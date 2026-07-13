@@ -62,6 +62,7 @@ const defaultUseProjectsReturn = {
 
 const defaultUseUserRoleReturn = {
   userRole: 'member' as const,
+  userId: null,
   loading: false,
   error: null,
   isAdmin: false,
@@ -222,10 +223,20 @@ describe('ProjectList Component', () => {
         ...defaultUseProjectsReturn,
         hasMore: false
       })
-      
+
       renderProjectList({ hasMore: false })
-      
+
       expect(screen.queryByText('Cargar Más Proyectos')).not.toBeInTheDocument()
+    })
+
+    it('debe navegar al proyecto al hacer click en su nombre', async () => {
+      const onViewProject = vi.fn()
+      const user = userEvent.setup()
+      renderProjectList({ onViewProject })
+
+      await user.click(screen.getByRole('button', { name: 'Proyecto Test 1' }))
+
+      expect(onViewProject).toHaveBeenCalledWith('project-1')
     })
   })
 
@@ -240,12 +251,10 @@ describe('ProjectList Component', () => {
       })
       
       renderProjectList()
-      
-      const viewButtons = screen.getAllByLabelText('Ver proyecto')
+
       const editButtons = screen.getAllByLabelText('Editar proyecto')
       const deleteButtons = screen.getAllByLabelText('Eliminar proyecto')
-      
-      expect(viewButtons.length).toBeGreaterThan(0)
+
       expect(editButtons.length).toBeGreaterThan(0)
       expect(deleteButtons.length).toBeGreaterThan(0)
     })
@@ -258,13 +267,29 @@ describe('ProjectList Component', () => {
         isPM: false,
         isMember: true
       })
-      
+
       renderProjectList()
-      
-      const viewButtons = screen.getAllByLabelText('Ver proyecto')
-      expect(viewButtons.length).toBeGreaterThan(0)
-      
+
+      expect(screen.queryByLabelText('Editar proyecto')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Gestionar miembros')).not.toBeInTheDocument()
       expect(screen.queryByLabelText('Eliminar proyecto')).not.toBeInTheDocument()
+    })
+
+    it('debe mostrar botones de acción al owner del proyecto', () => {
+      mockUseUserRole.mockReturnValue({
+        ...defaultUseUserRoleReturn,
+        userRole: 'member',
+        userId: 'user-1', // ownerId de "Proyecto Test 1"
+        isAdmin: false,
+        isMember: true
+      })
+
+      renderProjectList()
+
+      // Solo la tarjeta cuyo ownerId coincide con el usuario expone las acciones.
+      expect(screen.getAllByLabelText('Editar proyecto')).toHaveLength(1)
+      expect(screen.getAllByLabelText('Eliminar proyecto')).toHaveLength(1)
+      expect(screen.getAllByLabelText('Gestionar miembros')).toHaveLength(1)
     })
   })
 

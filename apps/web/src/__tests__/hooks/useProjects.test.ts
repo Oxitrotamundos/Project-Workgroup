@@ -67,13 +67,14 @@ describe('useProjects Hook', () => {
     
     mockUseUserRole.mockReturnValue({
       userRole: 'member',
+      userId: 'test-uid',
       loading: false,
       error: null,
       isAdmin: false,
       isPM: false,
       isMember: true
     })
-    
+
     ProjectService.getUserProjects = vi.fn().mockResolvedValue({
       items: mockProjects,
       hasMore: false,
@@ -109,6 +110,7 @@ describe('useProjects Hook', () => {
     it('debe cargar todos los proyectos para administradores', async () => {
       mockUseUserRole.mockReturnValue({
         userRole: 'admin',
+        userId: 'test-uid',
         loading: false,
         error: null,
         isAdmin: true,
@@ -129,6 +131,7 @@ describe('useProjects Hook', () => {
     it('debe manejar el estado de carga del rol de usuario', async () => {
       mockUseUserRole.mockReturnValue({
         userRole: null,
+        userId: null,
         loading: true,
         error: null,
         isAdmin: false,
@@ -170,6 +173,7 @@ describe('useProjects Hook', () => {
       
       mockUseUserRole.mockReturnValue({
         userRole: 'member',
+        userId: 'test-uid',
         loading: false,
         error: null,
         isAdmin: false,
@@ -210,6 +214,7 @@ describe('useProjects Hook', () => {
       
       mockUseUserRole.mockReturnValue({
         userRole: 'member',
+        userId: 'test-uid',
         loading: false,
         error: null,
         isAdmin: false,

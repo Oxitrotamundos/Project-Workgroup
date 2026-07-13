@@ -54,6 +54,8 @@ export interface ProjectResponse {
   color: string;
   createdAt: string;
   updatedAt: string;
+  // Total de personas con acceso (owner + filas de project_members). Solo en rutas de lectura.
+  memberCount?: number;
 }
 
 export const TIME_GRANULARITIES = ['hours', 'days'] as const;

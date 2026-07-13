@@ -104,6 +104,7 @@ describe('Projects (e2e)', () => {
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThan(0);
     expect(res.body[0].name).toBe('Test Project');
+    expect(res.body[0].memberCount).toBe(1); // solo el owner, sin project_members
   });
 
   describe('projectRole enforcement on update/delete', () => {
@@ -135,6 +136,14 @@ describe('Projects (e2e)', () => {
           projectRole: 'manager',
         },
       });
+    });
+
+    it('GET /v1/projects/:id → memberCount cuenta owner + members', async () => {
+      const res = await request(handle.app.getHttpServer())
+        .get(`/v1/projects/${scopedProjectId}`)
+        .set('Authorization', 'Bearer fake-token');
+      expect(res.status).toBe(200);
+      expect(res.body.memberCount).toBe(3); // owner + viewer + manager
     });
 
     it('PATCH as viewer → 403', async () => {
