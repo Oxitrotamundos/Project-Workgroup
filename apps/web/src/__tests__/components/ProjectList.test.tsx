@@ -259,13 +259,32 @@ describe('ProjectList Component', () => {
         isPM: false,
         isMember: true
       })
-      
+
       renderProjectList()
-      
+
       const viewButtons = screen.getAllByLabelText('Ver proyecto')
       expect(viewButtons.length).toBeGreaterThan(0)
-      
+
+      expect(screen.queryByLabelText('Editar proyecto')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Gestionar miembros')).not.toBeInTheDocument()
       expect(screen.queryByLabelText('Eliminar proyecto')).not.toBeInTheDocument()
+    })
+
+    it('debe mostrar botones de acción al owner del proyecto', () => {
+      mockUseUserRole.mockReturnValue({
+        ...defaultUseUserRoleReturn,
+        userRole: 'member',
+        userId: 'user-1', // ownerId de "Proyecto Test 1"
+        isAdmin: false,
+        isMember: true
+      })
+
+      renderProjectList()
+
+      // Solo la tarjeta cuyo ownerId coincide con el usuario expone las acciones.
+      expect(screen.getAllByLabelText('Editar proyecto')).toHaveLength(1)
+      expect(screen.getAllByLabelText('Eliminar proyecto')).toHaveLength(1)
+      expect(screen.getAllByLabelText('Gestionar miembros')).toHaveLength(1)
     })
   })
 

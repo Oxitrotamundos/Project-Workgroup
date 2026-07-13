@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import type { Project, ProjectStatus } from '../types/domain';
-import { useAuth } from '../contexts/AuthContext';
 import { useUserRole } from '../hooks/useUserRole';
 import MemberModal from './MemberModal';
 import {
@@ -17,6 +16,8 @@ import {
 
 interface ProjectCardProps {
   project: Project;
+  isAdmin: boolean;
+  currentUserId: string | null;
   onEdit: (project: Project) => void;
   onDelete: (projectId: string) => void;
   onView: (projectId: string) => void;
@@ -40,16 +41,15 @@ const STATUS_LABEL: Record<ProjectStatus, string> = {
 const formatDate = (date: string) =>
   new Intl.DateTimeFormat('es-ES', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(date));
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project, onEdit, onDelete, onView, onManageMembers }) => {
-  const { user } = useAuth();
-  const { isAdmin, isPM } = useUserRole();
-  const isOwner = user?.uid === project.ownerId;
-  const isMember = project.members.includes(user?.uid || '');
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, currentUserId, onEdit, onDelete, onView, onManageMembers }) => {
+  // ownerId es el id numérico del backend; comparamos contra el id del usuario, no el uid de Firebase.
+  const isOwner = currentUserId != null && currentUserId === project.ownerId;
 
-  const canEdit = isAdmin || isOwner || (isPM && isMember);
+  const canEdit = isAdmin || isOwner;
   const canDelete = isAdmin || isOwner;
-  const canView = isAdmin || isOwner || isMember;
-  const canManageMembers = isAdmin || isPM;
+  const canManageMembers = isAdmin || isOwner;
+  // Todo proyecto presente en la lista ya es visible para el usuario (el backend la filtra).
+  const canView = true;
 
   const variant = STATUS_VARIANT[project.status] ?? 'outline';
 
@@ -204,8 +204,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
   onDeleteProject,
   onLoadMore,
 }) => {
-  const { user } = useAuth();
-  const { isAdmin, isPM } = useUserRole();
+  const { isAdmin, isPM, userId } = useUserRole();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -358,6 +357,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
               >
                 <ProjectCard
                   project={project}
+                  isAdmin={isAdmin}
+                  currentUserId={userId}
                   onEdit={onEditProject}
                   onDelete={handleDelete}
                   onView={onViewProject}
@@ -383,7 +384,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
           onClose={closeMemberModal}
           projectId={selectedProject.id}
           projectName={selectedProject.name}
-          isOwner={user?.uid === selectedProject.ownerId}
+          isOwner={!!userId && userId === selectedProject.ownerId}
         />
       )}
     </div>
