@@ -7,6 +7,37 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-07-13
+
+Acceso a proyectos y gating de acciones por rol real: el gating de acciones de
+tarjeta de proyecto comparaba el uid de Firebase contra el id numérico del
+backend (nunca coincidía), y el conteo de miembros mostrado no reflejaba la
+membresía real. No introduce breaking changes.
+
+### Added
+- `useUserRole` expone `userId`, el id numérico del backend (distinto del
+  `uid` de Firebase)
+- Navegación al detalle de un proyecto por click en toda la tarjeta o en su
+  nombre (antes solo vía el ícono "ver proyecto")
+- Botones "gestionar miembros" y "editar proyecto" en el header de detalle del
+  proyecto (`ProjectView`), gateados por `isAdmin || isOwner`
+- `memberCount` en `GET /v1/projects` y `GET /v1/projects/:id`: total real de
+  personas con acceso (owner + `project_members`)
+
+### Changed
+- Acciones de tarjeta de proyecto (editar, eliminar, gestionar miembros)
+  gateadas por `isAdmin || isOwner` usando el `userId` real, en lugar de la
+  heurística de rol de proyecto (`isPM && isMember`)
+- Tarjeta y header de proyecto muestran `memberCount` en lugar de
+  `project.members.length`
+
+### Fixed
+- El gating de acciones de proyecto comparaba `user.uid` (Firebase) contra
+  `project.ownerId` (id numérico del backend), una comparación que nunca
+  coincidía para el owner real
+- El conteo de miembros mostrado en la tarjeta y en el header del proyecto no
+  reflejaba la membresía real
+
 ## [3.0.0] - 2026-07-08
 
 Epic recursos asignables + panel admin: nueva entidad `resources` (kind
