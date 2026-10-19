@@ -7,6 +7,28 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-10-18
+
+Resolución de alertas de seguridad de Dependabot sobre dependencias
+transitivas y directas. Bump Patch: no cambia código de producto ni contratos
+de API; solo versiones de dependencias, `pnpm.overrides` y la migración de la
+suite de tests a Vitest 4. Queda abierta una única alerta (`braces`, solo
+desarrollo) porque no existe versión parcheada.
+
+### Security
+- Overrides de `pnpm` con versión mínima parcheada y tope de major para
+  paquetes transitivos vulnerables (`multer`, `undici`, `fast-uri`,
+  `proxy-addr`, `websocket-driver`, `handlebars`, `shell-quote`, `hono`,
+  `ip-address`, `mysql2`, entre otros)
+- `react-router-dom` ^7.18.2 y `@modelcontextprotocol/sdk` ^1.31.0
+- `postcss` forzado a >=8.5.23 y `nanoid` 3.x a >=3.3.18 mediante override
+
+### Changed
+- `vitest` y `@vitest/ui` pasan a 4.1 (elimina `@vitest/mocker` y `tinypool`
+  vulnerables); `vite.config.ts` importa `defineConfig` desde `vitest/config` y
+  el mock de `StreamableHTTPServerTransport` usa `function` en lugar de arrow
+- `minimatch>brace-expansion` queda en `^1.1.21`
+
 ## [3.1.0] - 2026-07-13
 
 Acceso a proyectos y gating de acciones por rol real: el gating de acciones de

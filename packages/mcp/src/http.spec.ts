@@ -3,10 +3,10 @@ import { describe, it, expect, vi } from 'vitest';
 const handleRequest = vi.fn().mockResolvedValue(undefined);
 const connect = vi.fn().mockResolvedValue(undefined);
 vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
-  StreamableHTTPServerTransport: vi.fn().mockImplementation(() => ({
-    handleRequest,
-    close: vi.fn(),
-  })),
+  // Vitest 4 exige function/class en mocks que se invocan con `new`
+  StreamableHTTPServerTransport: vi.fn().mockImplementation(function () {
+    return { handleRequest, close: vi.fn() };
+  }),
 }));
 vi.mock('./server', () => ({ buildServer: vi.fn(() => ({ connect, close: vi.fn() })) }));
 vi.mock('./apiClient', () => ({ createApiClient: vi.fn((cfg) => ({ __cfg: cfg })) }));
